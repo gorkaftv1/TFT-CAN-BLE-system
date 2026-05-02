@@ -3,6 +3,7 @@ import { MonitorSample } from '../models/MonitorSample';
 import { useVehicleStore, PidSample } from '../../stores/vehicleStore';
 import { useDashboardStore } from '../../stores/dashboardStore';
 import { useLogsStore } from '../../stores/logsStore';
+import { LogService } from './LogService';
 
 const INTERVAL_MS = 500;
 
@@ -32,6 +33,7 @@ function handleSample(sample: MonitorSample): void {
     timestamp: now,
   };
   useVehicleStore.getState().updateSample(pidSample);
+  LogService.add('data', `pid:0x${sample.pid.toString(16).toUpperCase().padStart(2,'0')} ${sample.name}=${sample.value} ${sample.unit}`);
 }
 
 export class VehicleService {
@@ -50,6 +52,7 @@ export class VehicleService {
     stopMonitor = adapter.startMonitor(pids, INTERVAL_MS, handleSample);
     useVehicleStore.getState().setMonitoring(true);
     useLogsStore.getState().addConsoleLine(`[SYS] Monitor started: ${pids.length} PIDs`);
+    LogService.add('info', `monitor_start — ${pids.length} PIDs: ${pids.map(p => '0x' + p.toString(16).toUpperCase()).join(', ')}`);
   }
 
   static stop(): void {
@@ -57,6 +60,7 @@ export class VehicleService {
     stopMonitor = null;
     useVehicleStore.getState().clear();
     useLogsStore.getState().addConsoleLine(`[SYS] Monitor stopped`);
+    LogService.add('info', 'monitor_stop');
   }
 
   static async fetchVin(): Promise<void> {
@@ -64,6 +68,7 @@ export class VehicleService {
       const vin = await getAdapter().getVin();
       useVehicleStore.getState().setVin(vin);
       useLogsStore.getState().addConsoleLine(`[SYS] VIN: ${vin}`);
+      LogService.add('info', `VIN: ${vin}`);
     } catch {
       // VIN not available on all vehicles
     }

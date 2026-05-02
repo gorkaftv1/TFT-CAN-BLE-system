@@ -4,17 +4,30 @@ import { useLogsStore } from '../../stores/logsStore';
 import { LogEntry, LogType } from '../../domain/models/LogEntry';
 import { colors, fontSize, spacing } from '../../shared/theme';
 
-type Filter = 'all' | LogType;
-const FILTERS: Filter[] = ['all', 'data', 'info', 'error', 'debug'];
+type Tab = 'comunicacion' | 'data' | 'info' | 'debug';
+
+const TABS: { key: Tab; label: string; types: LogType[] }[] = [
+  { key: 'comunicacion', label: 'Comunicación', types: ['ble_tx', 'ble_rx'] },
+  { key: 'data',         label: 'Data',         types: ['data'] },
+  { key: 'info',         label: 'Info',         types: ['info', 'success', 'warning'] },
+  { key: 'debug',        label: 'Debug',        types: ['debug', 'error'] },
+];
 
 const TYPE_COLOR: Partial<Record<LogType, string>> = {
+  ble_tx:  '#4fc3f7',
+  ble_rx:  '#81c784',
   data:    colors.primary,
   info:    colors.textSecondary,
+  success: colors.success,
+  warning: colors.warning,
   error:   colors.error,
   debug:   colors.textMuted,
-  warning: colors.warning,
-  success: colors.success,
   command: colors.warning,
+};
+
+const TYPE_LABEL: Partial<Record<LogType, string>> = {
+  ble_tx: 'TX',
+  ble_rx: 'RX',
 };
 
 function pad(n: number, z = 2) { return n.toString().padStart(z, '0'); }
@@ -25,11 +38,12 @@ function fmtTime(ts: number): string {
 
 function EntryRow({ entry }: { entry: LogEntry }) {
   const color = TYPE_COLOR[entry.type] ?? colors.text;
+  const label = TYPE_LABEL[entry.type] ?? entry.type.toUpperCase();
   return (
     <View style={styles.row}>
       <Text style={styles.ts}>{fmtTime(entry.timestamp)}</Text>
       <View style={[styles.badge, { borderColor: color, backgroundColor: color + '22' }]}>
-        <Text style={[styles.badgeText, { color }]}>{entry.type.toUpperCase()}</Text>
+        <Text style={[styles.badgeText, { color }]}>{label}</Text>
       </View>
       <Text style={styles.content} numberOfLines={3}>{entry.content}</Text>
     </View>
@@ -37,28 +51,30 @@ function EntryRow({ entry }: { entry: LogEntry }) {
 }
 
 export function LogsScreen() {
-  const entries    = useLogsStore((s) => s.entries);
-  const clearLogs  = useLogsStore((s) => s.clearLogs);
-  const [filter, setFilter] = useState<Filter>('all');
+  const entries   = useLogsStore((s) => s.entries);
+  const clearLogs = useLogsStore((s) => s.clearLogs);
+  const [tab, setTab] = useState<Tab>('comunicacion');
+
+  const activeTypes = useMemo(() => TABS.find((t) => t.key === tab)!.types, [tab]);
 
   const filtered = useMemo(
-    () => (filter === 'all' ? entries : entries.filter((e) => e.type === filter)),
-    [entries, filter],
+    () => entries.filter((e) => (activeTypes as string[]).includes(e.type)),
+    [entries, activeTypes],
   );
 
   const renderItem: ListRenderItem<LogEntry> = useCallback(({ item }) => <EntryRow entry={item} />, []);
 
   return (
     <View style={styles.root}>
-      <View style={styles.filterBar}>
-        {FILTERS.map((f) => (
+      <View style={styles.tabBar}>
+        {TABS.map((t) => (
           <TouchableOpacity
-            key={f}
-            style={[styles.filterBtn, filter === f && styles.filterBtnActive]}
-            onPress={() => setFilter(f)}
+            key={t.key}
+            style={[styles.tabBtn, tab === t.key && styles.tabBtnActive]}
+            onPress={() => setTab(t.key)}
           >
-            <Text style={[styles.filterLabel, filter === f && styles.filterLabelActive]}>
-              {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
+            <Text style={[styles.tabLabel, tab === t.key && styles.tabLabelActive]}>
+              {t.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -67,7 +83,7 @@ export function LogsScreen() {
       <View style={styles.countRow}>
         <Text style={styles.count}>{filtered.length} entries</Text>
         <TouchableOpacity onPress={clearLogs}>
-          <Text style={styles.clearText}>Clear</Text>
+          <Text style={styles.clearText}>Clear all</Text>
         </TouchableOpacity>
       </View>
 
@@ -81,7 +97,7 @@ export function LogsScreen() {
         maxToRenderPerBatch={40}
         windowSize={8}
         removeClippedSubviews
-        ListEmptyComponent={<Text style={styles.emptyText}>No log entries</Text>}
+        ListEmptyComponent={<Text style={styles.emptyText}>No entries</Text>}
       />
     </View>
   );
@@ -90,27 +106,30 @@ export function LogsScreen() {
 const monoFont = Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' });
 
 const styles = StyleSheet.create({
-  root:      { flex: 1, backgroundColor: colors.background },
-  filterBar: {
+  root:   { flex: 1, backgroundColor: colors.background },
+  tabBar: {
     flexDirection: 'row', backgroundColor: colors.surface,
-    borderBottomWidth: 1, borderBottomColor: colors.border, padding: spacing.sm, gap: spacing.xs,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
   },
-  filterBtn:        { flex: 1, paddingVertical: spacing.xs, borderRadius: 5, alignItems: 'center', borderWidth: 1, borderColor: colors.border },
-  filterBtnActive:  { borderColor: colors.primary, backgroundColor: colors.primary + '1a' },
-  filterLabel:      { fontSize: fontSize.xs, color: colors.textSecondary },
-  filterLabelActive: { color: colors.primary, fontWeight: '600' },
+  tabBtn: {
+    flex: 1, paddingVertical: spacing.sm + 2, alignItems: 'center',
+    borderBottomWidth: 2, borderBottomColor: 'transparent',
+  },
+  tabBtnActive:   { borderBottomColor: colors.primary },
+  tabLabel:       { fontSize: fontSize.xs, color: colors.textSecondary },
+  tabLabelActive: { color: colors.primary, fontWeight: '600' },
   countRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.md, paddingVertical: spacing.xs },
   count:     { fontSize: fontSize.xs, color: colors.textMuted },
   clearText: { fontSize: fontSize.xs, color: colors.error },
-  list: { flex: 1 },
+  list:      { flex: 1 },
   row: {
     flexDirection: 'row', alignItems: 'flex-start',
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
   },
-  ts: { fontFamily: monoFont, fontSize: 10, color: colors.textMuted, marginRight: spacing.xs, minWidth: 84, paddingTop: 2 },
-  badge: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, borderWidth: 1, marginRight: spacing.xs, alignSelf: 'flex-start' },
+  ts:        { fontFamily: monoFont, fontSize: 10, color: colors.textMuted, marginRight: spacing.xs, minWidth: 84, paddingTop: 2 },
+  badge:     { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, borderWidth: 1, marginRight: spacing.xs, alignSelf: 'flex-start' },
   badgeText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  content:   { flex: 1, fontSize: fontSize.xs, color: colors.text, lineHeight: 17 },
+  content:   { flex: 1, fontFamily: monoFont, fontSize: fontSize.xs, color: colors.text, lineHeight: 17 },
   emptyText: { textAlign: 'center', color: colors.textMuted, padding: spacing.xl, fontSize: fontSize.sm },
 });

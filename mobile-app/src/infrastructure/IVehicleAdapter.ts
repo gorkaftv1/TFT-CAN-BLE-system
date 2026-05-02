@@ -2,7 +2,7 @@ import { DtcCode } from '../domain/models/DtcCode';
 import { MonitorSample } from '../domain/models/MonitorSample';
 
 export interface IVehicleAdapter {
-  connect(): Promise<void>;
+  connect(deviceId?: string, deviceLabel?: string): Promise<void>;
   disconnect(): Promise<void>;
   isConnected(): boolean;
   startMonitor(pids: number[], intervalMs: number, onSample: (s: MonitorSample) => void): () => void;

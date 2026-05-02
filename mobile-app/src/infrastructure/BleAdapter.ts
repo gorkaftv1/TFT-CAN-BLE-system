@@ -3,12 +3,12 @@ import { DtcCode } from '../domain/models/DtcCode';
 import { MonitorSample } from '../domain/models/MonitorSample';
 import { IVehicleAdapter } from './IVehicleAdapter';
 import { useLogsStore } from '../stores/logsStore';
+import { LogService } from '../domain/services/LogService';
 
 const NUS_SERVICE = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 const RX_CHAR     = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 const TX_CHAR     = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
 
-const DEVICE_NAME        = 'SEAT_DIAG';
 const MTU                = 240;   // NUS safe max — do NOT use 512
 const WRITE_CHUNK_BYTES  = 240;
 const SCAN_TIMEOUT_MS    = 20_000;
@@ -16,13 +16,6 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const CLIENT_TIMEOUT_MS  = 20_000;
 const INACTIVITY_CHECK_MS = 5_000;
 const PING_INTERVAL_MS   = 7_000;  // must be < server CLIENT_TIMEOUT_S (15s) with margin
-
-function strToB64(str: string): string {
-  const bytes = new TextEncoder().encode(str);
-  let bin = '';
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  return btoa(bin);
-}
 
 function b64ToStr(b64: string): string {
   const bin = atob(b64);
@@ -49,6 +42,12 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
+export interface ScannedDevice {
+  id: string;
+  name: string | null;
+  rssi: number | null;
+}
+
 export class BleAdapter implements IVehicleAdapter {
   private static instance: BleAdapter;
 
@@ -67,32 +66,51 @@ export class BleAdapter implements IVehicleAdapter {
     return BleAdapter.instance;
   }
 
-  async connect(): Promise<void> {
-    let retries = 0;
-    const MAX_RETRIES = 5;
-    while (retries < MAX_RETRIES) {
-      try {
-        this.device = await this.scanAndConnect();
-        await this.subscribeToTx();
-        consoleLine('SYS', 'Authenticating with Pi...');
-        await this.authenticate();
-        consoleLine('SYS', 'Authentication OK');
-        this.lastActivityTime = Date.now();
-        this.startPingInterval();
-        this.startActivityMonitor();
-        return;
-      } catch (e) {
-        retries++;
-        const msg = e instanceof Error ? e.message : String(e);
-        if (retries >= MAX_RETRIES) {
-          consoleLine('ERR', `Connection failed after ${MAX_RETRIES} retries: ${msg}`);
-          throw e;
-        }
-        const waitMs = Math.min(2 ** retries * 1000, 30000);
-        consoleLine('WARN', `Attempt ${retries}/${MAX_RETRIES} failed. Retrying in ${waitMs}ms...`);
-        await new Promise((r) => setTimeout(r, waitMs));
-      }
+  // ── Scanning ──────────────────────────────────────────────────────
+
+  startScan(onDevice: (d: ScannedDevice) => void, timeoutMs = SCAN_TIMEOUT_MS): () => void {
+    const seen = new Set<string>();
+    consoleLine('SYS', 'BLE scan started');
+    this.manager.startDeviceScan(null, { allowDuplicates: false }, (err, device) => {
+      if (err) { consoleLine('ERR', `Scan error: ${err.message}`); return; }
+      if (!device || seen.has(device.id)) return;
+      seen.add(device.id);
+      onDevice({ id: device.id, name: device.name ?? null, rssi: device.rssi ?? null });
+    });
+    const timer = setTimeout(() => {
+      this.manager.stopDeviceScan();
+      consoleLine('SYS', 'BLE scan timeout');
+    }, timeoutMs);
+    return () => { clearTimeout(timer); this.manager.stopDeviceScan(); };
+  }
+
+  // ── Connect to a specific device by ID ───────────────────────────
+
+  async connect(deviceId?: string, deviceLabel?: string): Promise<void> {
+    if (!deviceId) throw new Error('No device selected — pick a device from the scan list');
+    const label = deviceLabel ?? deviceId;
+    consoleLine('SYS', `[1/5] Connecting GATT to ${label}...`);
+    try {
+      const raw = await this.manager.connectToDevice(deviceId, { autoConnect: false, timeout: 10000 });
+      consoleLine('SYS', `[2/5] GATT connected — requesting MTU ${MTU}...`);
+      const mtuResult = await raw.requestMTU(MTU);
+      consoleLine('SYS', `[3/5] MTU=${mtuResult.mtu} — discovering services...`);
+      await raw.discoverAllServicesAndCharacteristics();
+      consoleLine('SYS', '[4/5] Services discovered — subscribing RX...');
+      raw.onDisconnected(() => this.handleUnexpectedDisconnect());
+      this.device = raw;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      consoleLine('ERR', `Connection failed at GATT level: ${msg}`);
+      throw e;
     }
+    await this.subscribeToTx();
+    consoleLine('SYS', '[5/5] Authenticating with Pi...');
+    await this.authenticate();
+    consoleLine('SYS', 'Auth OK — session live');
+    this.lastActivityTime = Date.now();
+    this.startPingInterval();
+    this.startActivityMonitor();
   }
 
   private async authenticate(token = '1234'): Promise<void> {
@@ -162,45 +180,6 @@ export class BleAdapter implements IVehicleAdapter {
 
   // ── BLE internals ─────────────────────────────────────────────────
 
-  private scanAndConnect(): Promise<Device> {
-    return new Promise<Device>((resolve, reject) => {
-      consoleLine('SYS', `Scanning for "${DEVICE_NAME}"...`);
-      const scanTimer = setTimeout(() => {
-        this.manager.stopDeviceScan();
-        reject(new Error(`"${DEVICE_NAME}" not found (scan timeout)`));
-      }, SCAN_TIMEOUT_MS);
-
-      this.manager.startDeviceScan(
-        [NUS_SERVICE],
-        { allowDuplicates: false },
-        async (err, device) => {
-          if (err) {
-            clearTimeout(scanTimer);
-            this.manager.stopDeviceScan();
-            reject(err);
-            return;
-          }
-          if (!device || device.name !== DEVICE_NAME) return;
-
-          this.manager.stopDeviceScan();
-          clearTimeout(scanTimer);
-          consoleLine('SYS', `Found ${DEVICE_NAME} — connecting, requesting MTU ${MTU}...`);
-
-          try {
-            const conn = await device.connect({ autoConnect: false });
-            await conn.requestMTU(MTU);
-            await conn.discoverAllServicesAndCharacteristics();
-            conn.onDisconnected(() => this.handleUnexpectedDisconnect());
-            consoleLine('SYS', 'BLE connected, services discovered');
-            resolve(conn);
-          } catch (e) {
-            reject(e);
-          }
-        },
-      );
-    });
-  }
-
   private subscribeToTx(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
       if (!this.device) { reject(new Error('Not connected')); return; }
@@ -228,7 +207,11 @@ export class BleAdapter implements IVehicleAdapter {
       const t = line.trim();
       if (!t) continue;
       try {
-        this.dispatch(JSON.parse(t) as Record<string, unknown>);
+        const parsed = JSON.parse(t) as Record<string, unknown>;
+        if (parsed.type !== 'samples' && parsed.type !== 'heartbeat' && parsed.type !== 'heartbeat_ack') {
+          LogService.add('ble_rx', t);
+        }
+        this.dispatch(parsed);
       } catch {
         // malformed JSON — skip
       }
@@ -285,18 +268,27 @@ export class BleAdapter implements IVehicleAdapter {
     });
   }
 
-  private async writeRx(data: string): Promise<void> {
+  // withResponse=true → GATT write-with-ack (reliable, used for commands)
+  // withResponse=false → write-without-response (fire-and-forget, used for ping/heartbeat)
+  private async writeRx(data: string, withResponse = true): Promise<void> {
     if (!this.device) throw new Error('Not connected');
     consoleLine('TX ', data.trimEnd());
+    try {
+      const cmdType = (JSON.parse(data.trim()) as Record<string, unknown>)?.cmd as string | undefined;
+      if (cmdType !== 'ping' && cmdType !== 'heartbeat_ack') LogService.add('ble_tx', data.trimEnd());
+    } catch { LogService.add('ble_tx', data.trimEnd()); }
     const bytes = new TextEncoder().encode(data);
     try {
       for (let offset = 0; offset < bytes.length; offset += WRITE_CHUNK_BYTES) {
         const slice = bytes.subarray(offset, offset + WRITE_CHUNK_BYTES);
         let bin = '';
         for (let i = 0; i < slice.length; i++) bin += String.fromCharCode(slice[i]);
-        await this.device.writeCharacteristicWithoutResponseForService(
-          NUS_SERVICE, RX_CHAR, btoa(bin),
-        );
+        const b64 = btoa(bin);
+        if (withResponse) {
+          await this.device.writeCharacteristicWithResponseForService(NUS_SERVICE, RX_CHAR, b64);
+        } else {
+          await this.device.writeCharacteristicWithoutResponseForService(NUS_SERVICE, RX_CHAR, b64);
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -312,13 +304,13 @@ export class BleAdapter implements IVehicleAdapter {
     this.pingInterval = setInterval(() => {
       if (!this.device) return;
       // Write directly without queue — pong response is silently discarded
-      this.writeRx(JSON.stringify({ cmd: 'ping' }) + '\n').catch(() => {});
+      this.writeRx(JSON.stringify({ cmd: 'ping' }) + '\n', false).catch(() => {});
     }, PING_INTERVAL_MS);
   }
 
   private sendHeartbeatAck(): void {
     if (!this.device) return;
-    this.writeRx(JSON.stringify({ type: 'heartbeat_ack' }) + '\n').catch(() => {});
+    this.writeRx(JSON.stringify({ type: 'heartbeat_ack' }) + '\n', false).catch(() => {});
   }
 
   private startActivityMonitor(): void {
