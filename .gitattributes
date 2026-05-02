@@ -1,0 +1,27 @@
+# Auto-detect text and normalize to LF in repo
+* text=auto eol=lf
+
+# Arduino
+*.ino text eol=lf
+*.h   text eol=lf
+*.cpp text eol=lf
+
+# Python
+*.py text eol=lf
+
+# LaTeX
+*.tex text eol=lf
+*.bib text eol=lf
+
+# Web / config
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+
+# Images — binary, no conversion
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.gif  binary
+*.pdf  binary

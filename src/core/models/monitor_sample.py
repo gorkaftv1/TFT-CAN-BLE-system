@@ -1,0 +1,14 @@
+"""Immutable snapshot of a single OBD-II sensor reading."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class MonitorSample:
+    pid: int
+    name: str
+    value: float
+    unit: str
+    timestamp: float   # time.monotonic() — immune to clock adjustments
