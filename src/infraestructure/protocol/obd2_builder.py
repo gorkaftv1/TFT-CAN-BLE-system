@@ -1,5 +1,3 @@
-"""Concrete OBD-II protocol builder backed by the config PID registry."""
-
 from __future__ import annotations
 
 import config.obd_pids as _pids
@@ -7,7 +5,6 @@ from core.interfaces.i_protocol_builder import IProtocolBuilder
 
 
 class Obd2ProtocolBuilder(IProtocolBuilder):
-    """Delegates every build method to the centralised PID registry."""
 
     def build_read_rpm_request(self) -> bytes:
         return _pids.PIDS[0x0C].request

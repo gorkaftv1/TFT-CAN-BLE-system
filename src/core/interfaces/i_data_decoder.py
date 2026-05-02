@@ -1,5 +1,3 @@
-"""Abstract interface for OBD-II response validation and data decoding."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -10,12 +8,8 @@ from core.models.obd_response import ObdResponse
 
 
 class IDataDecoder(ABC):
-    """Contract for validating ECU responses and decoding sensor values."""
-
     @abstractmethod
-    def validate_response(self, raw: bytes, expected_mode: int) -> ObdResponse:
-        """Check mode echo / NRC prefix; raise NrcException or InvalidResponseError on failure."""
-        ...
+    def validate_response(self, raw: bytes, expected_mode: int) -> ObdResponse: ...
 
     @abstractmethod
     def decode_rpm(self, raw: bytes) -> float: ...

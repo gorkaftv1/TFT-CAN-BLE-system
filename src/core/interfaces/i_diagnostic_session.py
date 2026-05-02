@@ -1,5 +1,3 @@
-"""Abstract interface for the high-level OBD-II diagnostic session."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

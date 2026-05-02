@@ -1,7 +1,3 @@
-"""CAN bus and ISO-TP constants (OBD-II / ISO 15765-2)."""
-
-# --- CAN Bus ---
-
 CAN_BITRATE: int = 500_000
 CAN_TX_ID: int   = 0x7E0
 CAN_RX_ID: int   = 0x7E8

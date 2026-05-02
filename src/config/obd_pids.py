@@ -103,4 +103,32 @@ PIDS: dict[int, PidDefinition] = {
         pid=0x5C, name="Engine Oil Temp", request=b"\x01\x5C", unit="°C",
         response_bytes=3, decode=lambda raw: float(raw[2] - 40),
     ),
+    0x0A: PidDefinition(
+        pid=0x0A, name="Fuel Pressure", request=b"\x01\x0A", unit="kPa",
+        response_bytes=3, decode=lambda raw: float(raw[2] * 3),
+    ),
+    0x0B: PidDefinition(
+        pid=0x0B, name="Intake MAP", request=b"\x01\x0B", unit="kPa",
+        response_bytes=3, decode=lambda raw: float(raw[2]),
+    ),
+    0x43: PidDefinition(
+        pid=0x43, name="Absolute Load", request=b"\x01\x43", unit="%",
+        response_bytes=4, decode=lambda raw: ((raw[2] << 8) | raw[3]) * 100 / 255,
+    ),
+    0x47: PidDefinition(
+        pid=0x47, name="Throttle Position B", request=b"\x01\x47", unit="%",
+        response_bytes=3, decode=lambda raw: (raw[2] * 100) / 255,
+    ),
+    0x49: PidDefinition(
+        pid=0x49, name="Accelerator Pedal D", request=b"\x01\x49", unit="%",
+        response_bytes=3, decode=lambda raw: (raw[2] * 100) / 255,
+    ),
+    0x4A: PidDefinition(
+        pid=0x4A, name="Accelerator Pedal E", request=b"\x01\x4A", unit="%",
+        response_bytes=3, decode=lambda raw: (raw[2] * 100) / 255,
+    ),
+    0x5E: PidDefinition(
+        pid=0x5E, name="Engine Fuel Rate", request=b"\x01\x5E", unit="L/h",
+        response_bytes=4, decode=lambda raw: ((raw[2] << 8) | raw[3]) / 20,
+    ),
 }
