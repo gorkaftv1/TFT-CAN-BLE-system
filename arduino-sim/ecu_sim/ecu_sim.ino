@@ -18,6 +18,11 @@ volatile bool ignitionPressed = false;
 unsigned long lastDebounceTime = 0;
 bool keyOn = false;
 
+volatile bool dtcFaultPressed = false;
+unsigned long lastDtcDebounceTime = 0;
+
+bool canNoiseEnabled = true;
+
 uint8_t responseBuffer[7];
 uint8_t responseLength = 0;
 
@@ -25,6 +30,8 @@ uint8_t responseLength = 0;
 
 // ---------- PROTOTYPES ----------
 void handleIgnitionButton();
+void handleDtcFaultButton();
+void generateBackgroundTraffic();
 void broadcastVehicleState();
 void sendResponse();
 void sendNegativeResponse(uint8_t mode, uint8_t errorCode);
@@ -33,9 +40,13 @@ bool waitForFlowControl();
 void logCANFrame(const char* tag, uint32_t id, const uint8_t* data, uint8_t len);
 
 // ---------- ISR ----------
-// Minimal ISR — only sets flag, no Serial/delay/CAN.
+// Minimal ISRs — only set flags, no Serial/delay/CAN.
 void onIgnitionButton() {
   ignitionPressed = true;
+}
+
+void onDtcFaultButton() {
+  dtcFaultPressed = true;
 }
 
 // ---------- IGNITION BUTTON ----------
@@ -57,6 +68,62 @@ void handleIgnitionButton() {
     vehicle.rpm = 0;
     Serial.println(F("[IGN] Key OFF — engine stopped"));
   }
+}
+
+// ---------- DTC FAULT BUTTON ----------
+// Injects a random DTC from the fault pool into dtcList on button press.
+void handleDtcFaultButton() {
+  if (!dtcFaultPressed) return;
+  dtcFaultPressed = false;
+
+  unsigned long now = millis();
+  if (now - lastDtcDebounceTime < DTC_DEBOUNCE_MS) return;
+  lastDtcDebounceTime = now;
+
+  static const uint16_t dtcPool[] = {
+    DTC_P0016, DTC_P0101, DTC_P0171, DTC_P0420,
+    DTC_P0299, DTC_P0401, DTC_P0300, DTC_P0301,
+    DTC_P0113, DTC_P0118, DTC_P0340, DTC_P0500,
+  };
+  static const uint8_t poolSize = sizeof(dtcPool) / sizeof(dtcPool[0]);
+
+  uint16_t code = dtcPool[random(poolSize)];
+
+  // Avoid duplicate injection
+  for (uint8_t i = 0; i < numStoredDTCs; i++) {
+    if (dtcList[i].code == code) {
+      Serial.print(F("[DTC] Already active: P"));
+      Serial.println(code, HEX);
+      return;
+    }
+  }
+
+  if (numStoredDTCs < 8) {
+    dtcList[numStoredDTCs].code   = code;
+    dtcList[numStoredDTCs].active = true;
+    numStoredDTCs++;
+    vehicle.numDTCs   = numStoredDTCs;
+    vehicle.checkEngine = true;
+    Serial.print(F("[DTC] Injected P"));
+    Serial.println(code, HEX);
+  } else {
+    Serial.println(F("[DTC] List full (8 DTCs)"));
+  }
+}
+
+// ---------- BACKGROUND TRAFFIC ----------
+// Randomly emits noise frames on bus IDs to stress-test the receiver.
+void generateBackgroundTraffic() {
+  if (!canNoiseEnabled) return;
+  if (random(100) >= CAN_NOISE_BG_TRAFFIC_PCT) return;
+
+  uint32_t id = CAN_BG_IDS[random(CAN_BG_ID_COUNT)];
+  uint8_t frame[8];
+  for (uint8_t i = 0; i < 8; i++) frame[i] = (uint8_t)random(256);
+
+  CAN.beginPacket(id);
+  CAN.write(frame, 8);
+  CAN.endPacket();
 }
 
 // ---------- SETUP ----------
@@ -85,6 +152,11 @@ void setup() {
   Serial.print(F("[OK] Ignition button on pin D"));
   Serial.println(ENGINE_START_PIN);
 
+  pinMode(DTC_FAULT_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(DTC_FAULT_PIN), onDtcFaultButton, FALLING);
+  Serial.print(F("[OK] DTC fault button on pin D"));
+  Serial.println(DTC_FAULT_PIN);
+
   Serial.print(F("[INFO] VIN: "));
   Serial.println(vehicle.vin);
   Serial.print(F("[INFO] Listen: 0x"));
@@ -97,8 +169,10 @@ void setup() {
 // ---------- LOOP ----------
 void loop() {
   handleIgnitionButton();
+  handleDtcFaultButton();
   updateVehicleSimulation();
   broadcastVehicleState();
+  generateBackgroundTraffic();
   processCANMessages();
   delay(10);
 }
@@ -315,6 +389,24 @@ void processCANMessages() {
   Serial.print(F("\n[RX] 0x")); Serial.print(id, HEX);
   Serial.print(F(" Mode:0x")); Serial.print(mode, HEX);
   Serial.print(F(" PID:0x"));  Serial.println(pid, HEX);
+
+  if (canNoiseEnabled) {
+    // Simulate bus latency jitter
+    delay(random(CAN_NOISE_LATENCY_MIN_MS, CAN_NOISE_LATENCY_MAX_MS + 1));
+
+    // Simulate packet drop
+    if (random(100) < CAN_NOISE_DROP_PCT) {
+      Serial.println(F("[NOISE] Packet dropped"));
+      return;
+    }
+
+    // Simulate sporadic NRC conditions-not-correct
+    if (random(100) < CAN_NOISE_NRC_PCT) {
+      Serial.println(F("[NOISE] Sporadic NRC 0x22"));
+      sendNegativeResponse(mode, NRC_CONDITIONS_NOT_CORRECT);
+      return;
+    }
+  }
 
   bool handled = false;
   switch (mode) {
