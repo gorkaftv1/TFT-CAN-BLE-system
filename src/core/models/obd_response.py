@@ -1,5 +1,3 @@
-"""Immutable value object wrapping a parsed positive ECU response frame."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,7 +5,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class ObdResponse:
-    """Parsed positive response from the ECU (mode echo, PID echo, data bytes)."""
 
     mode: int
     pid: int

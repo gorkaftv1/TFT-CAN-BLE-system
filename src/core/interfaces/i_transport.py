@@ -1,5 +1,3 @@
-"""Abstract interface for the ISO-TP transport layer."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -7,7 +5,6 @@ from types import TracebackType
 
 
 class ITransport(ABC):
-    """Contract for sending and receiving raw bytes over ISO-TP."""
 
     @abstractmethod
     def connect(self) -> None: ...

@@ -1,12 +1,9 @@
-"""Abstract interface for building raw OBD-II request frames."""
-
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
 
 class IProtocolBuilder(ABC):
-    """Pure factory: constructs OBD-II request byte sequences without I/O."""
 
     @abstractmethod
     def build_read_rpm_request(self) -> bytes: ...

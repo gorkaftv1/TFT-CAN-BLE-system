@@ -1,5 +1,3 @@
-"""Immutable snapshot of a single OBD-II sensor reading."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -1,9 +1,4 @@
-"""Domain exceptions for the OBD-II diagnostic layer."""
-
-
 class NrcException(Exception):
-    """ECU returned a Negative Response Code."""
-
     def __init__(self, mode: int, nrc_code: int) -> None:
         self.mode = mode
         self.nrc_code = nrc_code

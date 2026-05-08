@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "SEAT Diag",
+    "slug": "seat-diag",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow SEAT Diag to connect to the vehicle diagnostic interface"
+        }
+      ]
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a0f"
+      },
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.seatdiag.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.seatdiag.app",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Needed to connect to the vehicle OBD diagnostic interface"
+      }
+    }
+  }
+}
