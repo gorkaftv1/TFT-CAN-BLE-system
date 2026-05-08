@@ -6,6 +6,8 @@
 *.fdb_latexmk
 *.fls
 *.fmt
+*.glo
+*.ist
 *.lof
 *.log
 *.lot
@@ -14,7 +16,6 @@
 *.synctex.gz
 *.toc
 *.xdv
-# PDF generado — CI lo produce, no versionarlo
 documentation/*.pdf
 
 # ===== Arduino =====
@@ -32,19 +33,15 @@ mobile-app/.expo-shared/
 mobile-app/dist/
 mobile-app/web-build/
 mobile-app/expo-env.d.ts
+mobile-app/package-lock.json
 # Secrets
 mobile-app/.env
 mobile-app/.env.local
 mobile-app/.env.*.local
 # EAS
 mobile-app/.eas/
-# Android
-mobile-app/android/.gradle/
-mobile-app/android/build/
-mobile-app/android/local.properties
-mobile-app/android/app/build/
-mobile-app/android/keystores/
-mobile-app/android/app/google-services.json
+# Android (expo prebuild — generated, not versioned)
+mobile-app/android/
 # iOS
 mobile-app/ios/Pods/
 mobile-app/ios/build/
