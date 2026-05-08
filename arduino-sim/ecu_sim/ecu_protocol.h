@@ -101,6 +101,17 @@
 // ---------- HARDWARE ----------
 #define ENGINE_START_PIN     7
 #define IGNITION_DEBOUNCE_MS 200
+#define DTC_FAULT_PIN        6
+#define DTC_DEBOUNCE_MS      300
+
+// ---------- CAN NOISE ----------
+#define CAN_NOISE_DROP_PCT         2
+#define CAN_NOISE_NRC_PCT          1
+#define CAN_NOISE_LATENCY_MIN_MS   1
+#define CAN_NOISE_LATENCY_MAX_MS   15
+#define CAN_NOISE_BG_TRAFFIC_PCT   30
+#define CAN_BG_ID_COUNT            4
+static const uint32_t CAN_BG_IDS[CAN_BG_ID_COUNT] = {0x280, 0x480, 0x320, 0x520};
 
 // ---------- VEHICLE ----------
 #define VIN_LENGTH           17
@@ -160,6 +171,12 @@ struct DTC {
 #define DTC_P0420  0x0420
 #define DTC_P0299  0x0299
 #define DTC_P0401  0x0401
+#define DTC_P0300  0x0300
+#define DTC_P0301  0x0301
+#define DTC_P0113  0x0113
+#define DTC_P0118  0x0118
+#define DTC_P0340  0x0340
+#define DTC_P0500  0x0500
 
 // ---------- ENCODING UTILITIES ----------
 // OBD-II wire format: rpm*4, temp+40, percent*255/100, fuel trim 0-255 centered at 128
