@@ -42,17 +42,36 @@
 \usepackage{geometry}
 \usepackage{color}\usepackage{graphicx,xcolor}
 
-\renewcommand{\lstlistingname}{Algoritmo}
-%\renewcommand{\lstlistlistingnam%e}{Índice de~\lstlistingname s}
+\renewcommand{\lstlistingname}{Listado}
 
 \floatname{algorithm}{Algoritmo}
-\renewcommand{\listalgorithmname}{Índice de~\lstlistingname s}
-
+\renewcommand{\listalgorithmname}{Índice de algoritmos}
 
 \lstset{
-        basicstyle=\fontsize{7}{11}\ttfamily,
-        language=Java,
-        captionpos=b,
+    basicstyle=\fontsize{7.5}{11}\ttfamily,
+    captionpos=b,
+    frame=single,
+    breaklines=true,
+    breakatwhitespace=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=5pt,
+    showstringspaces=false,
+    keywordstyle=\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{black},
+}
+
+\lstdefinelanguage{JavaScript}{
+    keywords={const,let,var,function,async,await,return,new,this,if,else,
+              for,of,in,try,catch,throw,class,extends,export,import,from,
+              private,public,static,interface,type,null,undefined,true,false},
+    morestring=[b]',
+    morestring=[b]",
+    morestring=[b]`,
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    sensitive=true,
 }
 
 \usepackage{titlesec}
@@ -77,16 +96,16 @@
 
 \newpage
 \pagenumbering{roman}
-%{\Large{\textbf{Agradecimientos}}}
-%\input{Agradecimientos.tex}
+{\Large{\textbf{Agradecimientos}}}
+\input{Agradecimientos.tex}
 
-%\clearpage
+\clearpage
 \input{Resumen.tex}
 \tableofcontents
 
-%\addcontentsline{toc}{section}{Listings}
-%\lstlistoflistings
-%\listofalgorithms 
+\addcontentsline{toc}{section}{Listings}
+\lstlistoflistings
+\listofalgorithms 
 
 \listoffigures
 
@@ -97,157 +116,32 @@
 \pagenumbering{arabic}
 
 \chapter{Introducción}
-\input{Introduccion.tex}
+\input{Cap1_Introduccion.tex}
 
-\chapter{Estado actual y objetivos iniciales}
-%\input{EstadoDelArte.tex}
-Este es un CAPÍTULO \textbf{OBLIGATORIO}.
-\section{Motivación y antecedentes}
-
-La motivación para el desarrollo de este trabajo surge de la curiosidad por estudiar la serie de protocolos que se usan en el sector automovilistico donde se trabaja en un entorno de comunicaciónes críticas y ruidosas, donde se requiere una alta fidelidad en la transmisión de datos.\\
-
-\section{Objetivos}
-
-El objetivo del desarrollo de este proyecto, es diseñar y desarrollar un sistema empotrado basado en bus CAN con acceso inalámbrico para la monitorización de un vehículo automóvil perteneciente al grupo de automoción VAG. Con el fin de tener una herramienta de monitorización y evaluación de los parámetros del vehiculo, que permita el acceso a los datos de forma inalámbrica, y que pueda ser utilizada para la mejora del rendimiento del vehículo, la detección de fallos y el mantenimiento predictivo.
+\chapter{Estado actual y objetivos}
+\input{Cap2_EstadoArte.tex}
 
 \chapter{Aportaciones del trabajo}
-\chaptermark{Competencias, aportaciones y ODS}
-%\input{Competencias.tex}
-Este es un CAPÍTULO \textbf{OBLIGATORIO}.
+\chaptermark{Aportaciones, competencias y ODS}
+\input{Cap3_Aportaciones.tex}
 
-También pueden incluirse parte de estos contenidos en las conclusiones, en la descripción de los objetivos o en forma de anexos.
+\chapter{Metodología de desarrollo}
+\input{Cap4_Metodologia.tex}
 
-\section{Principales aportaciones}
-
-Justificar qué es lo que este TFT \textbf{aporta} a nuestro entorno socio-económico, técnico o científico. Repercusión esperada.
-
-\section{Competencias específicas}
-
-Indicar, sólo para las \textbf{competencias específicas} relacionadas de forma más directa con el trabajo desarrollado, cómo se han cubierto con este TFT.
-
-\section{Relación con los Objetivos de Desarrollo Sostenible (ODS)}
-
-\begin{center}
-
-\begin{table}[!htbp]
-\caption{Grado de relación del TFT con los objetivos de desarrollo sostenible.}
-\label{tab:ODS}
-\centering
-\begin{tabular}{|l|c|c|c|c|}
-\cline{1-5}
-  & \multicolumn{4}{c|}{Grado de relación} \\ \cline{2-5} 
- ODS & 0 & 1 & 2 & 3 \\
-  & No procede & Bajo & Medio & Alto \\  
-  \cline{1-5} 
-1 Fin de la Pobreza & X & & & \\ \cline{1-5}
-2 Hambre cero & X & & & \\ \cline{1-5}
-3 Salud y Bienestar & & X & & \\ \cline{1-5}
-4 Educación de calidad & & & X & \\ \cline{1-5}
-5 Igualdad de género & X & & & \\ \cline{1-5}
-6 Agua limpia y saneamiento & X & & & \\ \cline{1-5}
-7 Energía Asequible y no contaminante & & & X & \\ \cline{1-5}
-8 Trabajo decente y crecimiento económico & & X & & \\ \cline{1-5}
-9 Industria, Innovación e Infraestructuras & & & X & \\ \cline{1-5}
-10 Reducción de las desigualdades & X & & & \\ \cline{1-5}
-11 Ciudades y comunidades sostenibles & & X & & \\ \cline{1-5}
-12 Producción y consumo sostenibles & & & X & \\ \cline{1-5} 
-13 Acción por el clima & & & X & \\ \cline{1-5}
-14 Vida submarina & X & & & \\ \cline{1-5}
-15 Vida de ecosistemas terrestres & X & & & \\ \cline{1-5}
-16 Paz, justicia e instituciones sólidas & X & & & \\ \cline{1-5}
-17 Alianzas para lograr objetivos & X & & & \\ \cline{1-5}
-\end{tabular}%
-\end{table}
-\end{center}
-\textbf{Justificar el grado de relación del TFT con cada uno de los ODS, indicando qué aspectos del trabajo contribuyen a cada uno de ellos.}
-\\% JUSTIFICACIONES ODS (IDEAS PARA REDACTAR):
-ODS 9 (Medio - 3): Desarrollo de tecnología e innovación pura para el sector del mantenimiento industrial/automoción.\\
-ODS 12 (Medio - 2): Fomenta el "Derecho a Reparar". Una buena diagnosis alarga la vida del coche y evita la chatarra tecnológica.\\
-ODS 7 y 13 (Medio - 2): OBD-II vigila las emisiones de gases. Leer y arreglar los fallos de motor reduce la huella de carbono.\\
-ODS 4 (Medio - 2): Proyecto muy didáctico, aplicable para que otros alumnos aprendan sobre CAN y bajo nivel.\\
-ODS 3, 8 y 11 (Bajo - 1): Impacto indirecto. Ciudades menos contaminadas y apoyo al trabajo técnico de los talleres.
-
-\chapter{Desarrollo}
-%\input{Desarrollo.tex}
-Este es un CAPÍTULO \textbf{OBLIGATORIO}.
-
-\section{Metodología}
-
-Para el desarrollo del trabajo se ha seguido la metodología de desarrollo de software en cascada, que se compone de las siguientes fases: análisis, diseño, implementación y validación.
-\section{Fases de desarrollo}
-
-\subsection{Análisis}
-
-En esta primera fase se han identificado los requisitos del sistema y se han estudiado los protocolos de comunicación empleados en los vehículos del grupo VAG (Volkswagen Audi Group) sobre la plataforma PQ25, para poder empezar con el diseño de la infraestructura de monitorización y comunicación con las distintas ECUs del vehículo.
-
-Durante este análisis se ha descubierto que los vehículos del grupo VAG sobre la plataforma PQ25 utilizan una topología de \textbf{Gateway Central} esto lo que consigue es diferenciar los buses CAN de forma que no haya saturación de los datos en un solo CAN Bus. Esta arquitectura implica además que el bus CAN-Powertrain \textbf{no es directamente accesible desde el conector OBD-II}: el Gateway actúa como intermediario, filtrando y enrutando los mensajes entre buses, lo que impide el acceso directo al bus de motor mediante un adaptador CAN estándar conectado al puerto de diagnóstico. Podemos diferenciar entre:
-\begin{itemize}
-    \item \textbf{CAN-Powertrain}: este bus conecta la ECU (Motor), sensor ABS/ESP y transmisión. Este es el CAN Bus más importante con lo que tiene una velocidad de 500 kbps.
-    \item \textbf{CAN-Diagnostic}: este es el bus de diagnositco que se revela en el puerto OBD-II situado en la parte inferior del salpicadero bajo el volante. Este es un bus que opera a 500 kbps.
-    \item \textbf{CAN-Comfort}: este bus al no ser de alta prioridad tiene una velocidad de 100 kbps y controla elevalunas, cierre centralizado, iluminación interna, etc.
-    \item \textbf{CAN-Infotainment}: este bus es el que controla los sistema de entretenimiento e información como la radio, navegación y bluetooth. Este bus también opera a 100 kbps.
-\end{itemize}
-
-En cuanto a la capa de Enlace y Red se encontró que se trabaja siguiendo las normas ISO(Organización Internacional de Normalización):
-\begin{itemize}
-    \item \textbf{ISO 11898-1}: este norma define el estándar físico y de enlace de datos del CAN Bus.
-    \item \textbf{ISO 15765(CAN-TP)}: el protocolo de transporte. El CAN Bus estándar solo envía 8 bytes por mensaje, pero la ECU necesita de un protocolo de transporte que le permita enviar mensajes de más de 8 bytes para poder enviar por ejemplo, el VIN del vehículo(17 bytes), este protocolo le permite fragmentar los mensajes en varios mensajes de 8 bytes y luego reensamblarlos en el destino.
-\end{itemize}
-
-\subsection{Diseño}
-
-Para el diseño del projecto se 
-
-Ajuste a la planificación inicialmente prevista.
-
-Modificación en los objetivos planteados.
+\chapter{Desarrollo del sistema}
+\input{Cap5_Desarrollo.tex}
 
 \chapter{Resultados}
-%\input{Resultados.tex}
-
-Presentación de los resultados del trabajo. Repercusión.
+\input{Cap6_Resultados.tex}
 
 \chapter{Conclusiones y trabajo futuro}
-%\input{Conclusiones.tex}
-Este es un CAPÍTULO \textbf{OBLIGATORIO}.
+\input{Cap7_Conclusiones.tex}
 
-\section{Conclusiones}
-
-Valoración de resultados, grado de consecución de los  objetivos.
-
-\section{Trabajo futuro}
-
-Líneas de trabajo futuro, aspectos pendientes, posibles extensiones.
-
-\section{Uso de la IA}
-
-Indicar el uso que se ha hecho de la IA tanto en la elaboración de este documento como en el desarrollo del TFG.
-
-\vspace{1cm}
-
-\textbf{EXTENSIÓN DE LA MEMORIA:}
-
-\begin{itemize}
-    \item GII, GIFM, DGII-ADE (parte de GII): entre 50 y 100 páginas
-    \item GCID: entre 75 y 100 páginas
-\end{itemize}
-
-\chapter{Otros capítulos y anexos}
-
-El documento debe terminar con las \textbf{referencias bibliográficas} (SECCIÓN \textbf{OBLIGATORIA}). Después pueden incluirse \textbf{anexos} de forma opcional.
-
-\section{Ejemplos de capítulos opcionales}
-
-Dependiendo del tipo de trabajo, se podrían incluir, en el orden que corresponda, capítulos adicionales como los siguientes:
-
-\begin{description}
-\item{REQUISITOS}
-\item{NORMATIVA Y LEGISLACIÓN} incluir la legislación vigente que afecte al TFT (ley de protección de datos, leyes sobre seguridad, ...)
-\item{ASPECTOS ECONÓMICOS Y TEMPORALES}
-\item{DISEÑO}
-\item{RESULTADOS EXPERIMENTALES}
-\item{MANUAL  DE  USUARIO  Y  SOFTWARE}  deberán  incluirse  obligatoriamente  en  la  memoria  los extractos más relevantes   del código desarrollado. Siempre que sea posible, deberá   proporcionarse acceso a un repositorio software.
-\end{description}
+\appendix
+\input{AnexoA_CodigoArduino.tex}
+\input{AnexoB_CodigoPython.tex}
+\input{AnexoC_CodigoApp.tex}
+\input{AnexoD_BaseDatos.tex}
 
 
 \clearpage

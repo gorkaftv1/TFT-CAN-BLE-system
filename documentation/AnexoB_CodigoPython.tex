@@ -1,0 +1,229 @@
+\chapter*{Anexo B — Código fuente de la herramienta Python}
+\addcontentsline{toc}{chapter}{Anexo B — Código fuente de la herramienta Python}
+\label{anexo:python}
+
+Este anexo recoge los fragmentos más representativos del código fuente de la
+herramienta de diagnóstico implementada en Python sobre Raspberry Pi.
+
+\section*{B.1 — Interfaces abstractas del núcleo}
+
+\begin{lstlisting}[language=Python, caption={Interfaz ITransport — contrato de la capa de transporte}]
+from __future__ import annotations
+from abc import ABC, abstractmethod
+from types import TracebackType
+
+
+class ITransport(ABC):
+
+    @abstractmethod
+    def connect(self) -> None: ...
+
+    @abstractmethod
+    def disconnect(self) -> None: ...
+
+    @abstractmethod
+    def send(self, payload: bytes) -> None: ...
+
+    @abstractmethod
+    def receive(self) -> bytes: ...
+
+    @abstractmethod
+    def __enter__(self) -> ITransport: ...
+
+    @abstractmethod
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None: ...
+\end{lstlisting}
+
+\section*{B.2 — Transporte ISO-TP sobre SocketCAN}
+
+\begin{lstlisting}[language=Python, caption={IsoTpTransport — implementacion concreta sobre python-can + can-isotp}]
+import time
+import can
+import isotp
+from config.can_config import CAN_RX_ID, CAN_TX_ID, ISOTP_CF_SEPARATION_MS, ISOTP_PADDING_BYTE
+from core.exceptions import DiagnosticTimeoutError
+from core.interfaces.i_transport import ITransport
+
+
+class IsoTpTransport(ITransport):
+
+    def __init__(self, channel: str = "can0", timeout: float = 5.0) -> None:
+        self._channel = channel
+        self._timeout = timeout
+        self._address = isotp.Address(
+            addressing_mode=isotp.AddressingMode.Normal_11bits,
+            txid=CAN_TX_ID,
+            rxid=CAN_RX_ID,
+        )
+        self._params = {
+            "stmin": ISOTP_CF_SEPARATION_MS,
+            "blocksize": 0,
+            "tx_padding": ISOTP_PADDING_BYTE,
+        }
+        self._stack: isotp.CanStack | None = None
+        self._bus: can.BusABC | None = None
+
+    def connect(self) -> None:
+        self._bus = can.Bus(channel=self._channel, interface="socketcan")
+        # Vaciar tramas residuales del buffer del kernel
+        while self._bus.recv(timeout=0) is not None:
+            pass
+        self._stack = isotp.CanStack(self._bus, address=self._address,
+                                     params=self._params)
+        self._flush_rx()
+
+    def disconnect(self) -> None:
+        if self._stack is None:
+            return
+        self._bus.shutdown()
+        self._stack = None
+        self._bus = None
+
+    def send(self, payload: bytes) -> None:
+        self._flush_rx()
+        self._stack.send(payload)
+        while self._stack.transmitting():
+            self._stack.process()
+            time.sleep(0.001)
+
+    def receive(self) -> bytes:
+        deadline = time.monotonic() + self._timeout
+        while time.monotonic() < deadline:
+            self._stack.process()
+            if self._stack.available():
+                return self._stack.recv()
+            time.sleep(0.001)
+        raise DiagnosticTimeoutError(f"No response within {self._timeout:.1f}s.")
+
+    def _flush_rx(self) -> None:
+        self._stack.process()
+        while self._stack.available():
+            self._stack.recv()
+            self._stack.process()
+\end{lstlisting}
+
+\section*{B.3 — Logger SQLite con modo WAL}
+
+\begin{lstlisting}[language=Python, caption={SqliteDataLogger — esquema, buffer de escritura y modo WAL}]
+import sqlite3, threading
+from datetime import datetime, timezone
+from core.interfaces.i_data_logger import IDataLogger
+
+_SCHEMA = """
+PRAGMA journal_mode=WAL;
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT    NOT NULL DEFAULT '',
+    started_at TEXT    NOT NULL,
+    ended_at   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS samples (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    pid          INTEGER NOT NULL,
+    name         TEXT    NOT NULL,
+    value        REAL    NOT NULL,
+    unit         TEXT    NOT NULL,
+    monotonic_ts REAL    NOT NULL,
+    wall_ts      TEXT    NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS commands (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    command      TEXT    NOT NULL,
+    request_hex  TEXT    NOT NULL,
+    response_hex TEXT    NOT NULL,
+    wall_ts      TEXT    NOT NULL
+);
+"""
+
+_BUFFER_SIZE = 50
+
+
+class SqliteDataLogger(IDataLogger):
+    # WAL permite escrituras concurrentes desde hilo monitor y hilo BLE.
+
+    def __init__(self, db_path: str = "diagnostics.db") -> None:
+        self._lock = threading.Lock()
+        self._sample_buffer: list[tuple] = []
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._conn.executescript(_SCHEMA)
+        self._conn.commit()
+
+    def log_sample(self, session_id: int, sample) -> None:
+        row = (session_id, sample.pid, sample.name, sample.value,
+               sample.unit, sample.timestamp,
+               datetime.now(timezone.utc).isoformat())
+        with self._lock:
+            self._sample_buffer.append(row)
+            if len(self._sample_buffer) >= _BUFFER_SIZE:
+                self._flush_buffer()
+
+    def log_command(self, session_id, command, request, response) -> None:
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO commands"
+                " (session_id, command, request_hex, response_hex, wall_ts)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (session_id, command, request.hex(), response.hex(),
+                 datetime.now(timezone.utc).isoformat()),
+            )
+            self._conn.commit()
+
+    def _flush_buffer(self) -> None:
+        if not self._sample_buffer:
+            return
+        self._conn.executemany(
+            "INSERT INTO samples"
+            " (session_id, pid, name, value, unit, monotonic_ts, wall_ts)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
+            self._sample_buffer,
+        )
+        self._conn.commit()
+        self._sample_buffer.clear()
+\end{lstlisting}
+
+\section*{B.4 — Decorador LoggingTransport}
+
+\begin{lstlisting}[language=Python, caption={LoggingTransport — patron decorador sobre ITransport}]
+from core.interfaces.i_transport import ITransport
+from core.interfaces.i_data_logger import IDataLogger
+
+
+class LoggingTransport(ITransport):
+    """Envuelve cualquier ITransport e intercepta send/receive para loggear
+    las tramas CAN en hexadecimal en SQLite sin modificar el transporte base."""
+
+    def __init__(self, inner: ITransport, logger: IDataLogger,
+                 session_id: int, command: str) -> None:
+        self._inner = inner
+        self._logger = logger
+        self._session_id = session_id
+        self._command = command
+        self._last_sent: bytes = b""
+
+    def connect(self) -> None:    self._inner.connect()
+    def disconnect(self) -> None: self._inner.disconnect()
+    def __enter__(self):          self._inner.connect(); return self
+    def __exit__(self, *a):       self._inner.disconnect()
+
+    def send(self, payload: bytes) -> None:
+        self._last_sent = payload
+        self._inner.send(payload)
+
+    def receive(self) -> bytes:
+        response = self._inner.receive()
+        self._logger.log_command(
+            self._session_id, self._command,
+            self._last_sent, response,
+        )
+        return response
+\end{lstlisting}

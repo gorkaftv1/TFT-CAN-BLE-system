@@ -1,0 +1,122 @@
+\section{Simulador de ECU — Arduino MKR}
+\label{sec:arduino}
+
+El simulador de ECU es el componente que permite validar la herramienta de diagnóstico de forma independiente de un vehículo real. Se implementa sobre un Arduino MKR con shield CAN basado en el controlador MCP2515, conectado al bus CAN a 500\,kbps. El código fuente completo del simulador se recoge en el Anexo~A.
+
+
+\subsection{Hardware y configuración del bus CAN}
+
+El Arduino MKR opera a 3,3\,V y dispone de comunicación SPI para el controlador MCP2515. La librería CAN utilizada inicializa el controlador a 500\,kbps y configura un filtro de aceptación para recibir únicamente los identificadores relevantes: \texttt{0x7DF} (broadcast funcional OBD-II) y \texttt{0x7E0} (dirección física de la ECU simulada).
+
+Las constantes de configuración del protocolo se concentran en el fichero \texttt{ecu\_protocol.h}, separando la parametrización del código de lógica. Entre los identificadores definidos destacan:
+
+\begin{itemize}
+    \item \texttt{ECU\_CAN\_ID} = \texttt{0x7E0}: identificador del tester (peticiones)
+    \item \texttt{ECU\_RESPONSE\_ID} = \texttt{0x7E8}: identificador de respuesta de la ECU
+    \item \texttt{FC\_BLOCK\_SIZE} = 0: bloqueo de control de flujo (sin límite de bloque)
+    \item \texttt{FC\_ST\_MIN} = 10\,ms: tiempo mínimo entre Consecutive Frames
+\end{itemize}
+
+
+\subsection{Modelo físico del motor}
+
+Para que los datos de telemetría devueltos por el simulador presenten un comportamiento realista y dinámico, se implementa un modelo físico simplificado del motor que actualiza sus variables de estado en cada iteración del bucle principal.
+
+Las variables del modelo físico son:
+
+\begin{itemize}
+    \item \textbf{RPM}: se modela con una rampa de aceleración/deceleración limitada por la tasa máxima de cambio (\texttt{RPM\_ACCEL\_RATE}). El valor oscila entre el ralentí (\textasciitilde{}800\,rpm) y el máximo configurado, siguiendo una curva pseudoaleatoria que simula el uso normal del vehículo.
+
+    \item \textbf{Velocidad}: calculada a partir de las RPM mediante la relación de transmisión simulada, con un componente inercial que introduce retardo en la respuesta.
+
+    \item \textbf{Temperatura del refrigerante}: sigue una curva de calentamiento exponencial desde la temperatura ambiente hasta la temperatura de operación normal (\textasciitilde{}90\,°C), con variaciones pequeñas en estado estacionario.
+
+    \item \textbf{Temperatura del aceite}: similar a la del refrigerante pero con una constante de tiempo más lenta.
+
+    \item \textbf{Posición del acelerador}: valor pseudoaleatorio que actúa como entrada del modelo de RPM.
+
+    \item \textbf{Presión de combustible}, \textbf{tensión de batería}, \textbf{consumo de combustible}: valores derivados de las RPM y la posición del acelerador mediante relaciones lineales con ruido añadido.
+\end{itemize}
+
+El modelo se actualiza con una frecuencia de 100\,ms en el bucle principal, y los valores calculados se codifican directamente en los bytes de respuesta OBD-II según las fórmulas del estándar SAE J1979 para cada PID.
+
+
+\subsection{Implementación de los modos OBD-II}
+
+La función central de decodificación de peticiones \texttt{processCANMessage()} analiza el primer byte de datos de cada trama recibida para determinar el modo de servicio, y el segundo byte para el PID específico en el modo 0x01 y 0x09.
+
+\subsubsection{Modo 0x01 — Datos en vivo}
+
+Se implementan 23 PIDs. La respuesta se construye en un buffer de 8 bytes con el formato OBD-II estándar: byte de longitud ISO-TP (tipo SF + longitud), byte de modo de respuesta (\texttt{0x41}), byte de PID y bytes de datos codificados.
+
+La decodificación inversa sigue las fórmulas del estándar para cada PID. Como ejemplo, el PID \texttt{0x0C} (RPM) codifica el valor en dos bytes según:
+
+\[
+    \text{valor raw} = \text{RPM} \times 4 \quad \Rightarrow \quad
+    \text{byte\_A} = \lfloor \text{valor raw} / 256 \rfloor, \quad
+    \text{byte\_B} = \text{valor raw} \bmod 256
+\]
+
+El PID \texttt{0x00} (soporte de PIDs 0x01--0x20) devuelve una máscara de bits de 32 bits que indica qué PIDs están disponibles, permitiendo a la herramienta de diagnóstico realizar una enumeración automática de capacidades.
+
+\subsubsection{Modo 0x03 — Lectura de DTCs}
+
+El simulador mantiene una lista de DTCs activos (\texttt{dtcList[]}) con un contador \texttt{numStoredDTCs}. La respuesta del modo 0x03 incluye la cuenta de DTCs seguida de los pares de bytes correspondientes a cada código, codificados según el formato J2012: los dos bits más significativos del primer byte indican la categoría (00=P, 01=C, 10=B, 11=U) y los 12 bits restantes el código numérico en BCD.
+
+\subsubsection{Modo 0x04 — Borrado de DTCs}
+
+Al recibir una petición de modo 0x04, el simulador reinicia \texttt{numStoredDTCs} a cero, desactiva el flag \texttt{checkEngineLight} y responde con el byte de confirmación \texttt{0x44}.
+
+\subsubsection{Modo 0x09 — Información del vehículo (VIN)}
+
+El PID \texttt{0x02} del modo 0x09 devuelve el VIN del vehículo, una cadena ASCII de 17 caracteres. Dado que la respuesta completa ocupa 20 bytes (3 de cabecera ISO-TP más 17 del VIN), supera la capacidad de una Single Frame y requiere transmisión multi-frame.
+
+La secuencia de transmisión es:
+\begin{enumerate}
+    \item \textbf{First Frame}: PCI \texttt{0x10 0x14} (longitud = 20 bytes), modo
+    \texttt{0x49}, PID \texttt{0x02}, contador \texttt{0x01} y primeros 3 bytes del VIN.
+    \item Espera del \textbf{Flow Control} del tester.
+    \item \textbf{Consecutive Frame 1}: SN \texttt{0x21}, bytes 4--10 del VIN.
+    \item \textbf{Consecutive Frame 2}: SN \texttt{0x22}, bytes 11--17 del VIN
+    (con padding).
+\end{enumerate}
+
+Esta implementación manual de la secuencia multi-frame en el simulador fue uno de los puntos más críticos del desarrollo, ya que cualquier error en el contador de secuencia o en el timing entre tramas provocaba el rechazo de la sesión por parte de la librería \texttt{can-isotp} en la Raspberry Pi.
+
+
+\subsection{Mecanismos de simulación de ruido CAN}
+\label{sec:ruido_can}
+
+Una de las aportaciones más relevantes del simulador es la capacidad de reproducir condiciones adversas del bus CAN de forma controlada y reproducible. Los mecanismos de ruido se activan mediante el flag \texttt{canNoiseEnabled} y se aplican durante el procesamiento de cada petición recibida.
+
+\subsubsection{Latencia variable}
+
+Antes de procesar la petición, el simulador introduce un retardo aleatorio entre \texttt{CAN\_LATENCY\_MIN\_MS} (1\,ms) y \texttt{CAN\_LATENCY\_MAX\_MS} (15\,ms) mediante \texttt{delay(random(...))}. Este retardo simula la variabilidad de la carga del bus en un entorno vehicular real, donde múltiples ECUs compiten por el acceso al medio de forma simultánea.
+
+\subsubsection{Descarte de paquetes}
+
+Con una probabilidad configurable (\texttt{CAN\_DROP\_PCT} = 2\%), el simulador descarta la petición sin emitir respuesta alguna, simplemente retornando de la función de procesamiento. Este comportamiento simula la pérdida de tramas por colisión o por degradación de la señal en el bus.
+
+\subsubsection{Respuestas negativas esporádicas}
+
+Con una probabilidad independiente (\texttt{CAN\_NRC\_PCT} = 1\%), el simulador responde con una respuesta negativa UDS con NRC \texttt{0x22} (\textit{conditionsNotCorrect}), que indica que la ECU no puede atender la petición en ese momento. Esta simulación reproduce el comportamiento real de las ECUs cuando reciben peticiones fuera de su ventana de ejecución.
+
+\subsubsection{Tráfico de fondo}
+
+La función \texttt{generateBackgroundTraffic()} se invoca en cada iteración del bucle principal y, con una probabilidad del 30\% por ciclo, envía una trama CAN con un identificador aleatorio de entre cuatro seleccionados (\texttt{0x280, 0x480, 0x320, 0x520}) y 8 bytes de datos aleatorios. Este tráfico imita las transmisiones periódicas de otras ECUs del vehículo (módulo de carrocería, ABS, dirección asistida) y permite verificar que el filtro de aceptación de la Raspberry Pi funciona correctamente bajo carga.
+
+
+\subsection{Inyección de DTCs por interrupción hardware}
+
+Para simular la aparición espontánea de averías durante una sesión de diagnóstico, el simulador implementa un mecanismo de inyección de DTCs activado por la señal en el pin digital D6 (\texttt{DTC\_FAULT\_PIN}).
+
+El patrón de implementación sigue la práctica estándar para ISR en Arduino:
+
+\begin{enumerate}
+    \item La ISR \texttt{onDtcFaultButton()} es minimalista: únicamente activa un flag \texttt{volatile bool dtcFaultPressed = true}.
+    \item La lógica de debounce (300\,ms) y la inyección propiamente dicha se realizan en la función \texttt{handleDtcFaultButton()}, llamada desde el bucle principal, donde es seguro ejecutar operaciones con efectos de bloqueo.
+    \item Se selecciona aleatoriamente uno de los 12 DTCs disponibles en la tabla del simulador: P0300, P0301, P0302, P0303, P0113, P0118, P0340, P0341, P0500, P0501, P0171, P0172.
+    \item Se comprueba que el código seleccionado no esté ya presente en \texttt{dtcList[]} antes de insertarlo (deduplicación), y se activa el flag \texttt{checkEngineLight}.
+\end{enumerate}
+
+Esta funcionalidad permite al operador del banco de pruebas introducir averías de forma controlada durante una sesión de diagnóstico activa y verificar que la herramienta Python las detecta correctamente en la siguiente consulta del modo 0x03.

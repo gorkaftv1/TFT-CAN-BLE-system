@@ -1,0 +1,42 @@
+\section{Contexto y motivación}
+
+El sector del automóvil ha experimentado durante las últimas décadas una transformación profunda que ha llevado al vehículo moderno a convertirse en una plataforma de computación distribuida sobre ruedas. Si a mediados del siglo XX un automóvil podía describirse en términos puramente mecánicos, hoy un turismo de gama media incorpora entre 30 y 100 Unidades de Control Electrónico (ECU, del inglés \textit{Electronic Control Unit}), cada una de ellas responsable de gestionar un subsistema específico del vehículo: desde la inyección de combustible y la gestión del motor hasta el control de tracción, los sistemas de ayuda a la conducción o el infoentretenimiento. Esta proliferación de sistemas electrónicos ha mejorado drásticamente la seguridad, la eficiencia energética y la experiencia del conductor, pero ha introducido al mismo tiempo una complejidad técnica que plantea nuevos retos en materia de diagnóstico y mantenimiento.
+
+Para que todas estas ECUs puedan intercambiar información de forma fiable y en tiempo real, los fabricantes adoptaron a partir de los años noventa el bus CAN (\textit{Controller Area Network}), un protocolo de comunicaciones serie desarrollado originalmente por Robert Bosch GmbH en 1983 y estandarizado bajo la norma ISO 11898. El bus CAN permite que múltiples nodos compartan un mismo par de cables trenzados, con un mecanismo de arbitraje no destructivo basado en la prioridad del identificador de mensaje y una robusta señalización diferencial que lo hace especialmente resistente al ruido electromagnético propio del entorno vehicular.
+
+Sobre esta infraestructura de comunicaciones, la industria desarrolló el estándar OBD-II (\textit{On-Board Diagnostics}, segunda generación), que desde el año 1996 es obligatorio en Estados Unidos y desde principios de los 2000 en Europa bajo la denominación EOBD. OBD-II define un conector físico normalizado de 16 pines accesible desde el interior del vehículo, así como un conjunto de servicios y parámetros estandarizados que permiten a cualquier herramienta de diagnóstico externa consultar el estado del motor, leer los códigos
+de avería almacenados en las ECUs o identificar el vehículo mediante su número de identificación (VIN). Sin embargo, el acceso a esta información en la práctica ha quedado históricamente restringido al ámbito profesional: los escáneres de diagnóstico comerciales que implementan estos protocolos de forma completa tienen un coste elevado, requieren cableado dedicado y, en muchos casos, ofrecen interfaces poco intuitivas orientadas exclusivamente al técnico especializado.
+
+Este escenario pone de manifiesto una oportunidad clara: desarrollar una solución alternativa, de bajo coste y acceso inalámbrico, basada en plataformas de prototipado electrónico ampliamente disponibles, que permita acceder a la información diagnóstica del vehículo de forma portable e intuitiva. Esta es precisamente la motivación central de este Trabajo de Fin de Título.
+
+
+\section{Descripción del sistema desarrollado}
+
+El presente trabajo aborda el diseño y desarrollo de un sistema empotrado de diagnóstico vehicular compuesto por tres componentes principales que trabajan de forma integrada.
+
+El primer componente es un \textbf{simulador de ECU} implementado sobre una plataforma Arduino MKR con shield CAN. Este simulador reproduce el comportamiento de una ECU real en el bus CAN, respondiendo a peticiones OBD-II estándar con datos de telemetría generados mediante un modelo físico simplificado del motor: RPM, velocidad, temperaturas, presiones y códigos de avería, entre otros. El simulador incluye además mecanismos de inyección de ruido CAN y generación de tráfico de fondo, diseñados para validar la robustez del sistema de diagnóstico frente a condiciones adversas del bus.
+
+El segundo componente es la \textbf{herramienta de diagnóstico}, ejecutada sobre una Raspberry Pi conectada al bus CAN mediante un controlador MCP2515. Esta herramienta implementa la pila de protocolos completa: ISO-TP (ISO 15765-2) como capa de transporte sobre CAN, y OBD-II (SAE J1979) como capa de aplicación. La herramienta decodifica los parámetros recibidos, los persiste en una base de datos SQLite y los expone de forma inalámbrica a través de un servidor BLE GATT que implementa el servicio Nordic UART Service (NUS).
+
+El tercer componente es una \textbf{aplicación móvil} desarrollada con React Native y Expo, compatible con Android e iOS, que se conecta a la Raspberry Pi vía Bluetooth Low Energy. La aplicación ofrece al usuario una interfaz para la monitorización en tiempo real de los parámetros del vehículo, la consulta y gestión de códigos de avería, el acceso al historial de sesiones almacenadas y una consola de comandos directa.
+
+El conjunto del sistema constituye una plataforma de diagnóstico OBD-II portable, inalámbrica y de bajo coste, validada sobre un banco de pruebas basado en Arduino antes de su uso sobre hardware vehicular real.
+
+
+\section{Estructura del documento}
+
+El presente documento se organiza en siete capítulos cuyo contenido se resume a continuación.
+
+El \textbf{Capítulo~2} recoge la motivación detallada del trabajo, el análisis de las soluciones existentes en el mercado y la definición de los objetivos que se pretenden alcanzar.
+
+El \textbf{Capítulo~3} describe las principales aportaciones del trabajo, las competencias específicas del Grado de Ingeniería Informática desarrolladas durante su realización y la relación del proyecto con los Objetivos de Desarrollo Sostenible de la ONU.
+
+El \textbf{Capítulo~4} presenta la metodología de desarrollo seguida, basada en prototipos incrementales, y detalla las fases y tareas en las que se estructuró el trabajo, incluyendo una valoración de las desviaciones respecto a la planificación inicial.
+
+El \textbf{Capítulo~5} constituye el núcleo técnico de la memoria. Describe en detalle los protocolos de comunicación empleados (CAN, ISO-TP, OBD-II y BLE GATT), el diseño e implementación de cada uno de los tres componentes del sistema, y las pruebas de integración realizadas.
+
+El \textbf{Capítulo~6} presenta los resultados obtenidos, incluyendo métricas de rendimiento y una evaluación del grado de consecución de los objetivos planteados.
+
+El \textbf{Capítulo~7} recoge las conclusiones del trabajo, las líneas de trabajo futuro identificadas y una reflexión sobre el uso de herramientas de inteligencia artificial durante el desarrollo.
+
+Finalmente, el documento incluye la bibliografía de referencia y cuatro anexos con fragmentos representativos del código fuente desarrollado y el esquema de la base de datos.

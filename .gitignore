@@ -16,8 +16,8 @@
 *.synctex.gz
 *.toc
 *.xdv
-documentation/*.pdf
-
+*.lol
+*.loa
 # ===== Arduino =====
 arduino-sim/**/.cache/
 arduino-sim/**/build/

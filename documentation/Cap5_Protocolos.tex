@@ -1,0 +1,117 @@
+\section{Protocolos de comunicación}
+\label{sec:protocolos}
+
+Esta sección describe los cuatro protocolos de comunicación que conforman la pila de  del sistema, desde la capa física del bus CAN hasta el nivel de aplicación . Para cada protocolo se presenta su estructura de trama o paquete, los  de control relevantes y la forma en que se ha implementado en este trabajo.
+
+
+\subsection{CAN — Controller Area Network (ISO 11898)}
+\label{sec:proto_can}
+
+El bus CAN es un protocolo de comunicaciones serie orientado a mensajes, diseñado para  comunicación entre nodos en entornos con alta interferencia electromagnética. Fue  por Robert Bosch GmbH en 1983 y estandarizado bajo la norma ISO 11898.
+
+En su variante CAN 2.0A, que es la empleada en este trabajo, cada trama de datos  compuesta por los campos que se recogen en la tabla~\ref{tab:can_frame}.
+
+\input{fig_can_frame.tex}
+
+El campo \textbf{Identificador} (11 bits en CAN 2.0A) determina tanto la prioridad del  como su propósito lógico. En el contexto OBD-II, el tester externo emplea el  funcional \texttt{0x7DF} para direccionamiento broadcast o el identificador  \texttt{0x7E0} para dirigirse directamente a la ECU, mientras que la ECU responde  \texttt{0x7E8}. El mecanismo de arbitraje no destructivo garantiza que, en caso de , el mensaje con identificador de menor valor gana el bus sin que ningún nodo  datos.
+
+El campo \textbf{DLC} (\textit{Data Length Code}, 4 bits) indica el número de bytes de  de la trama, de 0 a 8. OBD-II utiliza tramas de 8 bytes, rellenando con \texttt{0x55}  \texttt{0xAA} los bytes no utilizados (padding).
+
+En este trabajo, el bus opera a \textbf{500\,kbps}, velocidad estándar para los sistemas -II modernos. La interfaz \texttt{SocketCAN} de Linux, accesible desde la Raspberry Pi  través del controlador MCP2515, expone el bus CAN como un \textit{socket} de red , lo que permite su uso desde Python mediante la librería \texttt{python-can} con  abstracción de alto nivel.
+
+
+\subsection{ISO-TP — Transport Protocol (ISO 15765-2)}
+\label{sec:proto_isotp}
+
+El protocolo de transporte ISO-TP define cómo segmentar y reasamblar mensajes de hasta  bytes sobre tramas CAN, cuyo campo de datos está limitado a 8 bytes. ISO-TP es  capa de transporte obligatoria para la comunicación OBD-II sobre CAN.
+
+ISO-TP define cuatro tipos de trama, identificados por los primeros nibbles del primer  de datos (campo PCI, \textit{Protocol Control Information}), tal como se muestra  la tabla~\ref{tab:isotp_frames}.
+
+\input{fig_isotp_frames.tex}
+
+Para mensajes de hasta 7 bytes (el caso más habitual en OBD-II modo 0x01), se emplea  \textbf{Single Frame} (SF), que incluye el PCI (\texttt{0x0N}, donde N es la longitud),  directamente por los bytes de datos.
+
+Para mensajes más largos, como la respuesta al PID \texttt{0x09 0x02} (VIN, 17 bytes más  longitud), el flujo de transmisión multi-frame ilustrado en la ~\ref{fig:isotp_multiframe} sigue la secuencia:
+
+\begin{enumerate}
+    \item El transmisor envía una \textbf{First Frame} (FF) con los primeros 6 bytes de datos y la longitud total del mensaje en el campo \texttt{FF\_DL}. \item El receptor responde con un \textbf{Flow Control} (FC) frame que autoriza la transmisión e indica el tamaño de bloque (\texttt{BS}) y el tiempo mínimo entre tramas (\texttt{STmin}).
+    \item El transmisor envía los \textbf{Consecutive Frames} (CF) necesarios, con un contador de secuencia (\texttt{SN}) de 0 a 15 que se reinicia cíclicamente.
+\end{enumerate}
+
+\begin{figure}[!htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{Ilustraciones/fig_isotp_multiframe.png}
+\caption{Flujo de transmisión ISO-TP multi-frame para la respuesta VIN (17 bytes).}
+\label{fig:isotp_multiframe}
+\end{figure}
+
+La implementación Python utiliza la librería \texttt{can-isotp}, que gestiona de forma transparente la segmentación, el Flow Control y la temporización, exponiendo al nivel de aplicación una interfaz de lectura/escritura de mensajes completos. En el simulador Arduino, la secuencia FF+CF se implementa de forma manual sobre la librería CAN del fabricante, con la temporización controlada por \texttt{delay()} entre tramas consecutivas.
+
+
+\subsection{OBD-II — On-Board Diagnostics (SAE J1979)}
+\label{sec:proto_obd2}
+
+OBD-II es el estándar de diagnóstico vehicular que define los servicios y parámetros que toda ECU conforme debe implementar. En la práctica, la comunicación OBD-II se estructura como un protocolo de petición-respuesta a nivel de aplicación, transportado sobre ISO-TP.
+
+La tabla~\ref{tab:obd2_format} ilustra el formato de los mensajes de petición y respuesta para el caso concreto del PID \texttt{0x0C} (RPM del motor) en modo \texttt{0x01}.
+
+\input{fig_obd2_format.tex}
+
+Cada petición OBD-II incluye un byte de modo y, opcionalmente, uno o más bytes de PID. La respuesta de la ECU incluye el modo de respuesta (modo + \texttt{0x40}), el PID solicitado y los bytes de datos codificados, cuya interpretación depende de la fórmula de decodificación definida por el estándar para cada PID.
+
+El ciclo completo de una consulta OBD-II se ilustra en la figura~\ref{fig:obd2_cycle}, que muestra la propagación del comando desde la aplicación móvil hasta la ECU y el camino de retorno de los datos decodificados.
+
+\begin{figure}[!htbp]
+\centering
+% \includegraphics[width=\textwidth]{Ilustraciones/fig_obd2_cycle.png}
+\caption{Ciclo completo de una consulta OBD-II desde la aplicación móvil hasta la ECU.}
+\label{fig:obd2_cycle}
+\end{figure}
+
+Los cuatro modos implementados en este trabajo son:
+
+\begin{itemize}
+    \item \textbf{Modo 0x01 — Datos en vivo (PIDs activos).} Permite consultar el valor actual de parámetros operativos del motor. Se han implementado 23 PIDs, incluyendo RPM (\texttt{0x0C}), velocidad (\texttt{0x0D}), temperatura del refrigerante (\texttt{0x05}), presión de combustible (\texttt{0x0A}), posición del acelerador (\texttt{0x11}) y consumo de combustible (\texttt{0x5E}), entre otros.
+
+    \item \textbf{Modo 0x03 — Lectura de DTCs almacenados.} Devuelve la lista de códigos de avería (\textit{Diagnostic Trouble Codes}) presentes en la memoria de la ECU. Cada DTC se codifica en dos bytes según el formato J2012: el nibble más significativo indica la categoría (P/C/B/U), los 12 bits restantes el código numérico.
+
+    \item \textbf{Modo 0x04 — Borrado de DTCs.} Borra todos los DTCs almacenados y reinicia el estado del indicador \textit{Check Engine}. Este servicio no requiere PID adicional; la ECU responde con un byte de confirmación (\texttt{0x44}).
+
+    \item \textbf{Modo 0x09 — Información del vehículo.} Permite obtener el número de identificación del vehículo (VIN, PID \texttt{0x02}), que en este trabajo se devuelve como una cadena ASCII de 17 caracteres mediante una secuencia ISO-TP multi-frame.
+\end{itemize}
+
+Cuando la ECU no puede atender una petición (modo no soportado, condiciones no adecuadas, PID no implementado), responde con una \textbf{Respuesta Negativa UDS} (ISO 14229-1) con identificador \texttt{0x7EF}. El byte NRC (\textit{Negative Response Code}) identifica la causa del rechazo: \texttt{0x11} (servicio no soportado), \texttt{0x12} (subfunción no soportada), \texttt{0x22} (condiciones no cumplidas) o \texttt{0x33} (seguridad no desbloqueada).
+
+
+\subsection{BLE GATT y Nordic UART Service}
+\label{sec:proto_ble}
+
+La comunicación inalámbrica entre la Raspberry Pi y la aplicación móvil se implementa mediante Bluetooth Low Energy, usando el perfil GATT (\textit{Generic Attribute Profile}). GATT organiza la comunicación en torno a \textit{servicios} y \textit{características}: cada servicio agrupa un conjunto de características que representan datos o funciones accesibles por el cliente.
+
+El servicio empleado en este trabajo es el \textbf{Nordic UART Service (NUS)}, un servicio GATT estándar de facto ampliamente soportado que emula un puerto serie bidireccional sobre BLE. NUS define dos características principales:
+
+\begin{itemize}
+    \item \textbf{TX Characteristic} (\texttt{6E400003-...}): el servidor envía datos al cliente mediante notificaciones GATT. El cliente activa las notificaciones escribiendo en el descriptor CCCD (\textit{Client Characteristic Configuration Descriptor}).
+    \item \textbf{RX Characteristic} (\texttt{6E400002-...}): el cliente escribe datos al servidor mediante operaciones GATT Write.
+\end{itemize}
+
+\begin{figure}[!htbp]
+\centering
+% \includegraphics[width=0.75\textwidth]{Ilustraciones/fig_ble_nus_packet.png}
+\caption{Estructura de capas del paquete BLE NUS.}
+\label{fig:ble_nus_packet}
+\end{figure}
+
+El MTU negociado durante el establecimiento de la conexión determina el tamaño máximo  cada paquete de datos. En este trabajo se configura un MTU de 240 bytes, suficiente
+para transportar los objetos JSON más grandes de la aplicación (respuestas con múltiples muestras de telemetría) en un único paquete, evitando la fragmentación a nivel de aplicación.
+
+El flujo de establecimiento de conexión se representa en la figura~\ref{fig:ble_gatt_flow} e incluye las fases de advertising, conexión, negociación de MTU, descubrimiento de servicios, activación de notificaciones y autenticación por token.
+
+\begin{figure}[!htbp]
+\centering
+% \includegraphics[width=0.85\textwidth]{Ilustraciones/fig_ble_gatt_flow.png}
+\caption{Flujo de establecimiento de sesión BLE GATT entre la aplicación móvil y la Raspberry Pi.}
+\label{fig:ble_gatt_flow}
+\end{figure}
+
+Sobre la capa de transporte NUS se define un \textbf{protocolo de comandos JSON} específico de la aplicación, que estructura los intercambios en forma de petición-respuesta. Cada objeto JSON de petición incluye un campo \texttt{cmd} que identifica la operación solicitada, y opcionalmente parámetros adicionales. Las respuestas incluyen siempre un campo \texttt{ok} booleano y los datos correspondientes al comando.

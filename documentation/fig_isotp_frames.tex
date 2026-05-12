@@ -1,0 +1,42 @@
+% Tipos de trama ISO-TP — tabla LaTeX
+% PCI byte en negrita. Padding 0xAA en cursiva.
+% Requiere: array (ya en main.tex)
+
+\begin{table}[!htbp]
+\caption{Tipos de trama ISO-TP (ISO 15765-2). El byte PCI (en negrita) codifica en sus cuatro bits superiores el tipo de trama y en los inferiores metadatos de longitud o control de flujo. El relleno \texttt{0xAA} se usa para completar los 8 bytes del payload CAN.}
+\label{tab:isotp_frames}
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Tipo} &
+\textbf{Byte 0} & \textbf{Byte 1} & \textbf{Byte 2} & \textbf{Byte 3} &
+\textbf{Byte 4} & \textbf{Byte 5} & \textbf{Byte 6} & \textbf{Byte 7} \\
+\hline
+\textbf{SF} \textit{Single Frame} &
+\textbf{0x0N} & D\textsubscript{1} & D\textsubscript{2} & D\textsubscript{3} &
+D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7} \\
+\hline
+\textbf{FF} \textit{First Frame} &
+\textbf{0x1H} & \textbf{0xLL} & D\textsubscript{1} & D\textsubscript{2} &
+D\textsubscript{3} & D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} \\
+\hline
+\textbf{CF} \textit{Consecutive Frame} &
+\textbf{0x2N} & D\textsubscript{1} & D\textsubscript{2} & D\textsubscript{3} &
+D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7} \\
+\hline
+\textbf{FC} \textit{Flow Control} &
+\textbf{0x3F} & \textbf{BS} & \textbf{STmin} & \textit{0xAA} &
+\textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
+\hline
+\end{tabular}
+
+\vspace{0.5em}
+\begin{tabular}{ll}
+\textbf{N} & longitud payload (SF) o número de secuencia (CF, 0x1--0xF) \\
+\textbf{H:LL} & longitud total del mensaje en 12 bits (FF, máx. 4095 bytes) \\
+\textbf{F} & flag Flow Control: 0=ContinueSending, 1=Wait, 2=Overflow \\
+\textbf{BS} & BlockSize: número de CFs antes del siguiente FC (0 = sin límite) \\
+\textbf{STmin} & separación mínima entre CFs en milisegundos \\
+\end{tabular}
+\end{table}

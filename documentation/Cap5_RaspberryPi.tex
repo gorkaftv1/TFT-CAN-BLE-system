@@ -1,0 +1,85 @@
+\section{Herramienta de diagnóstico — Raspberry Pi}
+\label{sec:raspberry}
+
+La herramienta de diagnóstico es el componente central del sistema: recibe peticiones desde la aplicación móvil vía BLE, las traduce a secuencias ISO-TP sobre el bus CAN, interpreta las respuestas de la ECU, persiste los datos en SQLite y devuelve los resultados al cliente móvil. Se implementa en Python 3 sobre Raspberry Pi con controlador CAN MCP2515. El código fuente se recoge en el Anexo~B.
+
+
+\subsection{Arquitectura software}
+\label{sec:python_arch}
+
+La herramienta sigue un diseño basado en interfaces y capas desacopladas mediante inyección de dependencias. Esta decisión arquitectónica, que supuso una inversión inicial de tiempo mayor a la contemplada en el diseño rápido, resultó rentable en las fases posteriores al facilitar las pruebas sin hardware y la extensión progresiva del sistema.
+
+Las interfaces abstractas principales son:
+
+\begin{itemize}
+    \item \textbf{\texttt{ITransport}}: define las operaciones de envío y recepción de mensajes ISO-TP (\texttt{send}, \texttt{recv}). Las implementaciones concretas son \texttt{CanTransport} (bus CAN real mediante \texttt{can-isotp}) y \texttt{MockTransport} (respuestas predefinidas para pruebas sin hardware).
+
+    \item \textbf{\texttt{IProtocolBuilder}}: define la construcción de mensajes OBD-II (\texttt{build\_request}). La implementación \texttt{OBD2ProtocolBuilder} genera las tramas de petición según el estándar SAE J1979.
+
+    \item \textbf{\texttt{IDataDecoder}}: define la decodificación de respuestas OBD-II (\texttt{decode\_response}). La implementación \texttt{OBD2DataDecoder} aplica las fórmulas del estándar para cada PID y devuelve valores con unidades.
+
+    \item \textbf{\texttt{IDiagnosticSession}}: define la interfaz de sesión de diagnóstico (\texttt{query\_pid}, \texttt{read\_dtcs}, \texttt{clear\_dtcs}, \texttt{get\_vin}). La implementación \texttt{DiagnosticSession} orquesta las demás interfaces.
+\end{itemize}
+
+Sobre esta estructura base se aplica el patrón decorador mediante \textbf{\texttt{LoggingTransport}}, que envuelve cualquier \texttt{ITransport} e intercepta todas las operaciones de envío y recepción para registrarlas en la base de datos SQLite, sin modificar el comportamiento del transporte subyacente. La composición resultante es:
+
+\[
+    \texttt{LoggedDiagnosticSession}(
+    \texttt{LoggingTransport}(\texttt{CanTransport}),\ \texttt{OBD2ProtocolBuilder},\
+    \texttt{OBD2DataDecoder},\ \texttt{SQLiteLogger}
+    )
+\]
+
+
+\subsection{Capa de transporte CAN e ISO-TP}
+
+La comunicación con el bus CAN se realiza a través de la interfaz \texttt{SocketCAN} de Linux, configurada mediante \texttt{ip link set can0 up type can bitrate 500000}. La librería \texttt{python-can} proporciona una abstracción de alto nivel sobre esta interfaz, mientras que \texttt{can-isotp} gestiona de forma automática la segmentación y reensamblado ISO-TP, el control de flujo y la temporización entre tramas.
+
+La configuración del socket ISO-TP define la dirección del tester (\texttt{0x7E0}) y la dirección de respuesta de la ECU (\texttt{0x7E8}), con \texttt{padding} activado para cumplir con el relleno a 8 bytes requerido por el estándar. El timeout de recepción se fija en 1\,segundo, valor suficiente para absorber la latencia máxima introducida por el simulador (15\,ms) con amplio margen.
+
+
+\subsection{Módulo de logging en SQLite}
+
+Toda la información de diagnóstico se persiste en una base de datos SQLite cuyo esquema se detalla en el Anexo~D. La base de datos opera en modo WAL (\textit{Write-Ahead Logging}), que permite escrituras concurrentes desde el hilo de monitorización y el hilo de atención a comandos BLE sin bloqueos mutuos.
+
+Las tres tablas principales del esquema son:
+
+\begin{itemize}
+    \item \textbf{\texttt{sessions}}: registra cada sesión de diagnóstico con su timestamp de inicio y fin, el identificador del dispositivo cliente BLE y el número de muestras recogidas.
+
+    \item \textbf{\texttt{samples}}: almacena cada muestra de telemetría con el timestamp, el PID consultado, el valor decodificado, la unidad y la trama CAN en hexadecimal (campo \texttt{raw\_hex}). Este último permite reconstruir la secuencia completa de comunicación ISO-TP para análisis forense.
+
+    \item \textbf{\texttt{commands}}: registra cada comando ejecutado desde la aplicación móvil con el timestamp, el tipo de comando, la dirección BLE del cliente y el resultado.
+\end{itemize}
+
+El \texttt{LoggingTransport} acumula las muestras en un buffer en memoria y las vuelca a SQLite en lotes de 50, reduciendo la frecuencia de escritura a disco y mejorando el rendimiento general del sistema durante sesiones de monitorización prolongadas.
+
+
+\subsection{Monitor de datos en tiempo real}
+
+El hilo de monitorización continua (\texttt{MonitorThread}) se ejecuta en segundo plano con un periodo de muestreo de 500\,ms. En cada ciclo consulta un conjunto configurable de PIDs del modo 0x01, decodifica los valores recibidos y los publica en una cola compartida (\texttt{queue.Queue}) que el hilo BLE lee para enviar notificaciones al cliente móvil.
+
+El conjunto de PIDs monitorizados por defecto incluye RPM, velocidad, temperatura del refrigerante, posición del acelerador y carga calculada del motor. La lista es configurable en tiempo de ejecución a través del comando JSON correspondiente.
+
+
+\subsection{Servidor BLE GATT}
+
+El servidor BLE se implementa mediante la librería \texttt{bless}, que proporciona una interfaz asíncrona (\texttt{asyncio}) para la gestión del servicio GATT. El servidor expone el servicio NUS con sus dos características (TX y RX) y gestiona las conexiones de los clientes BLE de forma concurrente.
+
+El manejador de comandos \texttt{BtCommandHandler} recibe los objetos JSON escritos por el cliente en la característica RX, los despacha al método correspondiente de la \texttt{LoggedDiagnosticSession} y envía la respuesta JSON como notificación en la característica TX.
+
+Se implementa un mecanismo de autenticación por token: el primer comando de cada sesión BLE debe incluir el campo \texttt{token} con el valor configurado en el servidor. Las conexiones no autenticadas reciben una respuesta de error y se cierran tras un timeout de inactividad configurable.
+
+Los comandos JSON implementados son:
+
+\begin{itemize}
+    \item \verb|{"cmd": "auth", "token": "..."}|: autenticación de sesión.
+    \item \verb|{"cmd": "query", "pid": "0C"}|: consulta un PID del modo 0x01.
+    \item \verb|{"cmd": "read_dtcs"}|: lectura de los DTCs almacenados.
+    \item \verb|{"cmd": "clear_dtcs"}|: borrado de DTCs.
+    \item \verb|{"cmd": "get_vin"}|: obtención del VIN del vehículo.
+    \item \verb|{"cmd": "monitor_start", "pids": ["0C","0D","05"]}|: inicio de monitorización continua.
+    \item \verb|{"cmd": "monitor_stop"}|: detención de la monitorización.
+    \item \verb|{"cmd": "get_sessions"}|: lista de sesiones históricas en SQLite.
+    \item \verb|{"cmd": "get_samples", "session_id": N}|: muestras de una sesión.
+\end{itemize}
