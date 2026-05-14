@@ -28,3 +28,7 @@ export function SettingsIcon({ color, size }: IconProps) {
 export function LogsIcon({ color, size }: IconProps) {
   return <Text style={{ color, fontSize: size * 0.75 }}>≡</Text>;
 }
+
+export function UdsIcon({ color, size }: IconProps) {
+  return <Text style={{ color, fontSize: size * 0.75 }}>⊕</Text>;
+}

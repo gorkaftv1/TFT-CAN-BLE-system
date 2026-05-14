@@ -65,4 +65,28 @@ export class MockAdapter implements IVehicleAdapter {
   async getSessions(): Promise<any[]> { return []; }
   async getSessionSamples(): Promise<any[]> { return []; }
   async getSessionCommands(): Promise<any[]> { return []; }
+
+  async setUdsSession(sessionType: number): Promise<{ session_type: number; p2_server_ms: number; p2_extended_ms: number }> {
+    await new Promise((r) => setTimeout(r, 200));
+    return { session_type: sessionType, p2_server_ms: 25, p2_extended_ms: 5000 };
+  }
+
+  async readUdsDid(did: string): Promise<{ did: string; name: string; value: string | number; unit: string }> {
+    await new Promise((r) => setTimeout(r, 100));
+    const MOCK: Record<string, { name: string; value: string | number; unit: string }> = {
+      '0xF190': { name: 'VIN',               value: 'VSSZZZ6JXCR123456', unit: '' },
+      '0xF18C': { name: 'ECU Serial Number', value: 'SIM1',               unit: '' },
+      '0xF189': { name: 'Software Version',  value: '1.00',               unit: '' },
+      '0x2001': { name: 'Engine Load',       value: 45.3,                 unit: '%' },
+      '0x2002': { name: 'Coolant Temp',      value: 90,                   unit: '°C' },
+      '0x2003': { name: 'Engine RPM',        value: 1200,                 unit: 'rpm' },
+      '0x2004': { name: 'Vehicle Speed',     value: 60,                   unit: 'km/h' },
+      '0x2005': { name: 'Throttle Position', value: 25.5,                 unit: '%' },
+      '0x2006': { name: 'Fuel Level',        value: 75.0,                 unit: '%' },
+      '0x2007': { name: 'Engine Oil Temp',   value: 95,                   unit: '°C' },
+      '0x2008': { name: 'Battery Voltage',   value: 14.2,                 unit: 'V' },
+    };
+    const entry = MOCK[did.toUpperCase()] ?? { name: `DID_${did}`, value: '—', unit: '' };
+    return { did, ...entry };
+  }
 }

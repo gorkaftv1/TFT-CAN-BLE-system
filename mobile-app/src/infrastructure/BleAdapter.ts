@@ -178,6 +178,14 @@ export class BleAdapter implements IVehicleAdapter {
     return await this.request({ cmd: 'session_commands', session_id: sessionId });
   }
 
+  async setUdsSession(sessionType: number): Promise<{ session_type: number; p2_server_ms: number; p2_extended_ms: number }> {
+    return await this.request({ cmd: 'uds_session', session_type: sessionType });
+  }
+
+  async readUdsDid(did: string): Promise<{ did: string; name: string; value: string | number; unit: string }> {
+    return await this.request({ cmd: 'uds_read_did', did });
+  }
+
   // ── BLE internals ─────────────────────────────────────────────────
 
   private subscribeToTx(): Promise<void> {

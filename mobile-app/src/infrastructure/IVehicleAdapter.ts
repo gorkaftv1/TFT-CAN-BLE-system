@@ -13,4 +13,6 @@ export interface IVehicleAdapter {
   getSessions(limit?: number): Promise<any[]>;
   getSessionSamples(sessionId: number, pid?: number, limit?: number): Promise<any[]>;
   getSessionCommands(sessionId: number): Promise<any[]>;
+  setUdsSession(sessionType: number): Promise<{ session_type: number; p2_server_ms: number; p2_extended_ms: number }>;
+  readUdsDid(did: string): Promise<{ did: string; name: string; value: string | number; unit: string }>;
 }

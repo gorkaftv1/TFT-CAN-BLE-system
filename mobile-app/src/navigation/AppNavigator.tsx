@@ -8,10 +8,11 @@ import { CustomizeScreen }  from '../screens/customize/CustomizeScreen';
 import { DashboardScreen }  from '../screens/dashboard/DashboardScreen';
 import { DtcScreen }        from '../screens/dtcs/DtcScreen';
 import { LogsScreen }       from '../screens/logs/LogsScreen';
+import { UdsScreen }        from '../screens/uds/UdsScreen';
 import { colors, fontSize } from '../shared/theme';
 import {
   ConnectionIcon, DashboardIcon, WarningIcon,
-  ConsoleIcon, SettingsIcon, LogsIcon,
+  ConsoleIcon, SettingsIcon, LogsIcon, UdsIcon,
 } from '../assets/icons';
 
 const Tab = createBottomTabNavigator();
@@ -26,6 +27,7 @@ export function AppNavigator() {
       case 'Console':    return <ConsoleIcon     {...props} />;
       case 'Customize':  return <SettingsIcon    {...props} />;
       case 'Logs':       return <LogsIcon        {...props} />;
+      case 'UDS':        return <UdsIcon         {...props} />;
       default:           return <View />;
     }
   };
@@ -56,6 +58,7 @@ export function AppNavigator() {
         <Tab.Screen name="Console"    component={ConsoleScreen}     />
         <Tab.Screen name="Customize"  component={CustomizeScreen}   />
         <Tab.Screen name="Logs"       component={LogsScreen}        />
+        <Tab.Screen name="UDS"        component={UdsScreen}         />
       </Tab.Navigator>
     </NavigationContainer>
   );
