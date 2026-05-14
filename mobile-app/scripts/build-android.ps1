@@ -37,8 +37,8 @@ $ScriptDir      = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Root           = Split-Path -Parent $ScriptDir
 $AndroidDir     = Join-Path $Root 'android'
 $AdapterFactory = Join-Path $Root 'src\infrastructure\adapterFactory.ts'
-$KeystoreFile   = Join-Path $AndroidDir 'vehiclediag-release.keystore'
-$KeystoreProps  = Join-Path $AndroidDir 'keystore.properties'
+# Keystore lives in mobile-app/ root — outside android/ so expo prebuild --clean never wipes it
+$KeystoreFile   = Join-Path $Root 'vehiclediag-release.keystore'
 $BuildVariant   = if ($Release) { 'release' } else { 'debug' }
 
 # -- USE_MOCK restore on exit -------------------------------------------------
@@ -121,8 +121,17 @@ try {
     Success "npm install done."
 
     # -- Step 3: Expo prebuild ------------------------------------------------
+    # Kill lingering Gradle daemons that lock files in android/ from failed builds
+    Get-Process -Name "java" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+
+    # Delete android/ ourselves so we control the removal (avoids EBUSY on locked files)
+    if (Test-Path $AndroidDir) {
+        Info "Removing android/ directory..."
+        Remove-Item $AndroidDir -Recurse -Force -ErrorAction Stop
+    }
+
     Info "Running expo prebuild (generates android/ native project)..."
-    npx expo prebuild --platform android --clean
+    npx expo prebuild --platform android
     if ($LASTEXITCODE -ne 0) { Restore-Mock; Err "expo prebuild failed." }
     Success "Prebuild complete."
 } finally {
@@ -150,40 +159,21 @@ if ($Release) {
         Success "Keystore already exists: $KeystoreFile"
     }
 
-    # keystore.properties for Gradle (UTF-8 without BOM — Gradle requires it)
-    $utf8NoBom = New-Object System.Text.UTF8Encoding $false
-    $ksProps = "storeFile=../vehiclediag-release.keystore`nstorePassword=vehiclediag_keystore`nkeyAlias=vehiclediag`nkeyPassword=vehiclediag_keystore`n"
-    [System.IO.File]::WriteAllText($KeystoreProps, $ksProps, $utf8NoBom)
+    # Write signing.gradle into android/ (recreated each build after --clean — that's fine).
+    # Uses apply from so it merges with the existing android{} block without duplicating signingConfigs.
+    $utf8NoBom    = New-Object System.Text.UTF8Encoding $false
+    $SigningGradle = Join-Path $AndroidDir 'signing.gradle'
+    # rootProject.projectDir = android/  →  parentFile = mobile-app/  →  keystore next to package.json
+    $signingContent = "def ksFile = new File(rootProject.projectDir.parentFile, `"vehiclediag-release.keystore`")`nandroid {`n    signingConfigs {`n        vehiclediag {`n            storeFile     ksFile`n            storePassword `"vehiclediag_keystore`"`n            keyAlias      `"vehiclediag`"`n            keyPassword   `"vehiclediag_keystore`"`n        }`n    }`n    buildTypes {`n        release {`n            signingConfig signingConfigs.vehiclediag`n        }`n    }`n}`n"
+    [System.IO.File]::WriteAllText($SigningGradle, $signingContent, $utf8NoBom)
 
-    # Inject signing config into build.gradle if not already present
-    $BuildGradle = Join-Path $AndroidDir 'app\build.gradle'
+    # Append apply line to app/build.gradle (only once — prebuild --clean regenerates it each time)
+    $BuildGradle   = Join-Path $AndroidDir 'app\build.gradle'
     $gradleContent = Get-Content $BuildGradle -Raw
-    if ($gradleContent -notmatch 'keystorePropertiesFile') {
-        Info "Injecting signing config into build.gradle..."
-
-        $nl = [System.Environment]::NewLine
-        $signingHeader  = 'def keystorePropertiesFile = rootProject.file("keystore.properties")' + $nl
-        $signingHeader += 'def keystoreProperties = new Properties()' + $nl
-        $signingHeader += 'if (keystorePropertiesFile.exists()) { keystoreProperties.load(new FileInputStream(keystorePropertiesFile)) }' + $nl
-        $signingHeader += $nl
-
-        # Use config name "vehiclediag" to avoid colliding with buildTypes.release { }
-        $signingBlock   = '    signingConfigs {' + $nl
-        $signingBlock  += '        vehiclediag {' + $nl
-        $signingBlock  += '            storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null' + $nl
-        $signingBlock  += '            storePassword keystoreProperties["storePassword"]' + $nl
-        $signingBlock  += '            keyAlias keystoreProperties["keyAlias"]' + $nl
-        $signingBlock  += '            keyPassword keystoreProperties["keyPassword"]' + $nl
-        $signingBlock  += '        }' + $nl
-        $signingBlock  += '    }' + $nl
-
-        $gradleContent = $signingHeader + $gradleContent
-        # Insert signingConfigs block before buildTypes
-        $gradleContent = $gradleContent -replace '(\s+buildTypes\s*\{)', ($signingBlock + '$1')
-        # Wire up release buildType — match "minifyEnabled" which is unique to release
-        $gradleContent = $gradleContent -replace '(minifyEnabled)', ('signingConfig signingConfigs.vehiclediag' + $nl + '            $1')
-        [System.IO.File]::WriteAllText($BuildGradle, $gradleContent, $utf8NoBom)
-        Success "Signing config injected."
+    if ($gradleContent -notmatch 'signing\.gradle') {
+        Info "Applying signing.gradle..."
+        [System.IO.File]::AppendAllText($BuildGradle, "`napply from: '../signing.gradle'`n", $utf8NoBom)
+        Success "Signing config applied."
     }
 }
 
