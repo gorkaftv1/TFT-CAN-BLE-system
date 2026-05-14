@@ -1,40 +1,65 @@
 \section{Motivación y antecedentes}
 
-El acceso a los datos internos de un vehículo automóvil ha sido durante décadas un ámbito reservado casi exclusivamente a los talleres especializados y a los fabricantes de automóviles. Los dispositivos de diagnóstico profesionales, conocidos coloquialmente como escáneres o \textit{scan tools}, permiten comunicarse con las ECUs del vehículo a través del puerto OBD-II y consultar en tiempo real una amplia variedad de parámetros operativos, leer y borrar códigos de avería, e incluso reprogramar ciertos módulos electrónicos. Sin embargo, el coste de estas herramientas, que en el segmento profesional puede oscilar entre varios cientos y varios miles de euros, junto con la complejidad de su operación, ha mantenido este tipo de diagnóstico fuera del alcance del usuario particular y del desarrollador aficionado.
+En el actual plan de estudios del Grado de Ingeniería Informáica en la asignatura de Internet de las cosas se estudia el ecosistema de los sistemas empotrados y sus múltiples protocolos de comunicación. Dentro de la amplia gama de protocolos de comunicación el estudio del bus CAN y se comentó su uso en el sector automotriz, esto dió lugar a la motivación por la cual se ha desarrollado este Trabajo de Fin de Título en el que se estudia el uso del bus CAN y el protoclo OBD-II y demás protocolos que orquestan la comunicación de información en un vehiculo.
 
-En los últimos años han aparecido en el mercado soluciones de bajo coste que pretenden democratizar el acceso al diagnóstico OBD-II. El adaptador ELM327, desarrollado por ELM Electronics, es posiblemente el más extendido de estos dispositivos. Se trata de un circuito integrado que actúa como puente entre el bus CAN del vehículo y una interfaz serie, habitualmente accesible vía Bluetooth o Wi-Fi. Existen multitud de aplicaciones móviles compatibles con este adaptador, como Torque Pro o OBD Fusion, que permiten visualizar parámetros básicos del motor desde un teléfono inteligente. No obstante, estas soluciones presentan limitaciones relevantes: el protocolo propietario AT utilizado por el ELM327 introduce latencias significativas, la calidad de los clones económicos disponibles en el mercado es muy variable, y la mayoría de las implementaciones no ofrecen acceso completo al conjunto de modos y servicios OBD-II, ni permiten el registro estructurado de datos para su análisis posterior.
+Actualmente los automóviles cuentan con un sistema de numerosos microcontroladores que generan una cantidad muy voluminosa de datos de telemetría y además cuentan con el protocolo de diagnóstico abordo (OBD-II). Estos son accesbles a traves del puerto OBD que se encuentra normalmente en la parte inferior del volante en el asiento del piloto. Este puerto permite que no solo los talleres y personas especializadas en el mundo de la mecánica y electromecánica, sino que cualquier persona con un "escáner" pueda ver el estado de su coche o pueda diagnositcar que fallo tiene o anticipar posibles fallos.
 
-En el ámbito más cercano a este trabajo, el Instituto Universitario SIANI de la Universidad de Las Palmas de Gran Canaria, a través de su División de Robótica y Oceanografía Computacional, dispone de medios hardware basados en plataformas de prototipado electrónico de bajo coste, como la Raspberry Pi y controladores CAN basados en el circuito MCP2515. Esta infraestructura disponible constituyó el punto de partida natural para plantear una solución alternativa a los adaptadores comerciales existentes: implementar directamente la pila de protocolos OBD-II sobre hardware de propósito general, con control total sobre cada capa del sistema y capacidad para extender sus funcionalidades en el futuro.
-
-A lo anterior se añade el interés técnico que representa la arquitectura de comunicaciones de los vehículos modernos del grupo VAG (Volkswagen Audi Group), en particular los modelos basados en la plataforma PQ25, como el SEAT Ibiza de sexta generación. Estos vehículos implementan una topología de \textit{Gateway} central que separa el bus CAN-Powertrain, donde se comunican las ECUs de motor y transmisión, del bus de diagnóstico accesible desde el conector OBD-II. Esta arquitectura impide el acceso directo al bus de motor mediante un adaptador CAN estándar y obliga a que toda comunicación de diagnóstico pase a través del módulo Gateway, lo que añade una capa de complejidad adicional que los dispositivos comerciales de bajo coste no siempre gestionan correctamente. El estudio de esta arquitectura y sus implicaciones prácticas constituye uno de los antecedentes directos de este trabajo.
-
+Actualmente en el mercado han aparecido numerosas soluciones para poner de forma accesible el acceso al diagnóstico OBD-II. La mayor parte de estas soluciones usan el adaptador ELM327, montando un circuito integrado que actúa como puente entre el bus CAN del vehículo y una interfaz accesible vía Bluetooth o Wi-Fi. Por otra parte existen numerosas aplicaciones móviles compatibles con estos adaptadores tales como Torque Pro u OBD Fusion, no obstantes estas soluciones no suelen permitir el registro estructurado de datos para análisis y la mayor parte de estas soluciones introducen latencias significativas dano lugar a una experiencia de usuario pobre.
 
 \section{Objetivos}
 \label{sec:objetivos}
 
-A partir del contexto descrito, se definen los siguientes objetivos para este Trabajo de Fin de Título.
+A partir del contexto descrito, se definen los siguientes objetivos para este proyecto.
 
 \subsection{Objetivo general}
 
-Diseñar y desarrollar un sistema empotrado de diagnóstico vehicular basado en el protocolo OBD-II sobre bus CAN, con acceso inalámbrico vía Bluetooth Low Energy, de bajo coste económico y validado mediante un banco de pruebas basado en Arduino.
+Diseñar y desarrollar un sistema empotrado de diagnóstico del vehículo basado en el protocolo OBD-II sobre bus CAN, con acceso inalámbrico vía Bluetooth Low Energy, de bajo coste económico y validado mediante un banco de pruebas basado en Arduino.
 
 \subsection{Objetivos específicos}
 
+La propuesta de este trabajo (TFT01) define tres funciones de usuario de alto nivel que el sistema debe satisfacer. La tabla~\ref{tab:tft01_objetivos} recoge estas funciones junto con los objetivos específicos de la memoria que las implementan.
+
+\begin{table}[!htbp]
+\caption{Trazabilidad entre funciones definidas en la propuesta TFT01 y objetivos específicos del trabajo.}
+\label{tab:tft01_objetivos}
+\centering
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{|p{4.2cm}|p{7.5cm}|c|}
+\hline
+\textbf{Función TFT01} & \textbf{Descripción} & \textbf{Obj.} \\
+\hline
+Monitorización en tiempo real &
+  Visualización numérica de parámetros de sensores disponibles en el vehículo (RPM, temperaturas, presiones, voltajes, etc.) &
+  O1, O2, O4, O5, O6 \\
+\hline
+Consulta y gestión de errores &
+  Lectura y borrado de códigos de error (DTCs) almacenados en la memoria de las ECUs &
+  O1, O2, O3, O4, O6 \\
+\hline
+Identificación &
+  Consulta de datos del vehículo (VIN) e información de los distintos módulos integrados &
+  O1, O2, O4, O5 \\
+\hline
+\end{tabular}
+\end{table}
+
+Los seis objetivos específicos que concretan estas funciones son:
+
 \begin{enumerate}
-    \item \textbf{Implementar la pila de protocolos OBD-II completa}: desarrollar sobre Raspberry Pi una implementación funcional de ISO-TP (ISO 15765-2) como capa de transporte y OBD-II (SAE J1979) como capa de aplicación, cubriendo los modos de servicio 0x01 (datos en vivo), 0x03 (lectura de DTCs), 0x04 (borrado de DTCs) y 0x09 (información del vehículo, incluyendo VIN).
+    \item[\textbf{O1.}] \textbf{Implementar la pila de protocolos OBD-II completa}: desarrollar sobre Raspberry Pi una implementación funcional de ISO-TP (ISO 15765-2) como capa de transporte y OBD-II (SAE J1979) como capa de aplicación, cubriendo los modos de servicio 0x01 (datos en vivo), 0x03 (lectura de DTCs), 0x04 (borrado de DTCs) y 0x09 (información del vehículo, incluyendo VIN).
 
-    \item \textbf{Desarrollar un simulador de ECU}: implementar sobre Arduino MKR con shield CAN un simulador de ECU que responda a peticiones OBD-II estándar con datos de telemetría realistas, con el objetivo de disponer de un banco de pruebas reproducible y controlado que no dependa de la disponibilidad de un vehículo real.
+    \item[\textbf{O2.}] \textbf{Desarrollar un simulador de ECU}: implementar sobre Arduino MKR con shield CAN un simulador de ECU que responda a peticiones OBD-II estándar con datos de telemetría realistas, con el objetivo de disponer de un banco de pruebas reproducible y controlado que no dependa de la disponibilidad de un vehículo real.
 
-    \item \textbf{Diseñar mecanismos de simulación de condiciones adversas}: incorporar en el simulador Arduino la generación de ruido CAN (pérdida de tramas, latencia variable, respuestas negativas esporádicas) y tráfico de fondo aleatorio, para validar la robustez de la herramienta de diagnóstico.
+    \item[\textbf{O3.}] \textbf{Diseñar mecanismos de simulación de condiciones adversas}: incorporar en el simulador Arduino la generación de ruido CAN (pérdida de tramas, latencia variable, respuestas negativas esporádicas) y tráfico de fondo aleatorio, para validar la robustez de la herramienta de diagnóstico.
 
-    \item \textbf{Proporcionar acceso inalámbrico mediante BLE}: implementar un servidor BLE GATT sobre la Raspberry Pi que exponga la funcionalidad de diagnóstico a través del servicio Nordic UART Service (NUS), eliminando la necesidad de conexión física entre el dispositivo de diagnóstico y el usuario.
+    \item[\textbf{O4.}] \textbf{Proporcionar acceso inalámbrico mediante BLE}: implementar un servidor BLE GATT sobre la Raspberry Pi que exponga la funcionalidad de diagnóstico a través del servicio Nordic UART Service (NUS), eliminando la necesidad de conexión física entre el dispositivo de diagnóstico y el usuario.
 
-    \item \textbf{Desarrollar una aplicación móvil multiplataforma}: implementar una aplicación para Android e iOS con React Native que permita al usuario conectarse al sistema de diagnóstico vía BLE, monitorizar parámetros del vehículo en tiempo real, gestionar los códigos de avería y consultar el historial de sesiones almacenadas.
+    \item[\textbf{O5.}] \textbf{Desarrollar una aplicación móvil multiplataforma}: implementar una aplicación para Android e iOS con React Native que permita al usuario conectarse al sistema de diagnóstico vía BLE, monitorizar parámetros del vehículo en tiempo real, gestionar los códigos de avería y consultar el historial de sesiones almacenadas.
 
-    \item \textbf{Registrar y persistir los datos de diagnóstico}: implementar un sistema de logging estructurado en base de datos SQLite que almacene las sesiones, las muestras de telemetría y los comandos ejecutados, para su consulta y análisis posterior.
+    \item[\textbf{O6.}] \textbf{Registrar y almacenar los datos de diagnóstico}: implementar un sistema de logging estructurado en base de datos SQLite que almacene las sesiones, las muestras de telemetría y los comandos ejecutados, para su consulta y análisis posterior.
 \end{enumerate}
 
 \subsection{Alcance y limitaciones}
 \label{sec:alcance}
 
-El sistema desarrollado se centra en la implementación de los modos OBD-II estándar definidos por SAE J1979, sin abordar los servicios de diagnóstico propietarios de cada fabricante, que requieren herramientas específicas y, en muchos casos, acuerdos de licencia con el fabricante del vehículo. Asimismo, la validación experimental del sistema se realiza íntegramente sobre el banco de pruebas Arduino, dado que las restricciones de acceso al hardware vehicular real durante el período de desarrollo del trabajo no permitieron completar las pruebas sobre el vehículo objetivo. Las implicaciones de esta limitación y las líneas de trabajo futuro que abre se discuten en el Capítulo~7.
+El sistema desarrollado se centra en la implementación de los modos OBD-II estándar definidos por SAE J1979, sin abordar los servicios de diagnóstico propietarios de cada fabricante, que requieren herramientas específicas y, en ka mayor parte casos, acuerdos de licencia con el fabricante del vehículo. Asimismo, la validación experimental del sistema se realiza sobre el banco de pruebas desarrollado en Arduino, dado que las restricciones de acceso al hardware del vehículo real durante el período de desarrollo del trabajo no permitieron completar las pruebas sobre el vehículo objetivo. Las implicaciones de esta limitación y las líneas de trabajo futuro que abre se discuten en el Capítulo~7.
