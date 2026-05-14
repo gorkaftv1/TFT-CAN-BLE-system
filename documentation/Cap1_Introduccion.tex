@@ -1,33 +1,33 @@
 \section{Contexto y motivación}
 
-El sector del automóvil ha experimentado durante las últimas décadas una transformación profunda que ha llevado al vehículo moderno a convertirse en una plataforma de computación distribuida sobre ruedas. Si a mediados del siglo XX un automóvil podía describirse en términos puramente mecánicos, hoy un turismo de gama media incorpora entre 30 y 100 Unidades de Control Electrónico (ECU, del inglés \textit{Electronic Control Unit}), cada una de ellas responsable de gestionar un subsistema específico del vehículo: desde la inyección de combustible y la gestión del motor hasta el control de tracción, los sistemas de ayuda a la conducción o el infoentretenimiento. Esta proliferación de sistemas electrónicos ha mejorado drásticamente la seguridad, la eficiencia energética y la experiencia del conductor, pero ha introducido al mismo tiempo una complejidad técnica que plantea nuevos retos en materia de diagnóstico y mantenimiento.
+El sector automovilístico ha seguido una tendencia clara hacia la sensoriazación y comunicación de datos en tiempo real, impulsada por la necesidad de monitorizar el estado del vehículo y anticipar posibles fallos antes de que se conviertan en problemas graves. Esta tendencia ha consistido en la incorporación de sensores cada vez más sofisticados, tales como sensores de presión, temperatura, posición. Estos generan una cantidad voluminosa de datos que deben ser procesados y transmitidos entre las distintas Unidades de Control Electrónico (ECU, del inglés \textit{Electronic Control Unit}) que orquestan el funcionamiento del vehículo además estos datos han de ser tratados según su prioridad y criticidad, lo que ha llevado a la adopción de protocolos de comunicación robustos y eficientes, .
 
-Para que todas estas ECUs puedan intercambiar información de forma fiable y en tiempo real, los fabricantes adoptaron a partir de los años noventa el bus CAN (\textit{Controller Area Network}), un protocolo de comunicaciones serie desarrollado originalmente por Robert Bosch GmbH en 1983 y estandarizado bajo la norma ISO 11898. El bus CAN permite que múltiples nodos compartan un mismo par de cables trenzados, con un mecanismo de arbitraje no destructivo basado en la prioridad del identificador de mensaje y una robusta señalización diferencial que lo hace especialmente resistente al ruido electromagnético propio del entorno vehicular.
+Para lograr una comunicación fiable, en tiempo real y con gestión de prioridades los fabricantes comenzaron a implementar el bus CAN (\textit{Controller Area Network}), un protocolo de comunicaciones serie creado por Robert Bosch GmbH en 1983 y estandarizado bajo la norma ISO 11898. Esencialmente el bus CAN consiste en un protocolo que permite la comunicación de múltiples microcontroladores compartiendo un mismo medio y donde se resuelven los conflictos de transmisión mediante un mecanismo de prioridades. Un ejemplo en la práctica podría ser la comunicación entre la ECU de seguridad, como el sistema antibloqueo de frenos (ABS), y la unidad de control del motor: si el ABS detecta que una rueda resbala, envía un mensaje prioritario por el bus CAN para que el motor reduzca su potencia inmediatamente.
 
-Sobre esta infraestructura de comunicaciones, la industria desarrolló el estándar OBD-II (\textit{On-Board Diagnostics}, segunda generación), que desde el año 1996 es obligatorio en Estados Unidos y desde principios de los 2000 en Europa bajo la denominación EOBD. OBD-II define un conector físico normalizado de 16 pines accesible desde el interior del vehículo, así como un conjunto de servicios y parámetros estandarizados que permiten a cualquier herramienta de diagnóstico externa consultar el estado del motor, leer los códigos
-de avería almacenados en las ECUs o identificar el vehículo mediante su número de identificación (VIN). Sin embargo, el acceso a esta información en la práctica ha quedado históricamente restringido al ámbito profesional: los escáneres de diagnóstico comerciales que implementan estos protocolos de forma completa tienen un coste elevado, requieren cableado dedicado y, en muchos casos, ofrecen interfaces poco intuitivas orientadas exclusivamente al técnico especializado.
-
-Este escenario pone de manifiesto una oportunidad clara: desarrollar una solución alternativa, de bajo coste y acceso inalámbrico, basada en plataformas de prototipado electrónico ampliamente disponibles, que permita acceder a la información diagnóstica del vehículo de forma portable e intuitiva. Esta es precisamente la motivación central de este Trabajo de Fin de Título.
-
+Por otra parte en 1996 se introdujo el estándar OBD-II (\textit{On-Board Diagnostics, segunda generación}), que define un conjunto de protocolos de comunicación junto con una batería de códigos de error comunes (DTCs - \textit{Diagnostic Trouble Code}). Así mismo permite la monitrización y evaluación del estado de los microcontroladores integrados en el vehículo.
 
 \section{Descripción del sistema desarrollado}
 
-El presente trabajo aborda el diseño y desarrollo de un sistema empotrado de diagnóstico vehicular compuesto por tres componentes principales que trabajan de forma integrada.
+Este proyecto se ha centrado en el diseño y desarrollo de un sistema de diagnóstico de vehículos que usan el protocolo OBD-II sobre bus CAN y que ofrece acceso inalámbrico usando Bluetooth Low Energy (BLE). Durante el desarrollo se han implementado tres componentes principales:
 
-El primer componente es un \textbf{simulador de ECU} implementado sobre una plataforma Arduino MKR con shield CAN. Este simulador reproduce el comportamiento de una ECU real en el bus CAN, respondiendo a peticiones OBD-II estándar con datos de telemetría generados mediante un modelo físico simplificado del motor: RPM, velocidad, temperaturas, presiones y códigos de avería, entre otros. El simulador incluye además mecanismos de inyección de ruido CAN y generación de tráfico de fondo, diseñados para validar la robustez del sistema de diagnóstico frente a condiciones adversas del bus.
+El componente principal es la \textbf{herramienta de diagnóstico}, creada sobre una Raspberry Pi conectada al bus CAN usando el CAN HAT rs485 que cuenta con controlador mcp215. Esta herramienta implementa los siguientes protocolos: 
+\begin{itemize}
+    \item \textbf{ISO-TP (ISO 15765-2)} como capa de transporte sobre CAN.
+    \item \textbf{OBD-II (SAE J1979)} como capa de aplicación.
+\end{itemize}
+La herramienta decodifica los parámetros recibidos, los almacena en una base de datos SQLite y los transmite de forma inalámbrica usando BLE y un servidor GATT que implementa el servicio Nordic UART Service (NUS).
 
-El segundo componente es la \textbf{herramienta de diagnóstico}, ejecutada sobre una Raspberry Pi conectada al bus CAN mediante un controlador MCP2515. Esta herramienta implementa la pila de protocolos completa: ISO-TP (ISO 15765-2) como capa de transporte sobre CAN, y OBD-II (SAE J1979) como capa de aplicación. La herramienta decodifica los parámetros recibidos, los persiste en una base de datos SQLite y los expone de forma inalámbrica a través de un servidor BLE GATT que implementa el servicio Nordic UART Service (NUS).
+El componente que ha permitido realizar pruebas es un \textbf{simulador de ECU} implementado sobre una plataforma Arduino MKRWAN 1310 con un shield CAN.
 
-El tercer componente es una \textbf{aplicación móvil} desarrollada con React Native y Expo, compatible con Android e iOS, que se conecta a la Raspberry Pi vía Bluetooth Low Energy. La aplicación ofrece al usuario una interfaz para la monitorización en tiempo real de los parámetros del vehículo, la consulta y gestión de códigos de avería, el acceso al historial de sesiones almacenadas y una consola de comandos directa.
+El tercer componente es una \textbf{aplicación móvil nativa} desarrollada con React Native y Expo, compatible con Android e iOS, que se conecta a la Raspberry Pi vía Bluetooth Low Energy. La aplicación ofrece al usuario una interfaz para la monitorización en tiempo real de los parámetros del vehículo, la consulta y gestión de códigos de avería, asímismo también presenta una pantalla para depuración que permite al usuario consultar el funcionamiento de la comunicación.
 
-El conjunto del sistema constituye una plataforma de diagnóstico OBD-II portable, inalámbrica y de bajo coste, validada sobre un banco de pruebas basado en Arduino antes de su uso sobre hardware vehicular real.
-
+El conjunto del sistema da lugar a un sistema de diagnóstico OBD-II portable, inalámbrica y de bajo coste, validado sobre un banco de pruebas basado en Arduino antes de su uso sobre hardware vehicular real y permitiendo realizar experimentos sin acceso a un vehiculo real.
 
 \section{Estructura del documento}
 
 El presente documento se organiza en siete capítulos cuyo contenido se resume a continuación.
 
-El \textbf{Capítulo~2} recoge la motivación detallada del trabajo, el análisis de las soluciones existentes en el mercado y la definición de los objetivos que se pretenden alcanzar.
+El \textbf{Capítulo~2} recoge la motivación por la cual se ha decidido realizar el trabajo y la definición de los objetivos que se pretenden alcanzar.
 
 El \textbf{Capítulo~3} describe las principales aportaciones del trabajo, las competencias específicas del Grado de Ingeniería Informática desarrolladas durante su realización y la relación del proyecto con los Objetivos de Desarrollo Sostenible de la ONU.
 
