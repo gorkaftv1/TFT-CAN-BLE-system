@@ -26,6 +26,10 @@ bool canNoiseEnabled = true;
 uint8_t responseBuffer[7];
 uint8_t responseLength = 0;
 
+// ---------- UDS STATE ----------
+uint8_t udsCurrentSession   = UDS_SESSION_DEFAULT;
+unsigned long udsLastActivityMs = 0;
+
 #define BROADCAST_INTERVAL_MS 100
 
 // ---------- PROTOTYPES ----------
@@ -36,8 +40,12 @@ void broadcastVehicleState();
 void sendResponse();
 void sendNegativeResponse(uint8_t mode, uint8_t errorCode);
 void sendVINMultiFrame();
+void sendUdsVinResponse();
 bool waitForFlowControl();
 void logCANFrame(const char* tag, uint32_t id, const uint8_t* data, uint8_t len);
+void checkUdsSessionTimeout();
+bool handleUdsSessionControl(uint8_t subFunc);
+bool handleUdsReadDataById(uint8_t didHigh, uint8_t didLow);
 
 // ---------- ISR ----------
 // Minimal ISRs — only set flags, no Serial/delay/CAN.
@@ -174,6 +182,7 @@ void loop() {
   broadcastVehicleState();
   generateBackgroundTraffic();
   processCANMessages();
+  checkUdsSessionTimeout();
   delay(10);
 }
 
@@ -410,10 +419,12 @@ void processCANMessages() {
 
   bool handled = false;
   switch (mode) {
-    case MODE_01_CURRENT_DATA: handled = handleMode01(pid); break;
-    case MODE_03_DTCS:         handled = handleMode03();    break;
-    case MODE_04_CLEAR_DTCS:   handled = handleMode04();    break;
-    case MODE_09_VEHICLE_INFO: handled = handleMode09(pid); break;
+    case MODE_01_CURRENT_DATA:      handled = handleMode01(pid);                    break;
+    case MODE_03_DTCS:              handled = handleMode03();                        break;
+    case MODE_04_CLEAR_DTCS:        handled = handleMode04();                        break;
+    case MODE_09_VEHICLE_INFO:      handled = handleMode09(pid);                     break;
+    case UDS_SID_SESSION_CTRL:      handled = handleUdsSessionControl(pid);          break;
+    case UDS_SID_READ_DATA_BY_ID:   handled = handleUdsReadDataById(pid, data[3]);   break;
     default:
       sendNegativeResponse(mode, NRC_SERVICE_NOT_SUPPORTED);
       handled = true;
@@ -700,6 +711,180 @@ void sendVINMultiFrame() {
     if (bytesSent < PAYLOAD_LEN) delay(ISOTP_CF_SEP_MS);
   }
   Serial.println(F("[INFO] VIN complete"));
+}
+
+// ---------- UDS: SESSION TIMEOUT ----------
+// Reverts to Default session after UDS_SESSION_TIMEOUT_MS of inactivity.
+void checkUdsSessionTimeout() {
+  if (udsCurrentSession == UDS_SESSION_DEFAULT) return;
+  if (millis() - udsLastActivityMs > UDS_SESSION_TIMEOUT_MS) {
+    udsCurrentSession = UDS_SESSION_DEFAULT;
+    Serial.println(F("[UDS] Session timeout — reverted to Default"));
+  }
+}
+
+// ---------- UDS 0x10: DiagnosticSessionControl ----------
+bool handleUdsSessionControl(uint8_t subFunc) {
+  switch (subFunc) {
+    case UDS_SESSION_DEFAULT:
+    case UDS_SESSION_PROGRAMMING:
+    case UDS_SESSION_EXTENDED:
+      udsCurrentSession   = subFunc;
+      udsLastActivityMs   = millis();
+      // Positive response: [0x50, subFunc, P2_high, P2_low, P2ext_high, P2ext_low]
+      // P2=25ms=0x0019, P2_extended=5000ms=0x1388
+      responseBuffer[0] = UDS_RESP_SESSION_CTRL;
+      responseBuffer[1] = subFunc;
+      responseBuffer[2] = 0x00; responseBuffer[3] = 0x19;  // P2 server max = 25 ms
+      responseBuffer[4] = 0x13; responseBuffer[5] = 0x88;  // P2* server max = 5000 ms
+      responseLength = 6;
+      sendResponse();
+      Serial.print(F("[UDS] Session → 0x")); Serial.println(subFunc, HEX);
+      return true;
+    default:
+      sendNegativeResponse(UDS_SID_SESSION_CTRL, NRC_SUBFUNCTION_NOT_SUPP);
+      return true;
+  }
+}
+
+// ---------- UDS 0x22: ReadDataByIdentifier ----------
+bool handleUdsReadDataById(uint8_t didHigh, uint8_t didLow) {
+  uint16_t did = ((uint16_t)didHigh << 8) | didLow;
+  udsLastActivityMs = millis();
+
+  // DIDs 0x2000–0x2FFF require Extended session
+  if ((did & 0xFF00) == 0x2000 && udsCurrentSession != UDS_SESSION_EXTENDED) {
+    sendNegativeResponse(UDS_SID_READ_DATA_BY_ID, NRC_SESSION_NOT_SUPPORTED);
+    return true;
+  }
+
+  responseBuffer[0] = UDS_RESP_READ_DATA_BY_ID;
+  responseBuffer[1] = didHigh;
+  responseBuffer[2] = didLow;
+
+  switch (did) {
+    case DID_VIN:
+      sendUdsVinResponse();
+      return true;
+
+    case DID_ECU_SERIAL:
+      responseBuffer[3] = 'S'; responseBuffer[4] = 'I';
+      responseBuffer[5] = 'M'; responseBuffer[6] = '1';
+      responseLength = 7;
+      sendResponse();
+      return true;
+
+    case DID_SW_VERSION:
+      responseBuffer[3] = '1'; responseBuffer[4] = '.';
+      responseBuffer[5] = '0'; responseBuffer[6] = '0';
+      responseLength = 7;
+      sendResponse();
+      return true;
+
+    case DID_ENGINE_LOAD_UDS:
+      responseBuffer[3] = encodePercent(vehicle.engineLoad);
+      responseLength = 4;
+      sendResponse();
+      return true;
+
+    case DID_COOLANT_TEMP_UDS:
+      responseBuffer[3] = (uint8_t)((vehicle.coolantTemp >> 8) & 0xFF);
+      responseBuffer[4] = (uint8_t)(vehicle.coolantTemp & 0xFF);
+      responseLength = 5;
+      sendResponse();
+      return true;
+
+    case DID_RPM_UDS:
+      responseBuffer[3] = (vehicle.rpm >> 8) & 0xFF;
+      responseBuffer[4] = vehicle.rpm & 0xFF;
+      responseLength = 5;
+      sendResponse();
+      return true;
+
+    case DID_VEHICLE_SPEED_UDS:
+      responseBuffer[3] = vehicle.speed;
+      responseLength = 4;
+      sendResponse();
+      return true;
+
+    case DID_THROTTLE_POS_UDS:
+      responseBuffer[3] = encodePercent(vehicle.throttlePos);
+      responseLength = 4;
+      sendResponse();
+      return true;
+
+    case DID_FUEL_LEVEL_UDS:
+      responseBuffer[3] = encodePercent(vehicle.fuelLevel);
+      responseLength = 4;
+      sendResponse();
+      return true;
+
+    case DID_OIL_TEMP_UDS:
+      responseBuffer[3] = (uint8_t)((vehicle.oilTemp >> 8) & 0xFF);
+      responseBuffer[4] = (uint8_t)(vehicle.oilTemp & 0xFF);
+      responseLength = 5;
+      sendResponse();
+      return true;
+
+    case DID_BATTERY_VOLTAGE_UDS:
+      responseBuffer[3] = (vehicle.batteryVoltage >> 8) & 0xFF;
+      responseBuffer[4] = vehicle.batteryVoltage & 0xFF;
+      responseLength = 5;
+      sendResponse();
+      return true;
+
+    default:
+      sendNegativeResponse(UDS_SID_READ_DATA_BY_ID, NRC_REQUEST_OUT_OF_RANGE);
+      return true;
+  }
+}
+
+// ---------- UDS VIN: MULTI-FRAME ----------
+// Sends [0x62, 0xF1, 0x90, VIN×17] = 20 bytes via FF + 2 CFs.
+void sendUdsVinResponse() {
+  const uint8_t PAYLOAD_LEN = 3 + VIN_LENGTH;
+  uint8_t payload[20];
+  payload[0] = UDS_RESP_READ_DATA_BY_ID;
+  payload[1] = 0xF1;
+  payload[2] = 0x90;
+  for (uint8_t i = 0; i < VIN_LENGTH; i++) payload[3 + i] = (uint8_t)vehicle.vin[i];
+
+  uint8_t ff[8];
+  ff[0] = ISOTP_PCI_FF | ((PAYLOAD_LEN >> 8) & 0x0F);
+  ff[1] = PAYLOAD_LEN & 0xFF;
+  for (uint8_t i = 0; i < ISOTP_FF_DATA_BYTES; i++) ff[2 + i] = payload[i];
+
+  CAN.beginPacket(ECU_RESPONSE_ID);
+  for (uint8_t i = 0; i < 8; i++) CAN.write(ff[i]);
+  CAN.endPacket();
+  logCANFrame("[UDS FF]", ECU_RESPONSE_ID, ff, 8);
+
+  if (!waitForFlowControl())
+    Serial.println(F("[WARN] FC timeout — sending CFs anyway"));
+
+  uint8_t bytesSent = ISOTP_FF_DATA_BYTES;
+  uint8_t sn = 1;
+  while (bytesSent < PAYLOAD_LEN) {
+    uint8_t cf[8];
+    cf[0] = ISOTP_PCI_CF | (sn & 0x0F);
+    for (uint8_t i = 0; i < ISOTP_CF_DATA_BYTES; i++) {
+      uint8_t idx = bytesSent + i;
+      cf[1 + i] = (idx < PAYLOAD_LEN) ? payload[idx] : ISOTP_PADDING_BYTE;
+    }
+    CAN.beginPacket(ECU_RESPONSE_ID);
+    for (uint8_t i = 0; i < 8; i++) CAN.write(cf[i]);
+    CAN.endPacket();
+    Serial.print(F("[UDS CF] SN=0x")); Serial.print(sn & 0x0F, HEX); Serial.print(F(" | "));
+    for (uint8_t i = 0; i < 8; i++) {
+      if (cf[i] < 0x10) Serial.print(F("0"));
+      Serial.print(cf[i], HEX); Serial.print(F(" "));
+    }
+    Serial.println();
+    bytesSent += ISOTP_CF_DATA_BYTES;
+    sn = (sn + 1) & 0x0F;
+    if (bytesSent < PAYLOAD_LEN) delay(ISOTP_CF_SEP_MS);
+  }
+  Serial.println(F("[UDS] VIN response complete"));
 }
 
 // ---------- FLOW CONTROL ----------

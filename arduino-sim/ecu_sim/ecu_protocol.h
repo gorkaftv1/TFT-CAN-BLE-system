@@ -178,6 +178,40 @@ struct DTC {
 #define DTC_P0340  0x0340
 #define DTC_P0500  0x0500
 
+// ---------- UDS (ISO 14229-1) ----------
+#define UDS_SID_SESSION_CTRL       0x10  // DiagnosticSessionControl
+#define UDS_SID_READ_DATA_BY_ID    0x22  // ReadDataByIdentifier
+
+#define UDS_RESP_SESSION_CTRL      0x50  // 0x10 + 0x40
+#define UDS_RESP_READ_DATA_BY_ID   0x62  // 0x22 + 0x40
+
+// Session types
+#define UDS_SESSION_DEFAULT        0x01
+#define UDS_SESSION_PROGRAMMING    0x02
+#define UDS_SESSION_EXTENDED       0x03
+
+// NRC: service not available in active session
+#define NRC_SESSION_NOT_SUPPORTED  0x7E
+
+// Session inactivity timeout before auto-revert to Default
+#define UDS_SESSION_TIMEOUT_MS     5000
+
+// ---------- UDS DIDs ----------
+// ISO 14229-1 standard DIDs (available in Default + Extended)
+#define DID_VIN                    0xF190  // Vehicle Identification Number (17 ASCII)
+#define DID_ECU_SERIAL             0xF18C  // ECU Serial Number (4 ASCII)
+#define DID_SW_VERSION             0xF189  // Software Version (4 ASCII)
+
+// Proprietary live-data DIDs — Extended session only
+#define DID_ENGINE_LOAD_UDS        0x2001  // uint8, percent×255/100
+#define DID_COOLANT_TEMP_UDS       0x2002  // int16 BE, °C
+#define DID_RPM_UDS                0x2003  // uint16 BE, rpm
+#define DID_VEHICLE_SPEED_UDS      0x2004  // uint8, km/h
+#define DID_THROTTLE_POS_UDS       0x2005  // uint8, percent×255/100
+#define DID_FUEL_LEVEL_UDS         0x2006  // uint8, percent×255/100
+#define DID_OIL_TEMP_UDS           0x2007  // int16 BE, °C
+#define DID_BATTERY_VOLTAGE_UDS    0x2008  // uint16 BE, mV
+
 // ---------- ENCODING UTILITIES ----------
 // OBD-II wire format: rpm*4, temp+40, percent*255/100, fuel trim 0-255 centered at 128
 
