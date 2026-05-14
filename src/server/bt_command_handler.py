@@ -3,12 +3,14 @@ from __future__ import annotations
 import threading
 
 from config.obd_pids import PIDS
+from config.uds_dids import DIDS as UDS_DIDS
 from core.interfaces.i_data_logger import IDataLogger
 from core.interfaces.i_diagnostic_session import IDiagnosticSession
 from core.interfaces.i_transport import ITransport
 from core.models.monitor_sample import MonitorSample
 from infraestructure.decoder.obd2_decoder import Obd2DataDecoder
 from monitor.live_data_monitor import LiveDataMonitor
+from session.uds_session import UdsSession
 
 
 class BtCommandHandler:
@@ -33,6 +35,7 @@ class BtCommandHandler:
         self._authenticated = auth_token is None
         self._monitor: LiveDataMonitor | None = None
         self._monitor_lock = threading.Lock()
+        self._uds = UdsSession(transport)
 
     def set_push_callback(self, cb) -> None:
         self._push = cb
@@ -60,6 +63,8 @@ class BtCommandHandler:
             "sessions":         self._sessions,
             "session_samples":  self._session_samples,
             "session_commands": self._session_commands,
+            "uds_session":      self._uds_session,
+            "uds_read_did":     self._uds_read_did,
         }
         fn = dispatch.get(name)
         if fn is None:
@@ -195,6 +200,32 @@ class BtCommandHandler:
                 }
                 for c in commands
             ],
+        }
+
+    def _uds_session(self, cmd: dict) -> dict:
+        """cmd: {"cmd":"uds_session","session_type":3}  (1=default, 2=programming, 3=extended)"""
+        session_type = int(cmd.get("session_type", 1))
+        with self._lock:
+            info = self._uds.set_session(session_type)
+        return {"status": "ok", "data": info}
+
+    def _uds_read_did(self, cmd: dict) -> dict:
+        """cmd: {"cmd":"uds_read_did","did":"0x2003"}  — DID as hex string or int."""
+        raw_did = cmd.get("did")
+        if raw_did is None:
+            return {"status": "error", "message": "missing 'did' field"}
+        did = int(raw_did, 16) if isinstance(raw_did, str) else int(raw_did)
+        definition = UDS_DIDS.get(did)
+        with self._lock:
+            value = self._uds.read_did(did)
+        return {
+            "status": "ok",
+            "data": {
+                "did":   f"0x{did:04X}",
+                "name":  definition.name if definition else f"DID_{did:04X}",
+                "value": value,
+                "unit":  definition.unit if definition else "",
+            },
         }
 
     def stop_monitor(self) -> None:
