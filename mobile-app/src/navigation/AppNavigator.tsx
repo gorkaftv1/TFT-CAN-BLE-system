@@ -21,14 +21,14 @@ export function AppNavigator() {
   const getIcon = (name: string, color: string) => {
     const props = { color, size: 24 };
     switch (name) {
-      case 'Connection': return <ConnectionIcon {...props} />;
-      case 'Dashboard':  return <DashboardIcon  {...props} />;
-      case 'DTCs':       return <WarningIcon     {...props} />;
-      case 'Console':    return <ConsoleIcon     {...props} />;
-      case 'Customize':  return <SettingsIcon    {...props} />;
-      case 'Logs':       return <LogsIcon        {...props} />;
-      case 'UDS':        return <UdsIcon         {...props} />;
-      default:           return <View />;
+      case 'Conexión':    return <ConnectionIcon {...props} />;
+      case 'Panel':       return <DashboardIcon  {...props} />;
+      case 'Averías':     return <WarningIcon     {...props} />;
+      case 'Consola':     return <ConsoleIcon     {...props} />;
+      case 'Configurar':  return <SettingsIcon    {...props} />;
+      case 'Registros':   return <LogsIcon        {...props} />;
+      case 'UDS':         return <UdsIcon         {...props} />;
+      default:            return <View />;
     }
   };
 
@@ -52,13 +52,13 @@ export function AppNavigator() {
           headerTitleStyle: { fontWeight: '600' as const },
         })}
       >
-        <Tab.Screen name="Connection" component={ConnectionScreen} />
-        <Tab.Screen name="Dashboard"  component={DashboardScreen}  />
-        <Tab.Screen name="DTCs"       component={DtcScreen}        />
-        <Tab.Screen name="Console"    component={ConsoleScreen}     />
-        <Tab.Screen name="Customize"  component={CustomizeScreen}   />
-        <Tab.Screen name="Logs"       component={LogsScreen}        />
-        <Tab.Screen name="UDS"        component={UdsScreen}         />
+        <Tab.Screen name="Conexión"   component={ConnectionScreen} />
+        <Tab.Screen name="Panel"      component={DashboardScreen}  />
+        <Tab.Screen name="Averías"    component={DtcScreen}        />
+        <Tab.Screen name="Consola"    component={ConsoleScreen}    />
+        <Tab.Screen name="Configurar" component={CustomizeScreen}  />
+        <Tab.Screen name="Registros"  component={LogsScreen}       />
+        <Tab.Screen name="UDS"        component={UdsScreen}        />
       </Tab.Navigator>
     </NavigationContainer>
   );

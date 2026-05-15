@@ -3,9 +3,8 @@ import { MonitorSample } from '../models/MonitorSample';
 import { useVehicleStore, PidSample } from '../../stores/vehicleStore';
 import { useDashboardStore } from '../../stores/dashboardStore';
 import { useLogsStore } from '../../stores/logsStore';
+import { useSettingsStore } from '../../stores/settingsStore';
 import { LogService } from './LogService';
-
-const INTERVAL_MS = 500;
 
 let stopMonitor: (() => void) | null = null;
 
@@ -19,6 +18,20 @@ function handleSample(sample: MonitorSample): void {
   const now = Date.now();
 
   if (sample.type === 'error') {
+    // Mark the PID as errored in the store so the dashboard can reflect it
+    const existing = useVehicleStore.getState().getSample(sample.pid);
+    if (existing) {
+      useVehicleStore.getState().updateSample({ ...existing, error: true, timestamp: now });
+    } else {
+      useVehicleStore.getState().updateSample({
+        pid: sample.pid,
+        name: sample.name,
+        value: 0,
+        unit: '',
+        timestamp: now,
+        error: true,
+      });
+    }
     useLogsStore.getState().addConsoleLine(
       `[${fmtTime(now)}] [ERR] pid:0x${sample.pid?.toString(16).toUpperCase().padStart(2,'0')} ${sample.message ?? ''}`,
     );
@@ -31,6 +44,7 @@ function handleSample(sample: MonitorSample): void {
     value: sample.value,
     unit: sample.unit,
     timestamp: now,
+    error: false,
   };
   useVehicleStore.getState().updateSample(pidSample);
   LogService.add('data', `pid:0x${sample.pid.toString(16).toUpperCase().padStart(2,'0')} ${sample.name}=${sample.value} ${sample.unit}`);
@@ -44,14 +58,15 @@ export class VehicleService {
     const pids = widgets.filter((w) => w.visible).map((w) => w.pid);
 
     if (pids.length === 0) {
-      useLogsStore.getState().addConsoleLine(`[SYS] No PIDs enabled — enable widgets in Customize first`);
+      useLogsStore.getState().addConsoleLine(`[SYS] Sin sensores activos — actívalos en Configurar`);
       return;
     }
 
+    const interval = useSettingsStore.getState().monitorIntervalMs;
     const adapter = getAdapter();
-    stopMonitor = adapter.startMonitor(pids, INTERVAL_MS, handleSample);
+    stopMonitor = adapter.startMonitor(pids, interval, handleSample);
     useVehicleStore.getState().setMonitoring(true);
-    useLogsStore.getState().addConsoleLine(`[SYS] Monitor started: ${pids.length} PIDs`);
+    useLogsStore.getState().addConsoleLine(`[SYS] Monitorización iniciada: ${pids.length} sensores`);
     LogService.add('info', `monitor_start — ${pids.length} PIDs: ${pids.map(p => '0x' + p.toString(16).toUpperCase()).join(', ')}`);
   }
 
@@ -59,7 +74,7 @@ export class VehicleService {
     stopMonitor?.();
     stopMonitor = null;
     useVehicleStore.getState().clear();
-    useLogsStore.getState().addConsoleLine(`[SYS] Monitor stopped`);
+    useLogsStore.getState().addConsoleLine(`[SYS] Monitorización detenida`);
     LogService.add('info', 'monitor_stop');
   }
 
@@ -70,7 +85,7 @@ export class VehicleService {
       useLogsStore.getState().addConsoleLine(`[SYS] VIN: ${vin}`);
       LogService.add('info', `VIN: ${vin}`);
     } catch {
-      // VIN not available on all vehicles
+      // VIN no disponible en todos los vehículos
     }
   }
 }

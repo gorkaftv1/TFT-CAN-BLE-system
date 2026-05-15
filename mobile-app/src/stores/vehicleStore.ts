@@ -6,6 +6,7 @@ export interface PidSample {
   value: number;
   unit: string;
   timestamp: number;
+  error?: boolean;
 }
 
 interface VehicleState {
