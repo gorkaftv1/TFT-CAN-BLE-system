@@ -5,6 +5,9 @@ import {
 } from 'react-native';
 import { useLogsStore } from '../../stores/logsStore';
 import { LogEntry, LogSection, LogType } from '../../domain/models/LogEntry';
+import { useConnectionStore } from '../../stores/connectionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { DisconnectedState } from '../../components/DisconnectedState';
 import { colors, fontSize, spacing } from '../../shared/theme';
 
 const monoFont = Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' });
@@ -59,10 +62,16 @@ function EntryRow({ entry }: { entry: LogEntry }) {
 }
 
 export function ConsoleScreen() {
+  const { status } = useConnectionStore();
+  const useMock = useSettingsStore((s) => s.useMock);
   const entries    = useLogsStore((s) => s.entries);
   const clearSection = useLogsStore((s) => s.clearSection);
   const clearAll   = useLogsStore((s) => s.clearAll);
   const [tab, setTab] = useState<TabKey>('bluetooth');
+
+  if (!useMock && status !== 'connected') {
+    return <DisconnectedState screen="console" />;
+  }
   const [autoScroll, setAutoScroll] = useState(true);
   const listRef = useRef<FlatList<LogEntry>>(null);
 

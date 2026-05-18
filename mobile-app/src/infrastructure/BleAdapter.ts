@@ -57,16 +57,16 @@ export class BleAdapter implements IVehicleAdapter {
 
   startScan(onDevice: (d: ScannedDevice) => void, timeoutMs = SCAN_TIMEOUT_MS): () => void {
     const seen = new Set<string>();
-    LogService.add('info', 'BLE scan started');
+    LogService.add('info', 'BLE busqueda iniciada');
     this.manager.startDeviceScan(null, { allowDuplicates: false }, (err, device) => {
-      if (err) { LogService.add('error', `Scan error: ${err.message}`); return; }
+      if (err) { LogService.add('error', `Error de busqueda: ${err.message}`); return; }
       if (!device || seen.has(device.id)) return;
       seen.add(device.id);
       onDevice({ id: device.id, name: device.name ?? null, rssi: device.rssi ?? null });
     });
     const timer = setTimeout(() => {
       this.manager.stopDeviceScan();
-      LogService.add('info', 'BLE scan timeout');
+      LogService.add('info', 'BLE busqueda finalizada por tiempo');
     }, timeoutMs);
     return () => { clearTimeout(timer); this.manager.stopDeviceScan(); };
   }
@@ -74,27 +74,27 @@ export class BleAdapter implements IVehicleAdapter {
   // ── Connect ───────────────────────────────────────────────────────
 
   async connect(deviceId?: string, deviceLabel?: string): Promise<void> {
-    if (!deviceId) throw new Error('No device selected — pick a device from the scan list');
+    if (!deviceId) throw new Error('No hay dispositivo seleccionado — elige uno de la lista');
     const label = deviceLabel ?? deviceId;
-    LogService.add('info', `[1/5] Connecting GATT to ${label}...`);
+    LogService.add('info', `[1/5] Conectando GATT a ${label}...`);
     try {
       const raw = await this.manager.connectToDevice(deviceId, { autoConnect: false, timeout: 10000 });
-      LogService.add('info', `[2/5] GATT connected — requesting MTU ${MTU}...`);
+      LogService.add('info', `[2/5] GATT conectado — solicitando MTU ${MTU}...`);
       const mtuResult = await raw.requestMTU(MTU);
-      LogService.add('info', `[3/5] MTU=${mtuResult.mtu} — discovering services...`);
+      LogService.add('info', `[3/5] MTU=${mtuResult.mtu} — descubriendo servicios...`);
       await raw.discoverAllServicesAndCharacteristics();
-      LogService.add('info', '[4/5] Services discovered — subscribing RX...');
+      LogService.add('info', '[4/5] Servicios descubiertos — suscribiendo RX...');
       raw.onDisconnected(() => this.handleUnexpectedDisconnect());
       this.device = raw;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      LogService.add('error', `Connection failed at GATT level: ${msg}`);
+      LogService.add('error', `Conexion fallida a nivel GATT: ${msg}`);
       throw e;
     }
     await this.subscribeToTx();
-    LogService.add('info', '[5/5] Authenticating with Pi...');
+    LogService.add('info', '[5/5] Autenticando con la Pi...');
     await this.authenticate();
-    LogService.add('success', 'Auth OK — session live');
+    LogService.add('success', 'Autenticacion correcta — sesion activa');
     this.lastActivityTime = Date.now();
     this.startPingInterval();
     this.startActivityMonitor();
@@ -110,7 +110,7 @@ export class BleAdapter implements IVehicleAdapter {
     this.txSub?.remove();
     this.txSub = null;
     this.rxBuf = '';
-    this.drainQueue(new Error('Disconnected'));
+    this.drainQueue(new Error('Desconectado'));
     if (this.device) {
       try { await this.device.cancelConnection(); } catch { /* ignore */ }
       this.device = null;
@@ -126,7 +126,7 @@ export class BleAdapter implements IVehicleAdapter {
     const cmd = JSON.stringify({ cmd: 'monitor_start', pids, interval_ms: intervalMs });
     LogService.addBleTx(cmd);
     this.request({ cmd: 'monitor_start', pids, interval_ms: intervalMs }).catch((e) => {
-      LogService.add('error', `monitor_start failed: ${e instanceof Error ? e.message : String(e)}`);
+      LogService.add('error', `Error al iniciar monitor: ${e instanceof Error ? e.message : String(e)}`);
     });
     return () => {
       this.sampleCbs.delete(onSample);
@@ -179,7 +179,7 @@ export class BleAdapter implements IVehicleAdapter {
 
   private subscribeToTx(): Promise<void> {
     return new Promise<void>((resolve, reject) => {
-      if (!this.device) { reject(new Error('Not connected')); return; }
+      if (!this.device) { reject(new Error('Sin conexion')); return; }
       this.txSub = this.device.monitorCharacteristicForService(
         NUS_SERVICE, TX_CHAR,
         (err, char) => {
@@ -251,7 +251,7 @@ export class BleAdapter implements IVehicleAdapter {
       const timer = setTimeout(() => {
         const idx = this.queue.findIndex((p) => p.timer === timer);
         if (idx !== -1) this.queue.splice(idx, 1);
-        reject(new Error(`Timeout: ${JSON.stringify(cmd)}`));
+        reject(new Error(`Tiempo de espera agotado: ${JSON.stringify(cmd)}`));
       }, REQUEST_TIMEOUT_MS);
 
       this.queue.push({ resolve: resolve as (d: unknown) => void, reject, timer });
@@ -264,7 +264,7 @@ export class BleAdapter implements IVehicleAdapter {
   }
 
   private async writeRx(data: string, withResponse = true): Promise<void> {
-    if (!this.device) throw new Error('Not connected');
+    if (!this.device) throw new Error('Sin conexion');
     try {
       const cmdType = (JSON.parse(data.trim()) as Record<string, unknown>)?.cmd as string | undefined;
       if (cmdType !== 'ping' && cmdType !== 'heartbeat_ack') LogService.addBleTx(data.trimEnd());
@@ -284,8 +284,8 @@ export class BleAdapter implements IVehicleAdapter {
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      LogService.add('error', `BLE write failed: ${msg}`);
-      throw new Error(`BLE write failed: ${msg}`);
+      LogService.add('error', `Escritura BLE fallida: ${msg}`);
+      throw new Error(`Escritura BLE fallida: ${msg}`);
     }
   }
 
@@ -310,7 +310,7 @@ export class BleAdapter implements IVehicleAdapter {
       if (!this.device) return;
       const elapsed = Date.now() - this.lastActivityTime;
       if (elapsed > CLIENT_TIMEOUT_MS) {
-        LogService.add('error', `Inactivity timeout (${elapsed}ms) — disconnecting`);
+        LogService.add('error', `Tiempo sin actividad (${elapsed}ms) — desconectando`);
         this.disconnect().catch(() => {});
       }
     }, INACTIVITY_CHECK_MS);

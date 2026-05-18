@@ -42,7 +42,7 @@ export const useUdsStore = create<UdsState>((set, get) => ({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ sessionLoading: false, error: msg });
-      LogService.add('error', `UDS session change failed: ${msg}`);
+      LogService.add('error', `Error al cambiar sesion UDS: ${msg}`);
     }
   },
 
@@ -56,7 +56,7 @@ export const useUdsStore = create<UdsState>((set, get) => ({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ sessionLoading: false, error: msg });
-      LogService.add('error', `UDS session change failed: ${msg}`);
+      LogService.add('error', `Error al cambiar sesion UDS: ${msg}`);
     }
   },
 
@@ -76,7 +76,7 @@ export const useUdsStore = create<UdsState>((set, get) => ({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ readingDid: null, error: msg });
-      LogService.add('error', `UDS readDid ${hexStr} failed: ${msg}`);
+      LogService.add('error', `Error al leer DID UDS ${hexStr}: ${msg}`);
     }
   },
 
@@ -85,7 +85,7 @@ export const useUdsStore = create<UdsState>((set, get) => ({
     const readable = sessionType === UDS_SESSION_EXTENDED ? ALL_DIDS : STANDARD_DIDS;
 
     set({ readAllLoading: true, error: null });
-    LogService.add('info', `UDS read all — ${readable.length} DIDs`);
+    LogService.add('info', `UDS leer todo — ${readable.length} DIDs`);
     const newValues: Record<string, DidValue | null> = { ...get().didValues };
 
     for (const def of readable) {

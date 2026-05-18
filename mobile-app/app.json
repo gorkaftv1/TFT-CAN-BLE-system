@@ -5,6 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "icon": "./src/assets/icons/diag_clear.png",
     "plugins": [
       [
         "react-native-ble-plx",
@@ -20,6 +21,7 @@
     ],
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icons/diag_clear.png",
         "backgroundColor": "#0a0a0f"
       },
       "permissions": [
@@ -34,10 +36,10 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.seatdiag.app"
+      "package": "com.diag.app"
     },
     "ios": {
-      "bundleIdentifier": "com.gorka.seatdiag",
+      "bundleIdentifier": "com.gorka.diag",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Needed to connect to the vehicle OBD diagnostic interface"
       }

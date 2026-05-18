@@ -70,19 +70,25 @@ export class VehicleService {
   static async snapshot(): Promise<void> {
     LogService.add('info', 'snapshot — requesting all PIDs');
     const data = await getAdapter().getSnapshot();
-    const now = Date.now();
+    const now  = Date.now();
+
+    const visiblePids = new Set(
+      useDashboardStore.getState().widgets.filter((w) => w.visible).map((w) => w.pid),
+    );
+
     for (const [pid, def] of PID_MAP.entries()) {
+      if (!visiblePids.has(pid)) continue;
       const entry = data[def.name];
       if (entry) {
         useVehicleStore.getState().updateSample({
-          pid,
-          name: def.name,
-          value: entry.value,
-          unit: entry.unit,
-          timestamp: now,
-          error: false,
+          pid, name: def.name, value: entry.value, unit: entry.unit, timestamp: now, error: false,
         });
         LogService.addObdSample(pid, def.name, entry.value, entry.unit);
+      } else {
+        useVehicleStore.getState().updateSample({
+          pid, name: def.name, value: 0, unit: def.unit, timestamp: now, error: true,
+        });
+        LogService.addObdError(pid, def.name, 'Tiempo de espera agotado');
       }
     }
   }

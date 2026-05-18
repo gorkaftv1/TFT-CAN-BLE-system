@@ -57,7 +57,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     try {
       await getAdapter().connect(deviceId, deviceLabel);
       set({ status: 'connected', deviceName: deviceLabel });
-      LogService.add('info', `Connected to ${deviceLabel}`);
+      LogService.add('info', `Conectado a ${deviceLabel}`);
       VehicleService.fetchVin();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -66,7 +66,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
   },
 
   disconnect: async () => {
-    LogService.add('info', `Disconnecting from ${get().deviceName ?? 'device'}`);
+    LogService.add('info', `Desconectando de ${get().deviceName ?? 'dispositivo'}`);
     VehicleService.stop();
     await getAdapter().disconnect();
     useVehicleStore.getState().clear();

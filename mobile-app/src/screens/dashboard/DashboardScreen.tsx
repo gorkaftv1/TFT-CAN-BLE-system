@@ -3,12 +3,12 @@ import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useDashboardStore, Widget } from '../../stores/dashboardStore';
 import { useVehicleStore, PidSample } from '../../stores/vehicleStore';
 import { useUdsStore } from '../../stores/udsStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { DisconnectedState } from '../../components/DisconnectedState';
 import { VehicleService } from '../../domain/services/VehicleService';
 import { PID_MAP } from '../../config/obd_pids';
 import { ALL_DIDS, STANDARD_DIDS, UDS_SESSION_EXTENDED, UdsDidConfig } from '../../config/uds_dids';
@@ -70,7 +70,12 @@ function ObdCard({ widget, intervalMs }: { widget: Widget; intervalMs: number })
         <View style={[styles.dot, { backgroundColor: colors.error }]} />
         <Text style={styles.cardName} numberOfLines={1}>{widget.label}</Text>
         <Text style={styles.cardPid}>{pidLabel}</Text>
-        <Text style={[styles.cardValue, { color: colors.error }]}>Error al leer</Text>
+        <View style={styles.cardRight}>
+          <Text style={styles.cardTs}>{fmtTime(sample.timestamp)}</Text>
+          <Text style={[styles.cardValue, { color: colors.error }]} numberOfLines={1}>
+            ERROR: LÍMITE DE TIEMPO
+          </Text>
+        </View>
       </View>
     );
   }
@@ -158,7 +163,7 @@ export function DashboardScreen() {
   const { widgets } = useDashboardStore();
   const { sessionType, readAllLoading, openExtendedSession } = useUdsStore();
   const intervalMs = useSettingsStore((s) => s.monitorIntervalMs);
-  const navigation = useNavigation();
+  const useMock = useSettingsStore((s) => s.useMock);
 
   const [protocol, setProtocol] = useState<Protocol>('obd');
   const [snapshotLoading, setSnapshotLoading] = useState(false);
@@ -212,22 +217,8 @@ export function DashboardScreen() {
   const isMonitoring = protocol === 'obd' ? monitoring : udsMonitoring;
   const isBusy = snapshotLoading || readAllLoading;
 
-  if (status !== 'connected') {
-    return (
-      <View style={styles.root}>
-        <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Sin conexion</Text>
-          <Text style={styles.emptyHint}>Conecta el adaptador de diagnostico para ver los datos del vehiculo.</Text>
-          <TouchableOpacity
-            style={styles.goBtn}
-            onPress={() => navigation.navigate('Ajustes' as never)}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.goBtnLabel}>Ir a Ajustes</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+  if (!useMock && status !== 'connected') {
+    return <DisconnectedState screen="dashboard" />;
   }
 
   return (
@@ -270,7 +261,7 @@ export function DashboardScreen() {
             activeOpacity={0.75}
           >
             <Text style={[styles.sessionLabel, sessionType === UDS_SESSION_EXTENDED && styles.sessionLabelActive]}>
-              {sessionType === UDS_SESSION_EXTENDED ? 'Sesion extendida' : 'Sesion default'}
+              {sessionType === UDS_SESSION_EXTENDED ? 'Sesion extendida' : 'Sesion por defecto'}
             </Text>
           </TouchableOpacity>
         )}

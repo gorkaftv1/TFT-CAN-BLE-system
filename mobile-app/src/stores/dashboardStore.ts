@@ -11,7 +11,7 @@ export interface Widget {
   order: number;
 }
 
-const STORAGE_KEY = '@dashboard_widgets_v2';
+const STORAGE_KEY = '@dashboard_widgets_v3';
 
 export const DEFAULT_WIDGETS: Widget[] = PIDS.map((p, i) => ({
   id: `pid_${p.pid}`,
@@ -28,6 +28,8 @@ interface DashboardState {
   toggleWidget: (id: string) => void;
   moveUp: (id: string) => void;
   moveDown: (id: string) => void;
+  selectAll: () => void;
+  deselectAll: () => void;
   loadFromStorage: () => Promise<void>;
   saveToStorage: () => Promise<void>;
 }
@@ -64,6 +66,16 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       return { widgets: arr.map((w, i) => ({ ...w, order: i })) };
     });
+    void get().saveToStorage();
+  },
+
+  selectAll: () => {
+    set((state) => ({ widgets: state.widgets.map((w) => ({ ...w, visible: true })) }));
+    void get().saveToStorage();
+  },
+
+  deselectAll: () => {
+    set((state) => ({ widgets: state.widgets.map((w) => ({ ...w, visible: false })) }));
     void get().saveToStorage();
   },
 

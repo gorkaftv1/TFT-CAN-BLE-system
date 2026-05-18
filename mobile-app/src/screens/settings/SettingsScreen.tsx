@@ -1,198 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  Alert, Animated, FlatList, ListRenderItem, Modal,
-  ScrollView, StyleSheet, Switch, Text, TextInput,
+  Alert, FlatList, ListRenderItem, ScrollView,
+  StyleSheet, Switch, Text, TextInput,
   TouchableOpacity, View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useDashboardStore, Widget } from '../../stores/dashboardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
 import { useVehicleStore } from '../../stores/vehicleStore';
-import { ScannedDevice } from '../../infrastructure/BleAdapter';
+import { ScanModal, useConnectionFlow } from '../../components/ConnectionFlowModals';
 import { colors, fontSize, spacing } from '../../shared/theme';
-
-// ── RSSI helpers ──────────────────────────────────────────────────
-
-function rssiBar(rssi: number | null): string {
-  if (rssi === null) return '?';
-  if (rssi >= -60) return 'xxxxxx';
-  if (rssi >= -75) return 'xxxx  ';
-  if (rssi >= -85) return 'xx    ';
-  return 'x     ';
-}
-
-function rssiLabel(rssi: number | null): string {
-  if (rssi === null) return 'Senal desconocida';
-  if (rssi >= -60) return 'Senal excelente';
-  if (rssi >= -75) return 'Senal buena';
-  if (rssi >= -85) return 'Senal debil';
-  return 'Senal muy debil';
-}
-
-// ── Connection Modal ──────────────────────────────────────────────
-
-function DeviceRow({ device, onConnect, disabled, targetName }: {
-  device: ScannedDevice;
-  onConnect: () => void;
-  disabled: boolean;
-  targetName: string;
-}) {
-  const name = device.name ?? 'Dispositivo desconocido';
-  const isTarget = name === targetName;
-  return (
-    <View style={[styles.deviceRow, isTarget && styles.deviceRowTarget]}>
-      <View style={styles.deviceInfo}>
-        <View style={styles.deviceNameRow}>
-          <Text style={[styles.deviceName, isTarget && styles.deviceNameTarget]}>{name}</Text>
-          {isTarget && <Text style={styles.tagRecommended}>Recomendado</Text>}
-        </View>
-        <Text style={styles.deviceMeta}>{rssiLabel(device.rssi)}</Text>
-      </View>
-      <TouchableOpacity
-        style={[styles.connectBtn, isTarget && styles.connectBtnTarget, disabled && styles.btnDisabled]}
-        onPress={onConnect}
-        disabled={disabled}
-        activeOpacity={0.75}
-      >
-        <Text style={[styles.connectBtnLabel, isTarget && styles.connectBtnLabelTarget]}>Conectar</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
-function ConnectionModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const { status, error, scannedDevices, startScan, stopScan, connect, disconnect } =
-    useConnectionStore();
-  const targetName = useSettingsStore((s) => s.deviceName);
-  const useMock    = useSettingsStore((s) => s.useMock);
-
-  const spinAnim = useRef(new Animated.Value(0)).current;
-  const animRef  = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    animRef.current?.stop();
-    spinAnim.setValue(0);
-    if (status === 'scanning' || status === 'connecting') {
-      animRef.current = Animated.loop(
-        Animated.timing(spinAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-      );
-      animRef.current.start();
-    }
-    return () => animRef.current?.stop();
-  }, [status]);
-
-  const rotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  const renderDevice: ListRenderItem<ScannedDevice> = ({ item }) => (
-    <DeviceRow
-      device={item}
-      disabled={status === 'connecting'}
-      targetName={targetName}
-      onConnect={() => connect(item.id, item.name ?? item.id)}
-    />
-  );
-
-  return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <View style={styles.modalRoot}>
-        {/* Modal header */}
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Buscar dispositivo</Text>
-          <TouchableOpacity style={styles.modalCloseBtn} onPress={onClose} activeOpacity={0.75}>
-            <Text style={styles.modalCloseLabel}>Cerrar</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Connection status (when connected) */}
-        {status === 'connected' ? (
-          <View style={styles.connectedBox}>
-            <View style={[styles.dot, { backgroundColor: colors.success }]} />
-            <View style={styles.connectedInfo}>
-              <Text style={styles.connectedLabel}>Conectado</Text>
-              <Text style={styles.connectedDevice}>
-                {useConnectionStore.getState().deviceName ?? ''}
-                {useMock ? '  [simulacion]' : ''}
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.disconnectBtn} onPress={disconnect} activeOpacity={0.75}>
-              <Text style={styles.disconnectLabel}>Desconectar</Text>
-            </TouchableOpacity>
-          </View>
-        ) : useMock ? (
-          /* Mock mode — no scan needed */
-          <View style={styles.mockBar}>
-            <View style={styles.scanBarLeft}>
-              {status === 'connecting' && (
-                <Animated.Text style={[styles.spinner, { transform: [{ rotate }] }]}>o</Animated.Text>
-              )}
-              <Text style={styles.scanStatus}>
-                {status === 'connecting' ? 'Iniciando simulacion...' : 'Modo simulacion activo'}
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.scanBtn, styles.scanBtnPrimary, status === 'connecting' && styles.btnDisabled]}
-              onPress={() => connect('mock', 'Simulacion')}
-              disabled={status === 'connecting'}
-              activeOpacity={0.75}
-            >
-              <Text style={[styles.scanBtnLabel, styles.scanBtnPrimaryLabel]}>Conectar</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* BLE scan controls */
-          <View style={styles.scanBar}>
-            <View style={styles.scanBarLeft}>
-              {(status === 'scanning' || status === 'connecting') && (
-                <Animated.Text style={[styles.spinner, { transform: [{ rotate }] }]}>o</Animated.Text>
-              )}
-              <Text style={styles.scanStatus}>
-                {status === 'scanning'   ? 'Buscando...' :
-                 status === 'connecting' ? 'Conectando...' :
-                 scannedDevices.length > 0 ? `${scannedDevices.length} encontrados` : 'Sin dispositivos'}
-              </Text>
-            </View>
-            {status === 'scanning' ? (
-              <TouchableOpacity style={styles.scanBtn} onPress={stopScan} activeOpacity={0.75}>
-                <Text style={styles.scanBtnLabel}>Detener</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.scanBtn, styles.scanBtnPrimary, status === 'connecting' && styles.btnDisabled]}
-                onPress={startScan}
-                disabled={status === 'connecting'}
-                activeOpacity={0.75}
-              >
-                <Text style={[styles.scanBtnLabel, styles.scanBtnPrimaryLabel]}>
-                  {scannedDevices.length > 0 ? 'Actualizar' : 'Buscar'}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
-
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        {/* Device list — BLE only */}
-        {status !== 'connected' && !useMock && (
-          scannedDevices.length === 0 ? (
-            <View style={styles.scanEmpty}>
-              <Text style={styles.scanEmptyText}>
-                Asegurate de que el adaptador esta encendido y cerca del telefono, luego pulsa Buscar.
-              </Text>
-            </View>
-          ) : (
-            <FlatList
-              data={scannedDevices}
-              keyExtractor={(d) => d.id}
-              renderItem={renderDevice}
-              contentContainerStyle={{ paddingBottom: spacing.xl }}
-            />
-          )
-        )}
-      </View>
-    </Modal>
-  );
-}
 
 // ── Widget row ────────────────────────────────────────────────────
 
@@ -220,21 +38,21 @@ function WidgetRow({
           onPress={() => onUp(item.id)} disabled={index === 0}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.arrowText}>up</Text>
+          <Ionicons name="chevron-up" size={18} color={index === 0 ? colors.textMuted : colors.text} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.arrowBtn, index === total - 1 && styles.arrowBtnDim]}
           onPress={() => onDown(item.id)} disabled={index === total - 1}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Text style={styles.arrowText}>dn</Text>
+          <Ionicons name="chevron-down" size={18} color={index === total - 1 ? colors.textMuted : colors.text} />
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-// ── Main screen ───────────────────────────────────────────────────
+// ── Interval options ──────────────────────────────────────────────
 
 const INTERVAL_OPTIONS = [
   { label: 'Tiempo real (250 ms)', value: 250 },
@@ -243,16 +61,18 @@ const INTERVAL_OPTIONS = [
   { label: 'Muy lento (2 s)',      value: 2000 },
 ];
 
+// ── Main screen ───────────────────────────────────────────────────
+
 export function SettingsScreen() {
   const { status } = useConnectionStore();
   const { vin } = useVehicleStore();
-  const { widgets, loaded, toggleWidget, moveUp, moveDown, loadFromStorage } = useDashboardStore();
+  const { widgets, loaded, toggleWidget, moveUp, moveDown, selectAll, deselectAll, loadFromStorage } = useDashboardStore();
   const {
     deviceName, monitorIntervalMs, useMock, loaded: settingsLoaded,
     setDeviceName, setMonitorInterval, setUseMock, loadFromStorage: loadSettings,
   } = useSettingsStore();
 
-  const [modalVisible, setModalVisible] = useState(false);
+  const { scanOpen, openScan, closeScan } = useConnectionFlow();
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
 
   useEffect(() => {
@@ -264,12 +84,13 @@ export function SettingsScreen() {
 
   const sorted  = [...widgets].sort((a, b) => a.order - b.order);
   const visible = sorted.filter((w) => w.visible).length;
+  const allSelected = visible === sorted.length;
 
   const handleToggleMock = (value: boolean) => {
     if (status === 'connected') {
       Alert.alert(
         'Cambiar modo',
-        'Esto desconectara el dispositivo actual. Continuar?',
+        'Esto desconectara el dispositivo actual. ¿Continuar?',
         [
           { text: 'Cancelar', style: 'cancel' },
           {
@@ -291,6 +112,18 @@ export function SettingsScreen() {
     if (trimmed) void setDeviceName(trimmed);
   };
 
+  const handleConnectionBtn = () => {
+    if (status === 'connected' || useMock) {
+      if (useMock) {
+        void setUseMock(false);
+      } else {
+        void useConnectionStore.getState().disconnect();
+      }
+    } else {
+      openScan();
+    }
+  };
+
   const renderWidget: ListRenderItem<Widget> = ({ item, index }) => (
     <WidgetRow
       item={item} index={index} total={sorted.length}
@@ -298,56 +131,56 @@ export function SettingsScreen() {
     />
   );
 
+  // Connection status label
+  const connectionLabel = useMock
+    ? 'Simulacion activa'
+    : status === 'connected'
+      ? `Conectado a ${useConnectionStore.getState().deviceName ?? ''}`
+      : status === 'scanning'   ? 'Buscando...'
+      : status === 'connecting' ? 'Conectando...'
+      : 'Desconectado';
+
+  const dotColor = useMock
+    ? colors.primary
+    : status === 'connected' ? colors.success
+    : status === 'scanning' || status === 'connecting' ? colors.warning
+    : colors.border;
+
+  const isActive = useMock || status === 'connected';
+
   return (
     <>
       <ScrollView style={styles.root} contentContainerStyle={styles.scrollContent}>
 
-        {/* ── Conexion ── */}
-        <Text style={styles.sectionTitle}>Conexion</Text>
+        {/* ── Estado de conexion ── */}
+        <Text style={styles.sectionTitle}>Estado de conexion</Text>
         <View style={styles.card}>
           <View style={styles.connectionStatus}>
-            <View style={[styles.dot, {
-              backgroundColor: status === 'connected' ? colors.success :
-                               status === 'scanning' || status === 'connecting' ? colors.warning :
-                               colors.border,
-            }]} />
+            <View style={[styles.dot, { backgroundColor: dotColor }]} />
             <View style={styles.connectionInfo}>
-              <Text style={styles.connectionLabel}>
-                {status === 'connected'  ? 'Conectado' :
-                 status === 'scanning'   ? 'Buscando...' :
-                 status === 'connecting' ? 'Conectando...' :
-                 'Desconectado'}
-              </Text>
-              {status === 'connected' && (
-                <Text style={styles.connectionDevice} numberOfLines={1}>
-                  {useConnectionStore.getState().deviceName ?? ''}{vin ? `  VIN: ${vin}` : ''}
-                </Text>
-              )}
+              <Text style={styles.connectionLabel}>{connectionLabel}</Text>
+              {status === 'connected' && !useMock && vin ? (
+                <Text style={styles.connectionDevice} numberOfLines={1}>VIN: {vin}</Text>
+              ) : null}
             </View>
           </View>
           <TouchableOpacity
-            style={[styles.connectionBtn, status === 'connected' && styles.connectionBtnDisconnect]}
-            onPress={() => {
-              if (status === 'connected') {
-                useConnectionStore.getState().disconnect();
-              } else {
-                setModalVisible(true);
-              }
-            }}
+            style={[styles.connectionBtn, isActive && styles.connectionBtnDisconnect]}
+            onPress={handleConnectionBtn}
             activeOpacity={0.75}
           >
             <Text style={styles.connectionBtnLabel}>
-              {status === 'connected' ? 'Desconectar' : 'Conectar'}
+              {isActive ? 'Desconectar' : 'Conectar'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* ── Adaptador BLE ── */}
-        <Text style={styles.sectionTitle}>Adaptador BLE</Text>
+        {/* ── Modo simulacion ── */}
+        <Text style={styles.sectionTitle}>Modo simulacion</Text>
         <View style={styles.card}>
           <View style={styles.mockRow}>
             <View style={styles.mockInfo}>
-              <Text style={styles.settingLabel}>Modo simulacion</Text>
+              <Text style={styles.settingLabel}>Simulacion de datos</Text>
               <Text style={styles.settingHint}>Usa datos ficticios sin hardware real.</Text>
             </View>
             <Switch
@@ -357,40 +190,44 @@ export function SettingsScreen() {
               thumbColor={useMock ? colors.primary : colors.textMuted}
             />
           </View>
-          {!useMock && (
-            <>
-              <View style={styles.divider} />
+        </View>
+
+        {/* ── Adaptador BLE ── */}
+        {!useMock && (
+          <>
+            <Text style={styles.sectionTitle}>Adaptador BLE</Text>
+            <View style={styles.card}>
               <Text style={styles.settingLabel}>Nombre del dispositivo</Text>
               <Text style={styles.settingHint}>
                 Nombre Bluetooth del adaptador de diagnostico. Por defecto: diag_tool
               </Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              style={styles.input}
-              value={deviceNameInput}
-              onChangeText={setDeviceNameInput}
-              onBlur={handleDeviceNameSave}
-              placeholder="Nombre del dispositivo"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="characters"
-              returnKeyType="done"
-              onSubmitEditing={handleDeviceNameSave}
-            />
-            {deviceNameInput.trim() !== deviceName && (
-              <TouchableOpacity style={styles.saveBtn} onPress={handleDeviceNameSave} activeOpacity={0.75}>
-                <Text style={styles.saveBtnLabel}>Guardar</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-            </>
-          )}
-        </View>
+              <View style={styles.inputRow}>
+                <TextInput
+                  style={styles.input}
+                  value={deviceNameInput}
+                  onChangeText={setDeviceNameInput}
+                  onBlur={handleDeviceNameSave}
+                  placeholder="Nombre del dispositivo"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="characters"
+                  returnKeyType="done"
+                  onSubmitEditing={handleDeviceNameSave}
+                />
+                {deviceNameInput.trim() !== deviceName && (
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleDeviceNameSave} activeOpacity={0.75}>
+                    <Text style={styles.saveBtnLabel}>Guardar</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </>
+        )}
 
-        {/* ── Velocidad de actualizacion ── */}
-        <Text style={styles.sectionTitle}>Velocidad de actualizacion</Text>
+        {/* ── Tiempo de sondeo ── */}
+        <Text style={styles.sectionTitle}>Tiempo de sondeo</Text>
         <View style={styles.card}>
           <Text style={styles.settingHint}>
-            Frecuencia de solicitud de datos al vehiculo. Mayor frecuencia = mayor consumo de bateria.
+            Define cada cuanto la aplicacion pide datos al vehiculo. Frecuencias mayores muestran cambios mas rapido pero consumen mas bateria.
           </Text>
           <View style={styles.intervalOptions}>
             {INTERVAL_OPTIONS.map((opt) => (
@@ -408,11 +245,25 @@ export function SettingsScreen() {
           </View>
         </View>
 
-        {/* ── Sensores del panel ── */}
-        <Text style={styles.sectionTitle}>Sensores del panel</Text>
+        {/* ── Datos mostrados en Diagnosis ── */}
+        <Text style={styles.sectionTitle}>Datos mostrados en Diagnosis</Text>
         <Text style={styles.sectionHint}>
-          {visible}/{sorted.length} activos — activa, desactiva y reordena con las flechas.
+          Selecciona aqui que datos quieres visualizar en el Panel de Datos.
         </Text>
+
+        {/* Select / deselect all toolbar */}
+        <View style={styles.selectAllRow}>
+          <Text style={styles.activeCount}>{visible}/{sorted.length} activos</Text>
+          <TouchableOpacity
+            style={styles.selectAllBtn}
+            onPress={() => allSelected ? deselectAll() : selectAll()}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.selectAllLabel}>
+              {allSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <FlatList
           data={sorted}
@@ -423,7 +274,7 @@ export function SettingsScreen() {
         />
       </ScrollView>
 
-      <ConnectionModal visible={modalVisible} onClose={() => setModalVisible(false)} />
+      <ScanModal visible={scanOpen} onClose={closeScan} />
     </>
   );
 }
@@ -438,8 +289,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingTop: spacing.lg, paddingBottom: spacing.xs,
   },
   sectionHint: {
-    fontSize: fontSize.sm, color: colors.textSecondary, textAlign: 'center',
+    fontSize: fontSize.sm, color: colors.textSecondary,
     paddingHorizontal: spacing.md, paddingBottom: spacing.sm,
+    lineHeight: 20,
   },
 
   card: {
@@ -464,7 +316,6 @@ const styles = StyleSheet.create({
   // Mock toggle
   mockRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   mockInfo: { flex: 1, marginRight: spacing.md },
-  divider:  { height: 1, backgroundColor: colors.border, marginVertical: spacing.xs },
 
   // Device name
   settingLabel: { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
@@ -488,6 +339,16 @@ const styles = StyleSheet.create({
   intervalBtnLabel:       { fontSize: fontSize.sm, color: colors.textSecondary },
   intervalBtnLabelActive: { color: colors.primary, fontWeight: '600' },
 
+  // Select all row
+  selectAllRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  activeCount:    { fontSize: fontSize.xs, color: colors.textMuted },
+  selectAllBtn:   { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 6, borderWidth: 1, borderColor: colors.primary },
+  selectAllLabel: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
+
   // Widget list
   widgetList: { paddingHorizontal: spacing.md, paddingTop: spacing.xs, gap: spacing.sm },
   widgetRow: {
@@ -499,81 +360,6 @@ const styles = StyleSheet.create({
   widgetLabelDim:{ color: colors.textMuted },
   widgetUnit:    { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
   arrows:        { flexDirection: 'row', gap: spacing.xs },
-  arrowBtn: {
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
-    borderRadius: 6, backgroundColor: colors.background,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  arrowBtnDim: { opacity: 0.25 },
-  arrowText:   { color: colors.text, fontSize: fontSize.xs, fontFamily: 'monospace' },
-
-  // ── Modal ──
-  modalRoot: { flex: 1, backgroundColor: colors.background },
-  modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  modalTitle:      { fontSize: fontSize.lg, fontWeight: '700', color: colors.text },
-  modalCloseBtn:   { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  modalCloseLabel: { fontSize: fontSize.sm, color: colors.textSecondary },
-
-  connectedBox: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    padding: spacing.md, backgroundColor: colors.success + '12',
-    borderBottomWidth: 1, borderBottomColor: colors.success + '30',
-  },
-  connectedInfo:   { flex: 1 },
-  connectedLabel:  { fontSize: fontSize.sm, fontWeight: '700', color: colors.success },
-  connectedDevice: { fontSize: fontSize.xs, color: colors.textMuted, fontFamily: 'monospace' },
-  disconnectBtn:   { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, backgroundColor: colors.error },
-  disconnectLabel: { fontSize: fontSize.sm, fontWeight: '700', color: '#fff' },
-
-  mockBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-    backgroundColor: colors.primary + '08',
-  },
-  scanBar: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  scanBarLeft:       { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
-  spinner:           { fontSize: 16, color: colors.primary },
-  scanStatus:        { fontSize: fontSize.sm, color: colors.textSecondary },
-  scanBtn:           { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
-  scanBtnPrimary:    { backgroundColor: colors.primary, borderColor: colors.primary },
-  scanBtnLabel:      { fontSize: fontSize.sm, fontWeight: '600', color: colors.textSecondary },
-  scanBtnPrimaryLabel:{ color: colors.background },
-  errorText: {
-    fontSize: fontSize.sm, color: colors.error,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: colors.error + '15',
-  },
-  scanEmpty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
-  scanEmptyText: { fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },
-
-  deviceRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: spacing.md, paddingVertical: spacing.md,
-    borderBottomWidth: 1, borderBottomColor: colors.border,
-  },
-  deviceRowTarget:  { backgroundColor: colors.primary + '10' },
-  deviceInfo:       { flex: 1 },
-  deviceNameRow:    { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: 3 },
-  deviceName:       { fontSize: fontSize.sm, fontWeight: '600', color: colors.text },
-  deviceNameTarget: { color: colors.primary },
-  tagRecommended: {
-    fontSize: 9, fontWeight: '700', color: colors.primary,
-    backgroundColor: colors.primary + '20', borderRadius: 4,
-    paddingHorizontal: 5, paddingVertical: 1,
-  },
-  deviceMeta:           { fontSize: fontSize.xs, color: colors.textMuted },
-  connectBtn:           { paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: 7, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
-  connectBtnTarget:     { backgroundColor: colors.primary, borderColor: colors.primary },
-  connectBtnLabel:      { fontSize: fontSize.xs, fontWeight: '700', color: colors.text },
-  connectBtnLabelTarget:{ color: colors.background },
-  btnDisabled:          { opacity: 0.4 },
+  arrowBtn:      { padding: spacing.xs, borderRadius: 6, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
+  arrowBtnDim:   { opacity: 0.25 },
 });

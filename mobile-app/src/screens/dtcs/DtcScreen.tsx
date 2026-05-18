@@ -2,6 +2,9 @@ import React from 'react';
 import { ActivityIndicator, Alert, FlatList, ListRenderItem, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useDtcStore } from '../../stores/dtcStore';
 import { DtcCode } from '../../domain/models/DtcCode';
+import { useConnectionStore } from '../../stores/connectionStore';
+import { useSettingsStore } from '../../stores/settingsStore';
+import { DisconnectedState } from '../../components/DisconnectedState';
 import { colors, fontSize, spacing } from '../../shared/theme';
 
 const SEVERITY_COLOR = { info: colors.primary, warning: colors.warning, error: colors.error };
@@ -21,7 +24,13 @@ function DtcRow({ item }: { item: DtcCode }) {
 }
 
 export function DtcScreen() {
+  const { status } = useConnectionStore();
+  const useMock = useSettingsStore((s) => s.useMock);
   const { codes, loading, error, fetch, clear } = useDtcStore();
+
+  if (!useMock && status !== 'connected') {
+    return <DisconnectedState screen="dtc" />;
+  }
 
   const handleClear = () => {
     Alert.alert(

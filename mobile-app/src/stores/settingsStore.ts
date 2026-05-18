@@ -18,7 +18,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   deviceName: 'diag_tool',
   monitorIntervalMs: 500,
-  useMock: true,
+  useMock: false,
   loaded: false,
 
   setDeviceName: async (name) => {
@@ -42,7 +42,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
         const { deviceName, monitorIntervalMs, useMock } = JSON.parse(raw) as Partial<SettingsState>;
-        const mock = typeof useMock === 'boolean' ? useMock : true;
+        const mock = typeof useMock === 'boolean' ? useMock : false;
         configureAdapter(mock);
         set({
           deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName : 'diag_tool',
@@ -51,6 +51,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         });
       }
     } catch { /* ignore */ }
+    configureAdapter(get().useMock);
     set({ loaded: true });
   },
 }));

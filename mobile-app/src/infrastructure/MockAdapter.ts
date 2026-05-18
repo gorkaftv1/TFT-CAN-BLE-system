@@ -25,13 +25,11 @@ export class MockAdapter implements IVehicleAdapter {
     this._interval = setInterval(() => {
       tick++;
       for (const def of pidDefs) {
-        onSample({
-          pid: def.pid,
-          name: def.name,
-          value: this.mockValue(def.pid, tick),
-          unit: def.unit,
-          ts: Date.now(),
-        });
+        if (Math.random() < 0.10) {
+          onSample({ pid: def.pid, name: def.name, value: 0, unit: def.unit, ts: Date.now(), type: 'error', message: 'Tiempo de espera agotado' });
+        } else {
+          onSample({ pid: def.pid, name: def.name, value: this.mockValue(def.pid, tick), unit: def.unit, ts: Date.now() });
+        }
       }
     }, intervalMs);
     return () => {
@@ -54,14 +52,24 @@ export class MockAdapter implements IVehicleAdapter {
 
   async fetchDtcs(): Promise<Array<Pick<DtcCode, 'code' | 'description' | 'severity'>>> {
     return [
-      { code: 'P0501', description: 'Vehicle Speed Sensor Range/Performance', severity: 'warning' },
-      { code: 'U0415', description: 'Invalid Data Received from ABS Control Module', severity: 'warning' },
+      { code: 'P0501', description: 'Rango/rendimiento del sensor de velocidad', severity: 'warning' },
+      { code: 'U0415', description: 'Datos invalidos recibidos del modulo ABS', severity: 'warning' },
     ];
   }
 
   async clearDtcs(): Promise<void> { /* mock: no-op */ }
-  async getVin(): Promise<string> { return 'VSSZZZ6JXCR123456'; }
-  async getSnapshot(): Promise<Record<string, { value: number; unit: string }>> { return {}; }
+  async getVin(): Promise<string> { return 'SIMUL000000'; }
+  async getSnapshot(): Promise<Record<string, { value: number; unit: string }>> {
+    const tick = Date.now() / 1000;
+    const result: Record<string, { value: number; unit: string }> = {};
+    for (const def of PIDS) {
+      if (Math.random() >= 0.10) {
+        result[def.name] = { value: this.mockValue(def.pid, tick), unit: def.unit };
+      }
+      // 10% chance: entry omitted → VehicleService marks it as missing (no update, card shows stale)
+    }
+    return result;
+  }
   async getSessions(): Promise<any[]> { return []; }
   async getSessionSamples(): Promise<any[]> { return []; }
   async getSessionCommands(): Promise<any[]> { return []; }
@@ -74,17 +82,17 @@ export class MockAdapter implements IVehicleAdapter {
   async readUdsDid(did: string): Promise<{ did: string; name: string; value: string | number; unit: string }> {
     await new Promise((r) => setTimeout(r, 100));
     const MOCK: Record<string, { name: string; value: string | number; unit: string }> = {
-      '0xF190': { name: 'VIN',               value: 'VSSZZZ6JXCR123456', unit: '' },
-      '0xF18C': { name: 'ECU Serial Number', value: 'SIM1',               unit: '' },
-      '0xF189': { name: 'Software Version',  value: '1.00',               unit: '' },
-      '0x2001': { name: 'Engine Load',       value: 45.3,                 unit: '%' },
-      '0x2002': { name: 'Coolant Temp',      value: 90,                   unit: '°C' },
-      '0x2003': { name: 'Engine RPM',        value: 1200,                 unit: 'rpm' },
-      '0x2004': { name: 'Vehicle Speed',     value: 60,                   unit: 'km/h' },
-      '0x2005': { name: 'Throttle Position', value: 25.5,                 unit: '%' },
-      '0x2006': { name: 'Fuel Level',        value: 75.0,                 unit: '%' },
-      '0x2007': { name: 'Engine Oil Temp',   value: 95,                   unit: '°C' },
-      '0x2008': { name: 'Battery Voltage',   value: 14.2,                 unit: 'V' },
+      '0xF190': { name: 'VIN',                  value: 'SIMUL000000', unit: '' },
+      '0xF18C': { name: 'Numero serie ECU',     value: 'SIM1',        unit: '' },
+      '0xF189': { name: 'Version software',     value: '1.00',        unit: '' },
+      '0x2001': { name: 'Carga del motor',      value: 45.3,          unit: '%' },
+      '0x2002': { name: 'Temp. refrigerante',   value: 90,            unit: '°C' },
+      '0x2003': { name: 'RPM motor',            value: 1200,          unit: 'rpm' },
+      '0x2004': { name: 'Velocidad',            value: 60,            unit: 'km/h' },
+      '0x2005': { name: 'Posicion acelerador',  value: 25.5,          unit: '%' },
+      '0x2006': { name: 'Nivel combustible',    value: 75.0,          unit: '%' },
+      '0x2007': { name: 'Temp. aceite motor',   value: 95,            unit: '°C' },
+      '0x2008': { name: 'Tension bateria',      value: 14.2,          unit: 'V' },
     };
     const entry = MOCK[did.toUpperCase()] ?? { name: `DID_${did}`, value: '—', unit: '' };
     return { did, ...entry };
