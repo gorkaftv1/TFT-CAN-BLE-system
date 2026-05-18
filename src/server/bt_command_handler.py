@@ -40,17 +40,17 @@ def _dec_voltage_mv(data: bytes) -> float:
     return round(((data[0] << 8) | data[1]) / 1000, 2)
 
 _DID_META: dict[int, tuple[str, str, Any]] = {
-    0xF190: ("VIN",               "",     _dec_str),
-    0xF18C: ("ECU Serial Number", "",     _dec_str),
-    0xF189: ("Software Version",  "",     _dec_str),
-    0x2001: ("Engine Load",       "%",    _dec_pct),
-    0x2002: ("Coolant Temp",      "°C", _dec_temp),
-    0x2003: ("Engine RPM",        "rpm",  _dec_rpm),
-    0x2004: ("Vehicle Speed",     "km/h", _dec_raw1),
-    0x2005: ("Throttle Position", "%",    _dec_pct),
-    0x2006: ("Fuel Level",        "%",    _dec_pct),
-    0x2007: ("Engine Oil Temp",   "°C", _dec_temp),
-    0x2008: ("Battery Voltage",   "V",    _dec_voltage_mv),
+    0xF190: ("VIN",                    "",     _dec_str),
+    0xF18C: ("Numero serie ECU",       "",     _dec_str),
+    0xF189: ("Version software",       "",     _dec_str),
+    0x2001: ("Carga del motor",        "%",    _dec_pct),
+    0x2002: ("Temp. refrigerante",     "°C",   _dec_temp),
+    0x2003: ("RPM motor",              "rpm",  _dec_rpm),
+    0x2004: ("Velocidad",              "km/h", _dec_raw1),
+    0x2005: ("Posicion acelerador",    "%",    _dec_pct),
+    0x2006: ("Nivel combustible",      "%",    _dec_pct),
+    0x2007: ("Temp. aceite motor",     "°C",   _dec_temp),
+    0x2008: ("Tension bateria",        "V",    _dec_voltage_mv),
 }
 
 
@@ -120,12 +120,15 @@ class BtCommandHandler:
 
     def _snapshot(self, _cmd: dict) -> dict:
         data = {}
-        with self._lock:
-            for pid_def in PIDS.values():
-                self._transport.send(pid_def.request)
-                raw = self._transport.receive()
+        for pid_def in PIDS.values():
+            try:
+                with self._lock:
+                    self._transport.send(pid_def.request)
+                    raw = self._transport.receive()
                 value = pid_def.decode(raw)
                 data[pid_def.name] = {"value": value, "unit": pid_def.unit}
+            except Exception:
+                pass  # absent key → app marks PID as timeout error
         return {"status": "ok", "data": data}
 
     def _dtcs(self, _cmd: dict) -> dict:

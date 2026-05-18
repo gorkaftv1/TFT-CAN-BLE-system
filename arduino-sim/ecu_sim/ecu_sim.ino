@@ -13,6 +13,7 @@ uint8_t numStoredDTCs = 0;
 unsigned long lastUpdate    = 0;
 unsigned long engineStartTime = 0;
 bool engineRunning = false;
+uint8_t udsSession = 1;  // 1=default, 3=extended
 
 volatile bool ignitionPressed = false;
 unsigned long lastDebounceTime = 0;
@@ -28,9 +29,11 @@ void handleIgnitionButton();
 void broadcastVehicleState();
 void sendResponse();
 void sendNegativeResponse(uint8_t mode, uint8_t errorCode);
+void sendMultiFrame(const uint8_t* payload, uint8_t payloadLen);
 void sendVINMultiFrame();
 bool waitForFlowControl();
-void logCANFrame(const char* tag, uint32_t id, const uint8_t* data, uint8_t len);
+bool handleMode10(uint8_t subFunc);
+bool handleMode22(uint16_t did);
 
 // ---------- ISR ----------
 // Minimal ISR — only sets flag, no Serial/delay/CAN.
@@ -159,10 +162,8 @@ void updateVehicleSimulation() {
   if (vehicle.rpm > 0 && !engineRunning) {
     engineRunning   = true;
     engineStartTime = currentTime;
-    Serial.println(F("[SIM] Engine started"));
   } else if (vehicle.rpm == 0 && engineRunning) {
     engineRunning = false;
-    Serial.println(F("[SIM] Engine stopped"));
   }
 
   if (engineRunning) {
@@ -249,7 +250,6 @@ void broadcastVehicleState() {
   frame[4] = 0x00; frame[5] = 0x00; frame[6] = 0x00;
   frame[7] = (uint8_t)(engineRunning ? 0x01 : 0x00);
   CAN.beginPacket(0x280); CAN.write(frame, 8); CAN.endPacket();
-  logCANFrame("[BC TX]", 0x280, frame, 8);
 
   uint16_t speedRaw = (uint16_t)(vehicle.speed * 100);
   frame[0] = (speedRaw >> 8) & 0xFF; frame[1] = speedRaw & 0xFF;
@@ -257,7 +257,6 @@ void broadcastVehicleState() {
   frame[4] = (speedRaw >> 8) & 0xFF; frame[5] = speedRaw & 0xFF;
   frame[6] = (speedRaw >> 8) & 0xFF; frame[7] = speedRaw & 0xFF;
   CAN.beginPacket(0x320); CAN.write(frame, 8); CAN.endPacket();
-  logCANFrame("[BC TX]", 0x320, frame, 8);
 
   frame[0] = encodeTemp(vehicle.coolantTemp);
   frame[1] = encodePercent(vehicle.throttlePos);
@@ -265,20 +264,7 @@ void broadcastVehicleState() {
   frame[3] = (uint8_t)(vehicle.batteryVoltage & 0xFF);
   frame[4] = 0x00; frame[5] = 0x00; frame[6] = 0x00; frame[7] = 0x00;
   CAN.beginPacket(0x3D0); CAN.write(frame, 8); CAN.endPacket();
-  logCANFrame("[BC TX]", 0x3D0, frame, 8);
-}
-
-// ---------- CAN LOG ----------
-void logCANFrame(const char* tag, uint32_t id, const uint8_t* data, uint8_t len) {
-  Serial.print(tag);
-  Serial.print(F(" 0x")); Serial.print(id, HEX);
-  Serial.print(F(" |"));
-  for (uint8_t i = 0; i < len; i++) {
-    Serial.print(F(" "));
-    if (data[i] < 0x10) Serial.print(F("0"));
-    Serial.print(data[i], HEX);
-  }
-  Serial.println();
+  // logCANFrame("[BC TX]", 0x3D0, frame, 8);
 }
 
 // ---------- CAN RX — ISO-TP ----------
@@ -322,6 +308,12 @@ void processCANMessages() {
     case MODE_03_DTCS:         handled = handleMode03();    break;
     case MODE_04_CLEAR_DTCS:   handled = handleMode04();    break;
     case MODE_09_VEHICLE_INFO: handled = handleMode09(pid); break;
+    case 0x10: handled = handleMode10(pid); break;
+    case 0x22: {
+      uint8_t didLow = (dataLen >= 4) ? data[3] : 0x00;
+      handled = handleMode22((uint16_t)(pid << 8) | didLow);
+      break;
+    }
     default:
       sendNegativeResponse(mode, NRC_SERVICE_NOT_SUPPORTED);
       handled = true;
@@ -610,12 +602,156 @@ void sendVINMultiFrame() {
   Serial.println(F("[INFO] VIN complete"));
 }
 
+// ---------- UDS MODE 10 — DiagnosticSessionControl ----------
+bool handleMode10(uint8_t subFunc) {
+  if (subFunc != 0x01 && subFunc != 0x03) {
+    sendNegativeResponse(0x10, NRC_SUBFUNCTION_NOT_SUPP);
+    return true;
+  }
+  udsSession = subFunc;
+  responseBuffer[0] = 0x50;
+  responseBuffer[1] = subFunc;
+  responseBuffer[2] = 0x00; responseBuffer[3] = 0x19;  // P2=25ms
+  responseBuffer[4] = 0x01; responseBuffer[5] = 0xF4;  // P2ext=500ms
+  responseLength = 6;
+  sendResponse();
+  Serial.print(F("[UDS] Session -> "));
+  Serial.println(subFunc == 3 ? F("extended") : F("default"));
+  return true;
+}
+
+// ---------- UDS MODE 22 — ReadDataByIdentifier ----------
+bool handleMode22(uint16_t did) {
+  uint8_t payload[24];
+  uint8_t payloadLen = 0;
+
+  payload[0] = 0x62;
+  payload[1] = (did >> 8) & 0xFF;
+  payload[2] = did & 0xFF;
+
+  switch (did) {
+    case 0xF190:  // VIN — 17 bytes, always accessible
+      for (uint8_t i = 0; i < VIN_LENGTH; i++) payload[3 + i] = (uint8_t)vehicle.vin[i];
+      payloadLen = 3 + VIN_LENGTH;
+      break;
+    case 0xF18C:  // ECU Serial Number
+      memcpy(&payload[3], "ECU00001", 8);
+      payloadLen = 11;
+      break;
+    case 0xF189:  // Software Version
+      memcpy(&payload[3], "V1.0.0", 6);
+      payloadLen = 9;
+      break;
+    case 0x2001:  // Engine Load — extended session only
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = encodePercent(vehicle.engineLoad);
+      payloadLen = 4;
+      break;
+    case 0x2002:  // Coolant Temp
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = encodeTemp(vehicle.coolantTemp);
+      payloadLen = 4;
+      break;
+    case 0x2003:  // Engine RPM
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      encodeRPM(&payload[3], vehicle.rpm);
+      payloadLen = 5;
+      break;
+    case 0x2004:  // Vehicle Speed
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = vehicle.speed;
+      payloadLen = 4;
+      break;
+    case 0x2005:  // Throttle Position
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = encodePercent(vehicle.throttlePos);
+      payloadLen = 4;
+      break;
+    case 0x2006:  // Fuel Level
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = encodePercent(vehicle.fuelLevel);
+      payloadLen = 4;
+      break;
+    case 0x2007:  // Engine Oil Temp
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = encodeTemp(vehicle.oilTemp);
+      payloadLen = 4;
+      break;
+    case 0x2008:  // Battery Voltage (mV, 2 bytes)
+      if (udsSession != 3) { sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT); return true; }
+      payload[3] = (vehicle.batteryVoltage >> 8) & 0xFF;
+      payload[4] = vehicle.batteryVoltage & 0xFF;
+      payloadLen = 5;
+      break;
+    default:
+      sendNegativeResponse(0x22, NRC_REQUEST_OUT_OF_RANGE);
+      return true;
+  }
+
+  if (payloadLen <= ISOTP_SF_MAX_PAYLOAD) {
+    memcpy(responseBuffer, payload, payloadLen);
+    responseLength = payloadLen;
+    sendResponse();
+  } else {
+    sendMultiFrame(payload, payloadLen);
+  }
+
+  Serial.print(F("[UDS] DID 0x")); Serial.print(did, HEX);
+  Serial.print(F(" -> ")); Serial.print(payloadLen - 3); Serial.println(F(" bytes"));
+  return true;
+}
+
+// ---------- TX: GENERIC MULTI-FRAME ----------
+void sendMultiFrame(const uint8_t* payload, uint8_t payloadLen) {
+  uint8_t ff[8];
+  ff[0] = ISOTP_PCI_FF | ((payloadLen >> 8) & 0x0F);
+  ff[1] = payloadLen & 0xFF;
+  for (uint8_t i = 0; i < ISOTP_FF_DATA_BYTES; i++) ff[2 + i] = payload[i];
+
+  CAN.beginPacket(ECU_RESPONSE_ID);
+  for (uint8_t i = 0; i < 8; i++) CAN.write(ff[i]);
+  CAN.endPacket();
+
+  Serial.print(F("[TX FF] 0x")); Serial.print(ECU_RESPONSE_ID, HEX); Serial.print(F(" | "));
+  for (uint8_t i = 0; i < 8; i++) {
+    if (ff[i] < 0x10) Serial.print(F("0"));
+    Serial.print(ff[i], HEX); Serial.print(F(" "));
+  }
+  Serial.println();
+
+  if (!waitForFlowControl())
+    Serial.println(F("[WARN] FC timeout — sending CFs anyway"));
+
+  uint8_t bytesSent = ISOTP_FF_DATA_BYTES;
+  uint8_t sn = 1;
+  while (bytesSent < payloadLen) {
+    uint8_t cf[8];
+    cf[0] = ISOTP_PCI_CF | (sn & 0x0F);
+    for (uint8_t i = 0; i < ISOTP_CF_DATA_BYTES; i++) {
+      uint8_t idx = bytesSent + i;
+      cf[1 + i] = (idx < payloadLen) ? payload[idx] : ISOTP_PADDING_BYTE;
+    }
+    CAN.beginPacket(ECU_RESPONSE_ID);
+    for (uint8_t i = 0; i < 8; i++) CAN.write(cf[i]);
+    CAN.endPacket();
+
+    Serial.print(F("[TX CF] SN=0x")); Serial.print(sn & 0x0F, HEX); Serial.print(F(" | "));
+    for (uint8_t i = 0; i < 8; i++) {
+      if (cf[i] < 0x10) Serial.print(F("0"));
+      Serial.print(cf[i], HEX); Serial.print(F(" "));
+    }
+    Serial.println();
+
+    bytesSent += ISOTP_CF_DATA_BYTES;
+    sn = (sn + 1) & 0x0F;
+    if (bytesSent < payloadLen) delay(ISOTP_CF_SEP_MS);
+  }
+}
+
 // ---------- FLOW CONTROL ----------
 // Polls CAN for FC frame from scanner. Returns false on ISOTP_FC_TIMEOUT_MS timeout.
 bool waitForFlowControl() {
   unsigned long deadline = millis() + ISOTP_FC_TIMEOUT_MS;
-  Serial.println(F("[INFO] Waiting for FC..."));
-
   while (millis() < deadline) {
     int pktSize = CAN.parsePacket();
     if (pktSize > 0) {
@@ -624,7 +760,6 @@ bool waitForFlowControl() {
       while (CAN.available()) CAN.read();
 
       if (rxId == ECU_CAN_ID && (pci & 0xF0) == ISOTP_PCI_FC) {
-        Serial.print(F("[RX FC] flag=0x")); Serial.println(pci & 0x0F, HEX);
         return true;
       }
     }
