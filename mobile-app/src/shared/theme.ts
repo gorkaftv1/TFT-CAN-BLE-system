@@ -1,17 +1,26 @@
 import { Platform } from 'react-native';
 
 export const colors = {
-  background: '#0a0a0f',
-  surface: '#12121a',
-  surfaceElevated: '#1a1a24',
-  border: '#2a2a3a',
-  primary: '#00d4ff',
-  success: '#00ff88',
-  warning: '#ffaa00',
-  error: '#ff4444',
-  text: '#ffffff',
-  textSecondary: '#8888aa',
-  textMuted: '#44445a',
+  // Backgrounds
+  background:      '#111827', // gray-900
+  surface:         '#1F2937', // gray-800
+  surfaceElevated: '#374151', // gray-700
+
+  // Borders
+  border: '#374151', // gray-700
+
+  // Brand / accent
+  primary: '#3B82F6', // blue-500  — trustworthy, modern, not neon
+
+  // Semantic
+  success: '#10B981', // emerald-500
+  warning: '#F59E0B', // amber-500
+  error:   '#EF4444', // red-500
+
+  // Text
+  text:          '#F9FAFB', // gray-50
+  textSecondary: '#9CA3AF', // gray-400
+  textMuted:     '#6B7280', // gray-500
 };
 
 export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 };

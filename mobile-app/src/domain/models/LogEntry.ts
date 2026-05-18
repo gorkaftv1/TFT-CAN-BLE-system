@@ -1,17 +1,15 @@
+export type LogSection = 'bluetooth' | 'obd' | 'uds' | 'app';
+
 export type LogType =
-  | 'ble_tx'    // App → Pi (BLE write)
-  | 'ble_rx'    // Pi → App (BLE notify)
-  | 'data'      // PID sample received from ECU
-  | 'info'      // Command/instruction launched by app
-  | 'debug'     // Internal app log
-  | 'error'
-  | 'warning'
-  | 'success'
-  | 'command';  // legacy
+  | 'ble_tx' | 'ble_rx'           // bluetooth section
+  | 'obd_tx' | 'obd_rx' | 'data' // obd section
+  | 'uds_tx' | 'uds_rx'          // uds section
+  | 'info' | 'success' | 'warning' | 'error' | 'debug'; // app section
 
 export interface LogEntry {
   id: string;
   type: LogType;
-  content: string;
+  section: LogSection;
+  content: string; // pre-formatted, may contain \n
   timestamp: number;
 }

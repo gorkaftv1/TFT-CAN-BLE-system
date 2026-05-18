@@ -21,7 +21,8 @@
 # =============================================================================
 param(
     [switch]$Release,
-    [switch]$Install
+    [switch]$Install,
+    [switch]$Mock        # keep USE_MOCK = true (simulated data, no BLE hardware needed)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -100,16 +101,30 @@ $env:PATH = "$env:ANDROID_HOME\platform-tools;$env:PATH"
 Success "Android SDK: $env:ANDROID_HOME"
 Success "Prerequisites OK."
 
-# -- Step 1: USE_MOCK = false -------------------------------------------------
-Info "Setting USE_MOCK = false..."
+# -- Step 1: USE_MOCK handling ------------------------------------------------
 $factoryContent = Get-Content $AdapterFactory -Raw
-if ($factoryContent -match 'export const USE_MOCK = true') {
-    $MockWasTrue = $true
-    $factoryContent -replace 'export const USE_MOCK = true', 'export const USE_MOCK = false' |
-        Set-Content $AdapterFactory -Encoding utf8
-    Success "USE_MOCK -> false"
+
+if ($Mock) {
+    Info "USE_MOCK = true  (-Mock flag set, simulated data)"
+    if ($factoryContent -match 'export const USE_MOCK = false') {
+        $MockWasTrue = $false   # was false → restore to false on exit
+        $factoryContent -replace 'export const USE_MOCK = false', 'export const USE_MOCK = true' |
+            Set-Content $AdapterFactory -Encoding utf8
+        # Override $MockWasTrue so Restore-Mock puts it back to false
+        $MockWasTrue = $true
+    } else {
+        Success "USE_MOCK already true."
+    }
 } else {
-    Success "USE_MOCK already false."
+    Info "Setting USE_MOCK = false (real BLE build)..."
+    if ($factoryContent -match 'export const USE_MOCK = true') {
+        $MockWasTrue = $true
+        $factoryContent -replace 'export const USE_MOCK = true', 'export const USE_MOCK = false' |
+            Set-Content $AdapterFactory -Encoding utf8
+        Success "USE_MOCK -> false"
+    } else {
+        Success "USE_MOCK already false."
+    }
 }
 
 # -- Step 2: JS dependencies --------------------------------------------------

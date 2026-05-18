@@ -1,10 +1,11 @@
 {
   "expo": {
-    "name": "SEAT Diag",
-    "slug": "seat-diag",
+    "name": "DIAG",
+    "slug": "diag",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "icon": "./src/assets/icons/diag_clear.png",
     "plugins": [
       [
         "react-native-ble-plx",
@@ -14,12 +15,13 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Allow SEAT Diag to connect to the vehicle diagnostic interface"
+          "bluetoothAlwaysPermission": "Allow DIAG to connect to the vehicle diagnostic interface"
         }
       ]
     ],
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icons/diag_clear.png",
         "backgroundColor": "#0a0a0f"
       },
       "permissions": [
@@ -34,10 +36,10 @@
         "android.permission.BLUETOOTH_SCAN",
         "android.permission.ACCESS_FINE_LOCATION"
       ],
-      "package": "com.seatdiag.app"
+      "package": "com.diag.app"
     },
     "ios": {
-      "bundleIdentifier": "com.seatdiag.app",
+      "bundleIdentifier": "com.gorka.diag",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Needed to connect to the vehicle OBD diagnostic interface"
       }

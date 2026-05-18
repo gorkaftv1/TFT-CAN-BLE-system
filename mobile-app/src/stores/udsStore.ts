@@ -6,6 +6,7 @@ import { ALL_DIDS, STANDARD_DIDS, UDS_SESSION_DEFAULT, UDS_SESSION_EXTENDED } fr
 interface DidValue {
   value: string | number;
   unit: string;
+  timestamp: number;
 }
 
 interface UdsState {
@@ -24,74 +25,81 @@ interface UdsState {
 }
 
 export const useUdsStore = create<UdsState>((set, get) => ({
-  sessionType:     UDS_SESSION_DEFAULT,
-  sessionLoading:  false,
-  didValues:       {},
-  readingDid:      null,
-  readAllLoading:  false,
-  error:           null,
+  sessionType:    UDS_SESSION_DEFAULT,
+  sessionLoading: false,
+  didValues:      {},
+  readingDid:     null,
+  readAllLoading: false,
+  error:          null,
 
   openExtendedSession: async () => {
     set({ sessionLoading: true, error: null });
+    LogService.addUdsTx('DiagnosticSessionControl', 'extendedDiagnosticSession');
     try {
       const info = await getAdapter().setUdsSession(UDS_SESSION_EXTENDED);
       set({ sessionType: info.session_type, sessionLoading: false });
-      LogService.add('info', `UDS session → Extended (P2=${info.p2_server_ms}ms)`);
+      LogService.addUdsRx('session', 'DiagnosticSession', 'extended', `P2=${info.p2_server_ms}ms`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ sessionLoading: false, error: msg });
-      LogService.add('error', `UDS session change failed: ${msg}`);
+      LogService.add('error', `Error al cambiar sesion UDS: ${msg}`);
     }
   },
 
   closeToDefaultSession: async () => {
     set({ sessionLoading: true, error: null });
+    LogService.addUdsTx('DiagnosticSessionControl', 'defaultSession');
     try {
       const info = await getAdapter().setUdsSession(UDS_SESSION_DEFAULT);
       set({ sessionType: info.session_type, sessionLoading: false, didValues: {} });
-      LogService.add('info', 'UDS session → Default');
+      LogService.addUdsRx('session', 'DiagnosticSession', 'default');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ sessionLoading: false, error: msg });
-      LogService.add('error', `UDS session change failed: ${msg}`);
+      LogService.add('error', `Error al cambiar sesion UDS: ${msg}`);
     }
   },
 
   readDid: async (hexStr: string) => {
     set({ readingDid: hexStr, error: null });
+    LogService.addUdsTx('ReadDataByIdentifier', hexStr);
     try {
       const result = await getAdapter().readUdsDid(hexStr);
       set((s) => ({
         readingDid: null,
-        didValues: { ...s.didValues, [hexStr]: { value: result.value, unit: result.unit } },
+        didValues: {
+          ...s.didValues,
+          [hexStr]: { value: result.value, unit: result.unit, timestamp: Date.now() },
+        },
       }));
+      LogService.addUdsRx(hexStr, result.name, result.value, result.unit || undefined);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ readingDid: null, error: msg });
-      LogService.add('error', `UDS readDid ${hexStr} failed: ${msg}`);
+      LogService.add('error', `Error al leer DID UDS ${hexStr}: ${msg}`);
     }
   },
 
   readAllAvailable: async () => {
     const { sessionType } = get();
-    const readable = sessionType === UDS_SESSION_EXTENDED
-      ? ALL_DIDS
-      : STANDARD_DIDS;
+    const readable = sessionType === UDS_SESSION_EXTENDED ? ALL_DIDS : STANDARD_DIDS;
 
     set({ readAllLoading: true, error: null });
+    LogService.add('info', `UDS leer todo — ${readable.length} DIDs`);
     const newValues: Record<string, DidValue | null> = { ...get().didValues };
 
     for (const def of readable) {
+      LogService.addUdsTx('ReadDataByIdentifier', def.hexStr);
       try {
         const result = await getAdapter().readUdsDid(def.hexStr);
-        newValues[def.hexStr] = { value: result.value, unit: result.unit };
+        newValues[def.hexStr] = { value: result.value, unit: result.unit, timestamp: Date.now() };
+        LogService.addUdsRx(def.hexStr, result.name, result.value, result.unit || undefined);
       } catch {
         newValues[def.hexStr] = null;
       }
     }
 
     set({ readAllLoading: false, didValues: newValues });
-    LogService.add('info', `UDS read all: ${readable.length} DIDs`);
   },
 
   reset: () => set({
