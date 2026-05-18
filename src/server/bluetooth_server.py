@@ -17,6 +17,7 @@ except ImportError:
     _BLESS_AVAILABLE = False
 
 from server.bt_command_handler import BtCommandHandler
+from infraestructure.logging.frame_formatter import format_ble_rx, format_ble_tx
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ _NUS_SERVICE = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 _NUS_RX      = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
 _NUS_TX      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
-_BLE_NAME              = "SEAT_DIAG"
+_BLE_NAME              = "diag_tool"
 _MTU                   = 240
 _CLIENT_TIMEOUT_S      = 15.0
 _SERVER_TIMEOUT_S      = 20.0
@@ -174,8 +175,8 @@ class BLEDiagServer:
                 self._last_rx_time = time.time()
                 continue
 
-            print(f"[BLE] RX ← {line}")
-            logger.info(f"[BLE] RX ← {line}")
+            logger.info(format_ble_rx(line, cmd))
+            print(format_ble_rx(line, cmd))
 
             assert self._loop is not None
             asyncio.run_coroutine_threadsafe(self._dispatch_async(cmd), self._loop)
@@ -238,17 +239,15 @@ class BLEDiagServer:
             return
         payload = (json.dumps(data) + "\n").encode()
         chunks = [payload[i:i + _MTU] for i in range(0, len(payload), _MTU)]
-        json_str = json.dumps(data)
-        print(f"[BLE] TX → {json_str[:200]}{'...' if len(json_str) > 200 else ''}")
-        logger.info(f"[BLE] TX → {json_str}")
+        logger.info(format_ble_tx(data))
+        print(format_ble_tx(data))
         self._loop.call_soon_threadsafe(self._send_chunks, chunks)
 
     def _notify_from_loop(self, data: dict) -> None:
         payload = (json.dumps(data) + "\n").encode()
         chunks = [payload[i:i + _MTU] for i in range(0, len(payload), _MTU)]
-        json_str = json.dumps(data)
-        print(f"[BLE] TX → {json_str[:200]}{'...' if len(json_str) > 200 else ''}")
-        logger.info(f"[BLE] TX → {json_str}")
+        logger.info(format_ble_tx(data))
+        print(format_ble_tx(data))
         self._send_chunks(chunks)
         self._last_tx_time = time.time()
 
