@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import logging
 import threading
 from types import TracebackType
 
 from core.interfaces.i_transport import ITransport
+from infraestructure.logging.frame_formatter import format_rx, format_tx
+
+_log = logging.getLogger("transport")
 
 
 class LoggingTransport(ITransport):
@@ -29,11 +33,13 @@ class LoggingTransport(ITransport):
 
     def send(self, payload: bytes) -> None:
         self._local.last_sent = payload
+        _log.info(format_tx(payload))
         self._inner.send(payload)
 
     def receive(self) -> bytes:
         data = self._inner.receive()
         self._local.last_received = data
+        _log.info(format_rx(data))
         return data
 
     def __enter__(self) -> LoggingTransport:

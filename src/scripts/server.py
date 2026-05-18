@@ -41,6 +41,14 @@ _file_handler.setFormatter(logging.Formatter(
 ))
 logging.getLogger().addHandler(_file_handler)
 
+# Transport logger: bare format so TX/RX frames render without logger-name prefix
+_transport_handler = logging.StreamHandler()
+_transport_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s", datefmt="%H:%M:%S"))
+_transport_log = logging.getLogger("transport")
+_transport_log.setLevel(logging.INFO)
+_transport_log.addHandler(_transport_handler)
+_transport_log.propagate = False
+
 import argparse
 
 from infraestructure.decoder.obd2_decoder import Obd2DataDecoder
