@@ -1,0 +1,34 @@
+% Estructura trama CAN 2.0A — tabla LaTeX
+% Requiere: array, multirow (ya en main.tex)
+
+\begin{table}[!htbp]
+\caption{Estructura de una trama CAN 2.0A (\textit{Standard Frame}). El campo ID de 11 bits determina la prioridad: a menor valor numérico, mayor prioridad en el bus.}
+\label{tab:can_frame}
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{SOF} &
+\textbf{ID} &
+\textbf{RTR} &
+\textbf{IDE} &
+\textbf{r0} &
+\textbf{DLC} &
+\textbf{DATA} &
+\textbf{CRC} &
+\textbf{CD} &
+\textbf{ACK} &
+\textbf{AD} &
+\textbf{EOF} \\
+\hline
+1 b & 11 b & 1 b & 1 b & 1 b & 4 b & 0--64 b & 15 b & 1 b & 1 b & 1 b & 7 b \\
+\hline
+\multicolumn{5}{|c|}{\textit{Arbitration + Control}} &
+\multicolumn{1}{c|}{} &
+\multicolumn{1}{c|}{\textit{Datos}} &
+\multicolumn{2}{c|}{\textit{CRC}} &
+\multicolumn{2}{c|}{\textit{ACK}} &
+\multicolumn{1}{c|}{\textit{EOF}} \\
+\hline
+\end{tabular}
+\end{table}

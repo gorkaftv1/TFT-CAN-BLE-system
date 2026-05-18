@@ -11,7 +11,7 @@ El bus CAN es un protocolo de comunicaciones serie orientado a mensajes, diseña
 
 En su variante CAN 2.0A, que es la empleada en este trabajo, cada trama de datos  compuesta por los campos que se recogen en la tabla~\ref{tab:can_frame}.
 
-\input{fig_can_frame.tex}
+% \input{fig_can_frame.tex}
 
 El campo \textbf{Identificador} (11 bits en CAN 2.0A) determina tanto la prioridad del  como su propósito lógico. En el contexto OBD-II, el tester externo emplea el  funcional \texttt{0x7DF} para direccionamiento broadcast o el identificador  \texttt{0x7E0} para dirigirse directamente a la ECU, mientras que la ECU responde  \texttt{0x7E8}. El mecanismo de arbitraje no destructivo garantiza que, en caso de , el mensaje con identificador de menor valor gana el bus sin que ningún nodo  datos.
 
@@ -27,7 +27,7 @@ El protocolo de transporte ISO-TP define cómo segmentar y reasamblar mensajes d
 
 ISO-TP define cuatro tipos de trama, identificados por los primeros nibbles del primer  de datos (campo PCI, \textit{Protocol Control Information}), tal como se muestra  la tabla~\ref{tab:isotp_frames}.
 
-\input{fig_isotp_frames.tex}
+% \input{fig_isotp_frames.tex}
 
 Para mensajes de hasta 7 bytes (el caso más habitual en OBD-II modo 0x01), se emplea  \textbf{Single Frame} (SF), que incluye el PCI (\texttt{0x0N}, donde N es la longitud),  directamente por los bytes de datos.
 
@@ -55,7 +55,7 @@ OBD-II es el estándar de diagnóstico del vehículo que define los servicios y 
 
 La tabla~\ref{tab:obd2_format} ilustra el formato de los mensajes de petición y respuesta para el caso concreto del PID \texttt{0x0C} (RPM del motor) en modo \texttt{0x01}.
 
-\input{fig_obd2_format.tex}
+% \input{fig_obd2_format.tex}
 
 Cada petición OBD-II incluye un byte de modo y, opcionalmente, uno o más bytes de PID. La respuesta de la ECU incluye el modo de respuesta (modo + \texttt{0x40}), el PID solicitado y los bytes de datos codificados, cuya interpretación depende de la fórmula de decodificación definida por el estándar para cada PID.
 
