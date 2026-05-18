@@ -1,21 +1,17 @@
 import { create } from 'zustand';
-import { LogEntry } from '../domain/models/LogEntry';
+import { LogEntry, LogSection } from '../domain/models/LogEntry';
 
-const MAX_ENTRIES = 500;
-const MAX_CONSOLE = 1000;
+const MAX_ENTRIES = 1000;
 
 interface LogsState {
   entries: LogEntry[];
-  consoleLines: string[];
   addEntry: (entry: LogEntry) => void;
-  addConsoleLine: (line: string) => void;
-  clearConsole: () => void;
-  clearLogs: () => void;
+  clearSection: (section: LogSection) => void;
+  clearAll: () => void;
 }
 
 export const useLogsStore = create<LogsState>((set, get) => ({
   entries: [],
-  consoleLines: [],
 
   addEntry: (entry) => {
     const { entries } = get();
@@ -26,15 +22,8 @@ export const useLogsStore = create<LogsState>((set, get) => ({
     });
   },
 
-  addConsoleLine: (line) => {
-    const { consoleLines } = get();
-    set({
-      consoleLines: consoleLines.length >= MAX_CONSOLE
-        ? [...consoleLines.slice(-(MAX_CONSOLE - 1)), line]
-        : [...consoleLines, line],
-    });
-  },
+  clearSection: (section) =>
+    set((s) => ({ entries: s.entries.filter((e) => e.section !== section) })),
 
-  clearConsole: () => set({ consoleLines: [] }),
-  clearLogs: () => set({ entries: [] }),
+  clearAll: () => set({ entries: [] }),
 }));

@@ -2,16 +2,25 @@
 import { BleAdapter } from './BleAdapter';
 import { MockAdapter } from './MockAdapter';
 
-// Set to true to test without real BLE hardware (build scripts patch this)
-export const USE_MOCK = true;
-
 let _adapter: IVehicleAdapter | null = null;
+let _useMock = true;
 
 export function getAdapter(): IVehicleAdapter {
   if (!_adapter) {
-    _adapter = USE_MOCK ? new MockAdapter() : BleAdapter.getInstance();
+    _adapter = _useMock ? new MockAdapter() : BleAdapter.getInstance();
   }
   return _adapter;
 }
+
+export function configureAdapter(useMock: boolean): void {
+  _useMock = useMock;
+  _adapter = null;
+}
+
+export function isUsingMock(): boolean {
+  return _useMock;
+}
+
+
 
 

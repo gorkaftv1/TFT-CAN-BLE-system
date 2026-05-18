@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SEAT Diag",
-    "slug": "seat-diag",
+    "name": "DIAG",
+    "slug": "diag",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,7 @@
             "peripheral",
             "central"
           ],
-          "bluetoothAlwaysPermission": "Allow SEAT Diag to connect to the vehicle diagnostic interface"
+          "bluetoothAlwaysPermission": "Allow DIAG to connect to the vehicle diagnostic interface"
         }
       ]
     ],
@@ -37,7 +37,7 @@
       "package": "com.seatdiag.app"
     },
     "ios": {
-      "bundleIdentifier": "com.seatdiag.app",
+      "bundleIdentifier": "com.gorka.seatdiag",
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "Needed to connect to the vehicle OBD diagnostic interface"
       }

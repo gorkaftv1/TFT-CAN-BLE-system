@@ -1,20 +1,24 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { configureAdapter } from '../infrastructure/adapterFactory';
 
 const STORAGE_KEY = '@app_settings_v1';
 
 interface SettingsState {
   deviceName: string;
   monitorIntervalMs: number;
+  useMock: boolean;
   loaded: boolean;
   setDeviceName: (name: string) => Promise<void>;
   setMonitorInterval: (ms: number) => Promise<void>;
+  setUseMock: (value: boolean) => Promise<void>;
   loadFromStorage: () => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  deviceName: 'SEAT_DIAG',
+  deviceName: 'diag_tool',
   monitorIntervalMs: 500,
+  useMock: true,
   loaded: false,
 
   setDeviceName: async (name) => {
@@ -27,14 +31,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await persist(get());
   },
 
+  setUseMock: async (value) => {
+    configureAdapter(value);
+    set({ useMock: value });
+    await persist(get());
+  },
+
   loadFromStorage: async () => {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const { deviceName, monitorIntervalMs } = JSON.parse(raw) as Partial<SettingsState>;
+        const { deviceName, monitorIntervalMs, useMock } = JSON.parse(raw) as Partial<SettingsState>;
+        const mock = typeof useMock === 'boolean' ? useMock : true;
+        configureAdapter(mock);
         set({
-          deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName : 'SEAT_DIAG',
+          deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName : 'diag_tool',
           monitorIntervalMs: typeof monitorIntervalMs === 'number' ? monitorIntervalMs : 500,
+          useMock: mock,
         });
       }
     } catch { /* ignore */ }
@@ -47,6 +60,7 @@ async function persist(state: SettingsState): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
       deviceName: state.deviceName,
       monitorIntervalMs: state.monitorIntervalMs,
+      useMock: state.useMock,
     }));
   } catch { /* ignore */ }
 }

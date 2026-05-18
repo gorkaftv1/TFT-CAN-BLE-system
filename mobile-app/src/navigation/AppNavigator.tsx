@@ -1,46 +1,35 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import React from 'react';
-import { View } from 'react-native';
-import { ConnectionScreen } from '../screens/connection/ConnectionScreen';
-import { ConsoleScreen }    from '../screens/console/ConsoleScreen';
-import { CustomizeScreen }  from '../screens/customize/CustomizeScreen';
-import { DashboardScreen }  from '../screens/dashboard/DashboardScreen';
-import { DtcScreen }        from '../screens/dtcs/DtcScreen';
-import { LogsScreen }       from '../screens/logs/LogsScreen';
-import { UdsScreen }        from '../screens/uds/UdsScreen';
+import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
+import { DtcScreen }       from '../screens/dtcs/DtcScreen';
+import { ConsoleScreen }   from '../screens/console/ConsoleScreen';
+import { SettingsScreen }  from '../screens/settings/SettingsScreen';
 import { colors, fontSize } from '../shared/theme';
-import {
-  ConnectionIcon, DashboardIcon, WarningIcon,
-  ConsoleIcon, SettingsIcon, LogsIcon, UdsIcon,
-} from '../assets/icons';
+import { DashboardIcon, WarningIcon, ConsoleIcon, SettingsIcon } from '../assets/icons';
 
 const Tab = createBottomTabNavigator();
 
 export function AppNavigator() {
-  const getIcon = (name: string, color: string) => {
-    const props = { color, size: 24 };
-    switch (name) {
-      case 'Conexión':    return <ConnectionIcon {...props} />;
-      case 'Panel':       return <DashboardIcon  {...props} />;
-      case 'Averías':     return <WarningIcon     {...props} />;
-      case 'Consola':     return <ConsoleIcon     {...props} />;
-      case 'Configurar':  return <SettingsIcon    {...props} />;
-      case 'Registros':   return <LogsIcon        {...props} />;
-      case 'UDS':         return <UdsIcon         {...props} />;
-      default:            return <View />;
-    }
-  };
-
   return (
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ focused }) => getIcon(route.name, focused ? colors.primary : colors.textSecondary),
-          tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1 },
-          tabBarActiveTintColor:   colors.primary,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarLabelStyle: { fontSize: fontSize.xs },
+          tabBarIcon: ({ focused }) => {
+            const color = focused ? colors.primary : colors.textSecondary;
+            const size  = 24;
+            switch (route.name) {
+              case 'Panel':    return <DashboardIcon color={color} size={size} />;
+              case 'Averias':  return <WarningIcon   color={color} size={size} />;
+              case 'Consola':  return <ConsoleIcon   color={color} size={size} />;
+              case 'Ajustes':  return <SettingsIcon  color={color} size={size} />;
+              default:         return null;
+            }
+          },
+          tabBarStyle:            { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1 },
+          tabBarActiveTintColor:  colors.primary,
+          tabBarInactiveTintColor:colors.textSecondary,
+          tabBarLabelStyle:       { fontSize: fontSize.xs },
           headerStyle: {
             backgroundColor: colors.surface,
             shadowColor: 'transparent',
@@ -48,17 +37,14 @@ export function AppNavigator() {
             borderBottomWidth: 1,
             borderBottomColor: colors.border,
           } as object,
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: '600' as const },
+          headerTintColor:     colors.text,
+          headerTitleStyle:    { fontWeight: '600' as const },
         })}
       >
-        <Tab.Screen name="Conexión"   component={ConnectionScreen} />
-        <Tab.Screen name="Panel"      component={DashboardScreen}  />
-        <Tab.Screen name="Averías"    component={DtcScreen}        />
-        <Tab.Screen name="Consola"    component={ConsoleScreen}    />
-        <Tab.Screen name="Configurar" component={CustomizeScreen}  />
-        <Tab.Screen name="Registros"  component={LogsScreen}       />
-        <Tab.Screen name="UDS"        component={UdsScreen}        />
+        <Tab.Screen name="Panel"   component={DashboardScreen} options={{ title: 'Panel' }}   />
+        <Tab.Screen name="Averias" component={DtcScreen}       options={{ title: 'Averias' }} />
+        <Tab.Screen name="Consola" component={ConsoleScreen}   options={{ title: 'Consola' }} />
+        <Tab.Screen name="Ajustes" component={SettingsScreen}  options={{ title: 'Ajustes' }} />
       </Tab.Navigator>
     </NavigationContainer>
   );
