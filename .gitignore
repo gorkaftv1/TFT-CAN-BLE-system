@@ -34,7 +34,8 @@ mobile-app/dist/
 mobile-app/web-build/
 mobile-app/expo-env.d.ts
 mobile-app/package-lock.json
-# Secrets
+# Secrets / signing keys
+mobile-app/*.keystore
 mobile-app/.env
 mobile-app/.env.local
 mobile-app/.env.*.local
@@ -76,6 +77,9 @@ src/**/.mypy_cache/
 src/**/.ruff_cache/
 # Jupyter (si usas notebooks)
 src/**/.ipynb_checkpoints/
+
+# ===== Claude Code =====
+.claude/
 
 # ===== OS =====
 .DS_Store
