@@ -135,7 +135,9 @@ class BLEDiagServer:
 
     def _on_write(self, characteristic: BlessGATTCharacteristic, value: bytearray, **_) -> None:
         rx_uuid = getattr(characteristic, "uuid", "?")
+        print(f"[BLE] write callback: uuid={rx_uuid!r} len={len(value)}")
         if str(rx_uuid).upper() != _NUS_RX.upper():
+            print(f"[BLE] write filtered (not RX char): {rx_uuid!r}")
             return
 
         self._last_rx_time = time.time()
