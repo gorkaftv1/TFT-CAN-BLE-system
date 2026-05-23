@@ -3,7 +3,7 @@ import { BleAdapter } from './BleAdapter';
 import { MockAdapter } from './MockAdapter';
 
 let _adapter: IVehicleAdapter | null = null;
-let _useMock = true;
+let _useMock = false;
 
 export function getAdapter(): IVehicleAdapter {
   if (!_adapter) {
