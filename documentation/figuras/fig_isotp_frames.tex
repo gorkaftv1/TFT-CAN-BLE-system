@@ -1,10 +1,3 @@
-% Tipos de trama ISO-TP — tabla LaTeX
-% PCI byte en negrita. Padding 0xAA en cursiva.
-% Requiere: array (ya en main.tex)
-
-\begin{table}[!htbp]
-\caption{Tipos de trama ISO-TP (ISO 15765-2). El byte PCI (en negrita) codifica en sus cuatro bits superiores el tipo de trama y en los inferiores metadatos de longitud o control de flujo. El relleno \texttt{0xAA} se usa para completar los 8 bytes del payload CAN.}
-\label{tab:isotp_frames}
 \centering
 \renewcommand{\arraystretch}{1.4}
 \begin{tabular}{|l|c|c|c|c|c|c|c|c|}
@@ -30,7 +23,6 @@ D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7
 \textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
 \hline
 \end{tabular}
-
 \vspace{0.5em}
 \begin{tabular}{ll}
 \textbf{N} & longitud payload (SF) o número de secuencia (CF, 0x1--0xF) \\
@@ -39,4 +31,3 @@ D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7
 \textbf{BS} & BlockSize: número de CFs antes del siguiente FC (0 = sin límite) \\
 \textbf{STmin} & separación mínima entre CFs en milisegundos \\
 \end{tabular}
-\end{table}

@@ -1,0 +1,337 @@
+% Tabla completa de PIDs OBD-II Modo 0x01 (SAE J1979)
+% Fuente: SAE J1979, ISO 15031-5, Wikipedia OBD-II PIDs
+% Requiere: \usepackage{longtable} en main.tex
+% Nota: la mayoría de PIDs son opcionales; su soporte depende del fabricante y modelo.
+% A, B, C, D denotan los bytes de respuesta en orden (primero = A).
+
+{\small
+\begin{longtable}{|c|p{4.6cm}|c|p{4.4cm}|c|}
+\caption{Tabla completa de PIDs del Modo 0x01 OBD-II (\textit{Show current data})
+         según SAE~J1979~\cite{SAEJ1979:2014}. A, B, C, D denotan los bytes de datos
+         de la respuesta en orden. Los PIDs marcados con (*) son obligatorios; el
+         resto son opcionales según soporte del fabricante.}
+\label{tab:obd2_pids} \\
+\hline
+\textbf{PID} & \textbf{Descripción} & \textbf{B} & \textbf{Fórmula} & \textbf{Unidad} \\
+\hline
+\endfirsthead
+\hline
+\textbf{PID} & \textbf{Descripción} & \textbf{B} & \textbf{Fórmula} & \textbf{Unidad} \\
+\hline
+\endhead
+\hline \multicolumn{5}{r|}{\textit{Continúa en la siguiente página\ldots}} \\
+\endfoot
+\hline
+\endlastfoot
+% ---- Rango 0x00–0x1F ----
+\texttt{0x00} & PIDs soportados [0x01--0x20]~(*) & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x01} & Estado del monitor desde borrado de DTCs~(*) & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x02} & DTC de congelación (\textit{Freeze DTC}) & 2 & --- & --- \\
+\hline
+\texttt{0x03} & Estado del sistema de combustible~(*) & 2 & Máscara de bits & --- \\
+\hline
+\texttt{0x04} & Carga calculada del motor~(*) & 1 & $A/2{,}55$ & \% \\
+\hline
+\texttt{0x05} & Temperatura del refrigerante~(*) & 1 & $A - 40$ & \textdegree C \\
+\hline
+\texttt{0x06} & Corrección de combustible a corto plazo (banco~1) & 1 & $(A/1{,}28) - 100$ & \% \\
+\hline
+\texttt{0x07} & Corrección de combustible a largo plazo (banco~1) & 1 & $(A/1{,}28) - 100$ & \% \\
+\hline
+\texttt{0x08} & Corrección de combustible a corto plazo (banco~2) & 1 & $(A/1{,}28) - 100$ & \% \\
+\hline
+\texttt{0x09} & Corrección de combustible a largo plazo (banco~2) & 1 & $(A/1{,}28) - 100$ & \% \\
+\hline
+\texttt{0x0A} & Presión de combustible (manométrica) & 1 & $3A$ & kPa \\
+\hline
+\texttt{0x0B} & Presión absoluta del colector de admisión (MAP) & 1 & $A$ & kPa \\
+\hline
+\texttt{0x0C} & Régimen del motor (RPM)~(*) & 2 & $(256A + B) / 4$ & rpm \\
+\hline
+\texttt{0x0D} & Velocidad del vehículo~(*) & 1 & $A$ & km/h \\
+\hline
+\texttt{0x0E} & Avance del encendido & 1 & $A/2 - 64$ & \textdegree \\
+\hline
+\texttt{0x0F} & Temperatura del aire de admisión & 1 & $A - 40$ & \textdegree C \\
+\hline
+\texttt{0x10} & Caudal másico de aire (MAF) & 2 & $(256A + B) / 100$ & g/s \\
+\hline
+\texttt{0x11} & Posición del acelerador~(*) & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x12} & Estado del aire secundario comandado & 1 & Máscara de bits & --- \\
+\hline
+\texttt{0x13} & Sondas $\lambda$ presentes (2 bancos) & 1 & Máscara de bits & --- \\
+\hline
+\texttt{0x14} & Sonda $\lambda$ 1 (banco~1, sensor~1): tensión y STFT & 2 & $V=A/200$; $\mathrm{STFT}=(B/1{,}28)-100$ & V; \% \\
+\hline
+\texttt{0x15} & Sonda $\lambda$ 2 (banco~1, sensor~2) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x16} & Sonda $\lambda$ 3 (banco~2, sensor~1) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x17} & Sonda $\lambda$ 4 (banco~2, sensor~2) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x18} & Sonda $\lambda$ 5 (banco~3, sensor~1) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x19} & Sonda $\lambda$ 6 (banco~3, sensor~2) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x1A} & Sonda $\lambda$ 7 (banco~4, sensor~1) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x1B} & Sonda $\lambda$ 8 (banco~4, sensor~2) & 2 & Ídem \texttt{0x14} & V; \% \\
+\hline
+\texttt{0x1C} & Estándar OBD al que se ajusta el vehículo~(*) & 1 & Enumeración & --- \\
+\hline
+\texttt{0x1D} & Sondas $\lambda$ presentes (4 bancos) & 1 & Máscara de bits & --- \\
+\hline
+\texttt{0x1E} & Estado de la entrada auxiliar (PTO) & 1 & Bit~0 = PTO activo & --- \\
+\hline
+\texttt{0x1F} & Tiempo de marcha desde arranque del motor & 2 & $256A + B$ & s \\
+\hline
+% ---- Rango 0x20–0x3F ----
+\texttt{0x20} & PIDs soportados [0x21--0x40] & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x21} & Distancia recorrida con MIL activado & 2 & $256A + B$ & km \\
+\hline
+\texttt{0x22} & Presión de rampa de combustible (relativa al vacío) & 2 & $0{,}079 \cdot (256A + B)$ & kPa \\
+\hline
+\texttt{0x23} & Presión manométrica de rampa de combustible & 2 & $10 \cdot (256A + B)$ & kPa \\
+\hline
+\texttt{0x24} & Sonda $\lambda$ 1 banda ancha (relación equiv. + tensión) & 4 & $\lambda = \frac{2(256A+B)}{65536}$; $V = \frac{8(256C+D)}{65536}$ & ---; V \\
+\hline
+\texttt{0x25} & Sonda $\lambda$ 2 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x26} & Sonda $\lambda$ 3 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x27} & Sonda $\lambda$ 4 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x28} & Sonda $\lambda$ 5 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x29} & Sonda $\lambda$ 6 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x2A} & Sonda $\lambda$ 7 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x2B} & Sonda $\lambda$ 8 banda ancha & 4 & Ídem \texttt{0x24} & ---; V \\
+\hline
+\texttt{0x2C} & EGR comandado & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x2D} & Error de EGR & 1 & $(A/1{,}28) - 100$ & \% \\
+\hline
+\texttt{0x2E} & Purga de evaporación comandada & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x2F} & Nivel de combustible en depósito & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x30} & Número de calentamientos desde borrado de DTCs & 1 & $A$ & --- \\
+\hline
+\texttt{0x31} & Distancia recorrida desde borrado de DTCs & 2 & $256A + B$ & km \\
+\hline
+\texttt{0x32} & Presión del vapor del sistema evap. & 2 & $(256A + B)/4$ (con signo) & Pa \\
+\hline
+\texttt{0x33} & Presión barométrica absoluta & 1 & $A$ & kPa \\
+\hline
+\texttt{0x34} & Sonda $\lambda$ 1 banda ancha (relación equiv. + corriente) & 4 & $\lambda = \frac{2(256A+B)}{65536}$; $I = \frac{256C+D}{256} - 128$ & ---; mA \\
+\hline
+\texttt{0x35} & Sonda $\lambda$ 2 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x36} & Sonda $\lambda$ 3 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x37} & Sonda $\lambda$ 4 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x38} & Sonda $\lambda$ 5 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x39} & Sonda $\lambda$ 6 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x3A} & Sonda $\lambda$ 7 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x3B} & Sonda $\lambda$ 8 banda ancha (+ corriente) & 4 & Ídem \texttt{0x34} & ---; mA \\
+\hline
+\texttt{0x3C} & Temperatura del catalizador (banco~1, sensor~1) & 2 & $(256A + B)/10 - 40$ & \textdegree C \\
+\hline
+\texttt{0x3D} & Temperatura del catalizador (banco~2, sensor~1) & 2 & Ídem \texttt{0x3C} & \textdegree C \\
+\hline
+\texttt{0x3E} & Temperatura del catalizador (banco~1, sensor~2) & 2 & Ídem \texttt{0x3C} & \textdegree C \\
+\hline
+\texttt{0x3F} & Temperatura del catalizador (banco~2, sensor~2) & 2 & Ídem \texttt{0x3C} & \textdegree C \\
+\hline
+% ---- Rango 0x40–0x5F ----
+\texttt{0x40} & PIDs soportados [0x41--0x60] & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x41} & Estado del monitor en este ciclo de conducción & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x42} & Tensión del módulo de control & 2 & $(256A + B) / 1000$ & V \\
+\hline
+\texttt{0x43} & Valor de carga absoluta & 2 & $100(256A + B) / 255$ & \% \\
+\hline
+\texttt{0x44} & Relación aire-combustible comandada ($\lambda$) & 2 & $2(256A + B) / 65536$ & --- \\
+\hline
+\texttt{0x45} & Posición relativa del acelerador & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x46} & Temperatura del aire ambiente & 1 & $A - 40$ & \textdegree C \\
+\hline
+\texttt{0x47} & Posición absoluta del acelerador B & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x48} & Posición absoluta del acelerador C & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x49} & Posición del pedal del acelerador D & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x4A} & Posición del pedal del acelerador E & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x4B} & Posición del pedal del acelerador F & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x4C} & Actuador del acelerador comandado & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x4D} & Tiempo de marcha con MIL activado & 2 & $256A + B$ & min \\
+\hline
+\texttt{0x4E} & Tiempo transcurrido desde borrado de DTCs & 2 & $256A + B$ & min \\
+\hline
+\texttt{0x4F} & Valores máx. ($\lambda$, tensión O2, corriente O2, MAP) & 4 & $A\,[\lambda]$; $B\,[\mathrm{V}]$; $C\,[\mathrm{mA}]$; $D{\times}10\,[\mathrm{kPa}]$ & --- \\
+\hline
+\texttt{0x50} & Valor máximo del sensor MAF & 4 & $A \times 10$ & g/s \\
+\hline
+\texttt{0x51} & Tipo de combustible & 1 & Enumeración & --- \\
+\hline
+\texttt{0x52} & Porcentaje de etanol en el combustible & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x53} & Presión vapor sistema evap. (absoluta) & 2 & $(256A + B) / 200$ & kPa \\
+\hline
+\texttt{0x54} & Presión vapor sistema evap. (con signo) & 2 & $256A + B$ (con signo) & Pa \\
+\hline
+\texttt{0x55} & Corrección O2 secundaria a corto plazo (bancos 1 y 3) & 2 & $(A/1{,}28)-100$; $(B/1{,}28)-100$ & \% \\
+\hline
+\texttt{0x56} & Corrección O2 secundaria a largo plazo (bancos 1 y 3) & 2 & Ídem \texttt{0x55} & \% \\
+\hline
+\texttt{0x57} & Corrección O2 secundaria a corto plazo (bancos 2 y 4) & 2 & Ídem \texttt{0x55} & \% \\
+\hline
+\texttt{0x58} & Corrección O2 secundaria a largo plazo (bancos 2 y 4) & 2 & Ídem \texttt{0x55} & \% \\
+\hline
+\texttt{0x59} & Presión absoluta de la rampa de combustible & 2 & $10(256A + B)$ & kPa \\
+\hline
+\texttt{0x5A} & Posición relativa del pedal del acelerador & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x5B} & Vida útil restante de la batería híbrida & 1 & $100A / 255$ & \% \\
+\hline
+\texttt{0x5C} & Temperatura del aceite de motor & 1 & $A - 40$ & \textdegree C \\
+\hline
+\texttt{0x5D} & Temporización de la inyección de combustible & 2 & $(256A + B)/128 - 210$ & \textdegree \\
+\hline
+\texttt{0x5E} & Caudal de combustible del motor & 2 & $(256A + B) / 20$ & L/h \\
+\hline
+\texttt{0x5F} & Requisitos de emisiones del vehículo & 1 & Máscara de bits & --- \\
+\hline
+% ---- Rango 0x60–0x7F ----
+\texttt{0x60} & PIDs soportados [0x61--0x80] & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x61} & Par motor demandado por el conductor & 1 & $A - 125$ & \% \\
+\hline
+\texttt{0x62} & Par motor real & 1 & $A - 125$ & \% \\
+\hline
+\texttt{0x63} & Par motor de referencia & 2 & $256A + B$ & Nm \\
+\hline
+\texttt{0x64} & Datos de par motor por punto de operación (5 puntos) & 5 & $X - 125$ (cada byte) & \% \\
+\hline
+\texttt{0x65} & Entradas/salidas auxiliares soportadas & 2 & Máscara de bits & --- \\
+\hline
+\texttt{0x66} & Sensor MAF dual (masa aire, dos sensores) & 5 & Complejo (ver J1979) & g/s \\
+\hline
+\texttt{0x67} & Temperatura del refrigerante (2 sensores) & 3 & $B - 40$; $C - 40$ & \textdegree C \\
+\hline
+\texttt{0x68} & Sensor de temperatura del aire de admisión & 7 & Complejo (ver J1979) & \textdegree C \\
+\hline
+\texttt{0x69} & EGR comandado y error de EGR & 7 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x6A} & Control flujo de aire admisión diesel & 5 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x6B} & Temperatura de los gases de recirculación (EGR) & 5 & Complejo (ver J1979) & \textdegree C \\
+\hline
+\texttt{0x6C} & Actuador del acelerador comandado (posición relativa) & 5 & Complejo (ver J1979) & \% \\
+\hline
+\texttt{0x6D} & Sistema de control de presión de combustible & 6 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x6E} & Sistema de control de presión de inyección & 5 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x6F} & Presión a la entrada del compresor del turbo & 3 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x70} & Control de sobrealimentación (\textit{boost pressure}) & 9 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x71} & Control de geometría variable del turbo (VGT) & 5 & Complejo (ver J1979) & \% \\
+\hline
+\texttt{0x72} & Control de la válvula de descarga (\textit{wastegate}) & 5 & Complejo (ver J1979) & \% \\
+\hline
+\texttt{0x73} & Presión de los gases de escape & 5 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x74} & Régimen del turbocompresor & 5 & $256A + B$ (por turbo) & rpm \\
+\hline
+\texttt{0x75} & Temperatura del turbocompresor (turbo~1) & 7 & $(256A+B)/10 - 40$ & \textdegree C \\
+\hline
+\texttt{0x76} & Temperatura del turbocompresor (turbo~2) & 7 & Ídem \texttt{0x75} & \textdegree C \\
+\hline
+\texttt{0x77} & Temperatura del intercooler (CACT) & 5 & $(256A+B)/10 - 40$ & \textdegree C \\
+\hline
+\texttt{0x78} & Temperatura de gases de escape EGT (banco~1) & 9 & $(256A+B)/10 - 40$ & \textdegree C \\
+\hline
+\texttt{0x79} & Temperatura de gases de escape EGT (banco~2) & 9 & Ídem \texttt{0x78} & \textdegree C \\
+\hline
+\texttt{0x7A} & Presión diferencial del filtro de partículas (DPF) & 7 & Complejo (ver J1979) & kPa \\
+\hline
+\texttt{0x7B} & Filtro de partículas DPF (presión y temperatura) & 7 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x7C} & Temperatura del filtro de partículas DPF & 9 & $(256A+B)/10 - 40$ & \textdegree C \\
+\hline
+\texttt{0x7D} & Estado de zona de control NOx NTE & 1 & Máscara de bits & --- \\
+\hline
+\texttt{0x7E} & Estado de zona de control PM NTE & 1 & Máscara de bits & --- \\
+\hline
+\texttt{0x7F} & Tiempo de marcha del motor (formato extendido) & 13 & Complejo (ver J1979) & s \\
+\hline
+% ---- Rango 0x80–0xA0 ----
+\texttt{0x80} & PIDs soportados [0x81--0xA0] & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0x81} & Tiempo de marcha del motor AECD (ciclo~1) & 12 & Complejo (ver J1979) & s \\
+\hline
+\texttt{0x82} & Tiempo de marcha del motor AECD (ciclo~2) & 12 & Complejo (ver J1979) & s \\
+\hline
+\texttt{0x83} & Sensor de NOx & 5 & Complejo (ver J1979) & ppm \\
+\hline
+\texttt{0x84} & Temperatura superficial del colector & 1 & $A - 40$ & \textdegree C \\
+\hline
+\texttt{0x85} & Sistema de advertencia e inducción de NOx & 12 & Máscara de bits & --- \\
+\hline
+\texttt{0x86}--\texttt{0x97} & Reservados (no definidos en J1979) & --- & --- & --- \\
+\hline
+\texttt{0x98} & Sensor de temperatura EGT (conjunto~1) & 9 & Complejo (ver J1979) & \textdegree C \\
+\hline
+\texttt{0x99} & Sensor de temperatura EGT (conjunto~2) & 9 & Complejo (ver J1979) & \textdegree C \\
+\hline
+\texttt{0x9A} & Datos del sistema híbrido/eléctrico & 6 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x9B} & Datos del sensor de fluido de escape diésel (DEF) & 4 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x9C} & Datos del sensor de O2 & 17 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0x9D} & Caudal de combustible del motor (multipunto) & 9 & Complejo (ver J1979) & L/h \\
+\hline
+\texttt{0x9E} & Caudal másico de gases de escape & 2 & $256A + B$ & kg/h \\
+\hline
+\texttt{0x9F} & Uso porcentual del sistema de combustible & 9 & Complejo (ver J1979) & \% \\
+\hline
+% ---- Rango 0xA0–0xC0 ----
+\texttt{0xA0} & PIDs soportados [0xA1--0xC0] & 4 & Máscara de bits & --- \\
+\hline
+\texttt{0xA1} & Datos corregidos del sensor NOx & 5 & Complejo (ver J1979) & ppm \\
+\hline
+\texttt{0xA2} & Caudal de combustible por cilindro & 2 & $(256A+B)/512$ & mg/ciclo \\
+\hline
+\texttt{0xA3} & Transmisión de vehículo eléctrico & 9 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0xA4} & Marcha real de la transmisión & 4 & Complejo (ver J1979) & --- \\
+\hline
+\texttt{0xA5} & Dosificación de fluido de escape diésel & 4 & Complejo (ver J1979) & \% \\
+\hline
+\texttt{0xA6} & Odómetro & 4 & $(2^{24}A + 2^{16}B + 256C + D)/10$ & km \\
+\hline
+\texttt{0xA7}--\texttt{0xAF} & Reservados (no definidos en J1979) & --- & --- & --- \\
+\hline
+\texttt{0xC0} & PIDs soportados [0xC1--0xE0] & 4 & Máscara de bits & --- \\
+\hline
+\end{longtable}
+}

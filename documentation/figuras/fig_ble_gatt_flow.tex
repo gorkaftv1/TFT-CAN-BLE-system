@@ -36,9 +36,6 @@
 %   - Título: "Flujo de conexión BLE GATT - NUS"
 % =========================================================
 
-\begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.85\textwidth]{Ilustraciones/ble_gatt_flow.png}
-\caption{Flujo completo de una conexión BLE GATT con el servicio NUS. Tras el descubrimiento y negociación de MTU, la app habilita las notificaciones en la característica TX y comienza el intercambio de comandos JSON. Un mecanismo de keepalive mantiene la conexión activa; la inactividad superior a 20 segundos provoca el cierre de sesión.}
-\label{fig:ble_gatt_flow}
-\end{figure}
+% TODO draw.io: diagrama de secuencia BLE GATT (ADV → CONNECT → MTU → discover → subscribe → auth → data) y exportar como ble_gatt_flow.png
+% \includegraphics[width=0.85\textwidth]{Ilustraciones/ble_gatt_flow.png}

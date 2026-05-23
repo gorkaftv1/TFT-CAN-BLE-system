@@ -1,9 +1,11 @@
+% TODO - revisar y redactar todo el capítulo
 \section{Resultados obtenidos}
 \label{sec:resultados}
 
 Este capítulo presenta los resultados de la validación del sistema en dos entornos complementarios: el banco de ensayo Arduino, que permitió reproducir condiciones adversas de forma controlada, y un vehículo real, en el que se verificó la interoperabilidad del sistema con una ECU de producción a través del conector OBD-II estándar. Los resultados se organizan en torno a cuatro dimensiones: funcionalidad del protocolo, rendimiento de la comunicación, comportamiento ante condiciones adversas y grado de consecución de los objetivos planteados en el Capítulo~2.
 
 
+% TODO - CONTRADICCIÓN: este sección describe pruebas sobre vehículo real, pero 10_Conclusiones dice "ausencia de validación sobre vehículo real". Decidir si hubo prueba real o no y redactar consistentemente.
 \section{Validación sobre vehículo real}
 \label{sec:resultados_vehiculo_real}
 
@@ -19,6 +21,7 @@ La conexión al vehículo demostró que el protocolo OBD-II implementado es comp
 \end{figure}
 
 
+% TODO - revisar datos y redactar
 \section{Validación funcional del protocolo OBD-II}
 \label{sec:resultados_protocolo}
 
@@ -53,6 +56,7 @@ La respuesta VIN se validó con una cadena de 17 caracteres ASCII, verificando q
 El ciclo de gestión de DTCs se validó íntegramente: lectura de lista vacía, inyección de tres DTCs distintos mediante la interrupción hardware del pin D6, lectura de la lista con los tres códigos presentes, borrado y confirmación de lista vacía. La codificación J2012 de los DTCs fue correcta en todos los casos.
 
 
+% TODO - verificar que los números de latencia son reales (medidos), no estimados
 \section{Métricas de rendimiento de la comunicación}
 \label{sec:resultados_rendimiento}
 
@@ -87,6 +91,7 @@ En el modo de monitorización continua con cuatro PIDs a 500\,ms de periodo, el 
 La base de datos SQLite acumuló aproximadamente 1.200 muestras por sesión de 10 minutos con cuatro PIDs, con un tamaño de fichero resultante de 480\,KB. La escritura en lotes de 50 muestras mantuvo la latencia de acceso a disco por debajo de 15\,ms en el 99\% de los casos.
 
 
+% TODO - revisar y redactar; verificar que los porcentajes de ruido son los reales configurados
 \section{Comportamiento ante condiciones adversas}
 \label{sec:resultados_ruido}
 
@@ -107,6 +112,7 @@ Los resultados más relevantes de las pruebas bajo ruido son:
 La tasa de errores no recuperables (timeouts que provocan el descarte definitivo de una muestra) se situó en un 0,08\% sobre el total de consultas realizadas con ruido activo, valor que se considera aceptable para el uso previsto del sistema.
 
 
+% TODO - revisar y redactar
 \section{Grado de consecución de los objetivos}
 \label{sec:resultados_objetivos}
 
