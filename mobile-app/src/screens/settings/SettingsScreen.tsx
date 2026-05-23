@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useDashboardStore, Widget } from '../../stores/dashboardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePidSupportStore } from '../../stores/pidSupportStore';
 import { useVehicleStore } from '../../stores/vehicleStore';
 import { ScanModal, useConnectionFlow } from '../../components/ConnectionFlowModals';
 import { colors, fontSize, spacing } from '../../shared/theme';
@@ -71,6 +72,8 @@ export function SettingsScreen() {
     deviceName, monitorIntervalMs, useMock, loaded: settingsLoaded,
     setDeviceName, setMonitorInterval, setUseMock, loadFromStorage: loadSettings,
   } = useSettingsStore();
+
+  const { supportedPids, probing, lastProbed, probe, clear: clearPids } = usePidSupportStore();
 
   const { scanOpen, openScan, closeScan } = useConnectionFlow();
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
@@ -223,6 +226,43 @@ export function SettingsScreen() {
           </>
         )}
 
+        {/* ── PIDs del vehiculo ── */}
+        {!useMock && (
+          <>
+            <Text style={styles.sectionTitle}>PIDs del vehículo</Text>
+            <View style={styles.card}>
+              <Text style={styles.settingLabel}>PIDs soportados</Text>
+              <Text style={styles.settingHint}>
+                {supportedPids === null
+                  ? 'Sin escanear. Pulsa para detectar que sensores responde tu vehiculo.'
+                  : `${supportedPids.length} PIDs detectados${lastProbed ? ` · ${new Date(lastProbed).toLocaleTimeString()}` : ''}`}
+              </Text>
+              <View style={styles.pidBtnRow}>
+                <TouchableOpacity
+                  style={[styles.pidScanBtn, probing && styles.pidScanBtnDisabled]}
+                  onPress={() => void probe()}
+                  disabled={probing}
+                  activeOpacity={0.75}
+                >
+                  <Text style={styles.pidScanBtnLabel}>
+                    {probing ? 'Escaneando...' : supportedPids === null ? 'Escanear PIDs' : 'Re-escanear'}
+                  </Text>
+                </TouchableOpacity>
+                {supportedPids !== null && (
+                  <TouchableOpacity style={styles.pidClearBtn} onPress={clearPids} activeOpacity={0.75}>
+                    <Text style={styles.pidClearBtnLabel}>Borrar</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+              {supportedPids !== null && supportedPids.length > 0 && (
+                <Text style={styles.pidList}>
+                  {supportedPids.map((p) => '0x' + p.toString(16).toUpperCase()).join('  ')}
+                </Text>
+              )}
+            </View>
+          </>
+        )}
+
         {/* ── Tiempo de sondeo ── */}
         <Text style={styles.sectionTitle}>Tiempo de sondeo</Text>
         <View style={styles.card}>
@@ -348,6 +388,15 @@ const styles = StyleSheet.create({
   activeCount:    { fontSize: fontSize.xs, color: colors.textMuted },
   selectAllBtn:   { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 6, borderWidth: 1, borderColor: colors.primary },
   selectAllLabel: { fontSize: fontSize.xs, color: colors.primary, fontWeight: '600' },
+
+  // PID scan
+  pidBtnRow:         { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+  pidScanBtn:        { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, backgroundColor: colors.primary },
+  pidScanBtnDisabled:{ opacity: 0.5 },
+  pidScanBtnLabel:   { fontSize: fontSize.sm, fontWeight: '700', color: colors.background },
+  pidClearBtn:       { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  pidClearBtnLabel:  { fontSize: fontSize.sm, color: colors.textMuted },
+  pidList:           { fontSize: fontSize.xs, color: colors.textSecondary, fontFamily: 'monospace', lineHeight: 18 },
 
   // Widget list
   widgetList: { paddingHorizontal: spacing.md, paddingTop: spacing.xs, gap: spacing.sm },

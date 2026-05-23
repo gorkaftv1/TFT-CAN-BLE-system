@@ -70,6 +70,11 @@ export class MockAdapter implements IVehicleAdapter {
     }
     return result;
   }
+  async probeAvailablePids(): Promise<number[]> {
+    await new Promise((r) => setTimeout(r, 400));
+    return PIDS.map((p) => p.pid);
+  }
+
   async getSessions(): Promise<any[]> { return []; }
   async getSessionSamples(): Promise<any[]> { return []; }
   async getSessionCommands(): Promise<any[]> { return []; }

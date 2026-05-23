@@ -155,6 +155,10 @@ export class BleAdapter implements IVehicleAdapter {
     return await this.request({ cmd: 'vin' });
   }
 
+  async probeAvailablePids(): Promise<number[]> {
+    return await this.request<number[]>({ cmd: 'probe_pids' });
+  }
+
   async getSessions(limit = 50): Promise<any[]> {
     return await this.request({ cmd: 'sessions', limit });
   }

@@ -3,6 +3,7 @@ import { getAdapter } from '../infrastructure/adapterFactory';
 import { BleAdapter, ScannedDevice } from '../infrastructure/BleAdapter';
 import { VehicleService } from '../domain/services/VehicleService';
 import { useVehicleStore } from './vehicleStore';
+import { usePidSupportStore } from './pidSupportStore';
 import { LogService } from '../domain/services/LogService';
 
 export type ConnectionStatus = 'disconnected' | 'scanning' | 'connecting' | 'connected';
@@ -59,6 +60,7 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
       set({ status: 'connected', deviceName: deviceLabel });
       LogService.add('info', `Conectado a ${deviceLabel}`);
       VehicleService.fetchVin();
+      void usePidSupportStore.getState().probe();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ status: 'disconnected', error: msg });

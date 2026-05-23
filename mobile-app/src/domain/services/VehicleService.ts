@@ -3,6 +3,7 @@ import { MonitorSample } from '../models/MonitorSample';
 import { useVehicleStore, PidSample } from '../../stores/vehicleStore';
 import { useDashboardStore } from '../../stores/dashboardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePidSupportStore } from '../../stores/pidSupportStore';
 import { LogService } from './LogService';
 import { PID_MAP } from '../../config/obd_pids';
 
@@ -46,7 +47,11 @@ export class VehicleService {
     if (stopMonitor) return;
 
     const widgets = useDashboardStore.getState().widgets;
-    const pids = widgets.filter((w) => w.visible).map((w) => w.pid);
+    const supported = usePidSupportStore.getState().supportedPids;
+    const pids = widgets
+      .filter((w) => w.visible)
+      .map((w) => w.pid)
+      .filter((pid) => supported === null || supported.includes(pid));
 
     if (pids.length === 0) {
       LogService.add('warning', 'monitor_start — no active sensors');
