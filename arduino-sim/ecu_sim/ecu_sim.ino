@@ -195,6 +195,7 @@ void updateVehicleSimulation() {
 
     vehicle.runtimeSinceStart = (currentTime - engineStartTime) / 1000;
 
+#if ADD_NOISE
     vehicle.rpm            += random(-NOISE_RPM_MAX,       NOISE_RPM_MAX + 1);
     vehicle.coolantTemp    += random(-NOISE_COOLANT_MAX,   NOISE_COOLANT_MAX + 1);
     vehicle.oilTemp        += random(-NOISE_OIL_MAX,       NOISE_OIL_MAX + 1);
@@ -202,6 +203,7 @@ void updateVehicleSimulation() {
     vehicle.mafFlow        += random(-NOISE_MAF_MAX,       NOISE_MAF_MAX + 1);
     vehicle.batteryVoltage += random(-NOISE_VOLTAGE_MAX,   NOISE_VOLTAGE_MAX + 1);
     vehicle.shortFuelTrim1 += random(-NOISE_FUEL_TRIM_MAX, NOISE_FUEL_TRIM_MAX + 1);
+#endif
 
     vehicle.rpm            = constrain(vehicle.rpm,            750,  6500);
     vehicle.coolantTemp    = constrain(vehicle.coolantTemp,    -40,   130);
@@ -264,7 +266,24 @@ void broadcastVehicleState() {
   frame[3] = (uint8_t)(vehicle.batteryVoltage & 0xFF);
   frame[4] = 0x00; frame[5] = 0x00; frame[6] = 0x00; frame[7] = 0x00;
   CAN.beginPacket(0x3D0); CAN.write(frame, 8); CAN.endPacket();
-  // logCANFrame("[BC TX]", 0x3D0, frame, 8);
+  logCANFrame("[BC TX]", 0x3D0, frame, 8);
+}
+
+// ---------- CAN LOG ----------
+void logCANFrame(const char* tag, uint32_t id, const uint8_t* data, uint8_t len) {
+#if LOG_LEVEL >= 1
+  Serial.print(tag);
+  Serial.print(F(" 0x")); Serial.print(id, HEX);
+  Serial.print(F(" |"));
+  for (uint8_t i = 0; i < len; i++) {
+    Serial.print(F(" "));
+    if (data[i] < 0x10) Serial.print(F("0"));
+    Serial.print(data[i], HEX);
+  }
+  Serial.println();
+#else
+  (void)tag; (void)id; (void)data; (void)len;
+#endif
 }
 
 // ---------- CAN RX — ISO-TP ----------
@@ -298,9 +317,11 @@ void processCANMessages() {
   uint8_t mode = data[1];
   uint8_t pid  = data[2];
 
+#if LOG_LEVEL >= 1
   Serial.print(F("\n[RX] 0x")); Serial.print(id, HEX);
   Serial.print(F(" Mode:0x")); Serial.print(mode, HEX);
   Serial.print(F(" PID:0x"));  Serial.println(pid, HEX);
+#endif
 
   bool handled = false;
   switch (mode) {
@@ -327,12 +348,63 @@ void processCANMessages() {
 bool handleMode01(uint8_t pid) {
   responseLength = 0;
 
+  // BASIC mode: reject PIDs not in the core set before entering the switch
+#if SIM_MODE == SIM_MODE_BASIC
   switch (pid) {
-    case PID_SUPPORTED_01_20:
+    case 0x00: case 0x20: case 0x40:           // support bitmask queries
+    case PID_ENGINE_LOAD:   case PID_COOLANT_TEMP:
+    case PID_ENGINE_RPM:    case PID_VEHICLE_SPEED:
+    case PID_THROTTLE_POS:  case PID_CONTROL_MODULE_VOLTAGE:
+      break;  // allowed — fall through to main switch
+    default:
+      return false;  // NRC: subfunction not supported
+  }
+#endif
+
+  switch (pid) {
+    // --- Support bitmask PIDs (0x00 / 0x20 / 0x40) ---
+    case PID_SUPPORTED_01_20:  // 0x00 — PIDs 0x01-0x20
       responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
       responseBuffer[1] = pid;
-      responseBuffer[2] = 0xBE; responseBuffer[3] = 0x1F;
+#if SIM_MODE == SIM_MODE_BASIC
+      // 0x04,0x05,0x0C,0x0D,0x11 + next-range bit (0x20)
+      responseBuffer[2] = 0x18; responseBuffer[3] = 0x18;
+      responseBuffer[4] = 0x80; responseBuffer[5] = 0x01;
+#else
+      // Full: 0x04-0x07,0x0A-0x11,0x1F + next-range
+      responseBuffer[2] = 0xBE; responseBuffer[3] = 0x7F;
       responseBuffer[4] = 0xA8; responseBuffer[5] = 0x13;
+#endif
+      responseLength = 6;
+      break;
+
+    case 0x20:  // PIDs 0x21-0x40
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+#if SIM_MODE == SIM_MODE_BASIC
+      // only next-range bit (0x40) so 0x42 is reachable
+      responseBuffer[2] = 0x00; responseBuffer[3] = 0x00;
+      responseBuffer[4] = 0x00; responseBuffer[5] = 0x01;
+#else
+      // Full: 0x23,0x2F,0x31,0x33 + next-range
+      responseBuffer[2] = 0x20; responseBuffer[3] = 0x02;
+      responseBuffer[4] = 0xA0; responseBuffer[5] = 0x01;
+#endif
+      responseLength = 6;
+      break;
+
+    case 0x40:  // PIDs 0x41-0x60
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+#if SIM_MODE == SIM_MODE_BASIC
+      // 0x42 only
+      responseBuffer[2] = 0x40; responseBuffer[3] = 0x00;
+      responseBuffer[4] = 0x00; responseBuffer[5] = 0x00;
+#else
+      // Full: 0x42,0x46,0x5C,0x5E
+      responseBuffer[2] = 0x44; responseBuffer[3] = 0x00;
+      responseBuffer[4] = 0x00; responseBuffer[5] = 0x14;
+#endif
       responseLength = 6;
       break;
     case PID_ENGINE_LOAD:
@@ -472,7 +544,9 @@ bool handleMode03() {
   }
 
   sendResponse();
+#if LOG_LEVEL >= 1
   Serial.print(F("[INFO] Sent ")); Serial.print(toSend); Serial.println(F(" DTCs"));
+#endif
   return true;
 }
 
@@ -498,7 +572,9 @@ bool handleMode04() {
 bool handleMode09(uint8_t pid) {
   switch (pid) {
     case 0x02:
+#if LOG_LEVEL >= 1
       Serial.print(F("[INFO] VIN: ")); Serial.println(vehicle.vin);
+#endif
       sendVINMultiFrame();
       return true;
     default:
@@ -524,12 +600,14 @@ void sendResponse() {
   for (uint8_t i = 0; i < 8; i++) CAN.write(frame[i]);
   CAN.endPacket();
 
+#if LOG_LEVEL >= 1
   Serial.print(F("[TX SF] 0x")); Serial.print(ECU_RESPONSE_ID, HEX); Serial.print(F(" | "));
   for (uint8_t i = 0; i < 8; i++) {
     if (frame[i] < 0x10) Serial.print(F("0"));
     Serial.print(frame[i], HEX); Serial.print(F(" "));
   }
   Serial.println();
+#endif
 }
 
 // ---------- TX: NEGATIVE RESPONSE ----------
@@ -542,8 +620,10 @@ void sendNegativeResponse(uint8_t mode, uint8_t errorCode) {
   for (uint8_t i = 0; i < 8; i++) CAN.write(frame[i]);
   CAN.endPacket();
 
+#if LOG_LEVEL >= 1
   Serial.print(F("[TX NRC] Mode=0x")); Serial.print(mode, HEX);
   Serial.print(F(" Err=0x")); Serial.println(errorCode, HEX);
+#endif
 }
 
 // ---------- TX: VIN MULTI-FRAME ----------
@@ -565,12 +645,14 @@ void sendVINMultiFrame() {
   for (uint8_t i = 0; i < 8; i++) CAN.write(ff[i]);
   CAN.endPacket();
 
+#if LOG_LEVEL >= 1
   Serial.print(F("[TX FF] 0x")); Serial.print(ECU_RESPONSE_ID, HEX); Serial.print(F(" | "));
   for (uint8_t i = 0; i < 8; i++) {
     if (ff[i] < 0x10) Serial.print(F("0"));
     Serial.print(ff[i], HEX); Serial.print(F(" "));
   }
   Serial.println();
+#endif
 
   if (!waitForFlowControl())
     Serial.println(F("[WARN] FC timeout — sending CFs anyway"));
@@ -588,18 +670,22 @@ void sendVINMultiFrame() {
     for (uint8_t i = 0; i < 8; i++) CAN.write(cf[i]);
     CAN.endPacket();
 
+#if LOG_LEVEL >= 1
     Serial.print(F("[TX CF] SN=0x")); Serial.print(sn & 0x0F, HEX); Serial.print(F(" | "));
     for (uint8_t i = 0; i < 8; i++) {
       if (cf[i] < 0x10) Serial.print(F("0"));
       Serial.print(cf[i], HEX); Serial.print(F(" "));
     }
     Serial.println();
+#endif
 
     bytesSent += ISOTP_CF_DATA_BYTES;
     sn = (sn + 1) & 0x0F;
     if (bytesSent < PAYLOAD_LEN) delay(ISOTP_CF_SEP_MS);
   }
+#if LOG_LEVEL >= 1
   Serial.println(F("[INFO] VIN complete"));
+#endif
 }
 
 // ---------- UDS MODE 10 — DiagnosticSessionControl ----------
@@ -752,6 +838,9 @@ void sendMultiFrame(const uint8_t* payload, uint8_t payloadLen) {
 // Polls CAN for FC frame from scanner. Returns false on ISOTP_FC_TIMEOUT_MS timeout.
 bool waitForFlowControl() {
   unsigned long deadline = millis() + ISOTP_FC_TIMEOUT_MS;
+#if LOG_LEVEL >= 1
+  Serial.println(F("[INFO] Waiting for FC..."));
+#endif
   while (millis() < deadline) {
     int pktSize = CAN.parsePacket();
     if (pktSize > 0) {
@@ -760,6 +849,9 @@ bool waitForFlowControl() {
       while (CAN.available()) CAN.read();
 
       if (rxId == ECU_CAN_ID && (pci & 0xF0) == ISOTP_PCI_FC) {
+#if LOG_LEVEL >= 1
+        Serial.print(F("[RX FC] flag=0x")); Serial.println(pci & 0x0F, HEX);
+#endif
         return true;
       }
     }

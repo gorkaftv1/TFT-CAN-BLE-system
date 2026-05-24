@@ -6,6 +6,21 @@
 
 #include <Arduino.h>
 
+// ---------- SIMULATION CONFIG ----------
+// ADD_NOISE: 1 = sensor noise enabled, 0 = clean deterministic values
+#define ADD_NOISE     1
+
+// SIM_MODE: selects which PIDs the simulated ECU reports as supported
+//   SIM_MODE_FULL  — all PIDs handled by this firmware (matches a full ECU)
+//   SIM_MODE_BASIC — only the 6 core PIDs: RPM, Speed, Coolant, Load, Throttle, Battery
+#define SIM_MODE_FULL  0
+#define SIM_MODE_BASIC 1
+#define SIM_MODE       SIM_MODE_FULL
+
+// ---------- LOGGING ----------
+// 0 = quiet (only errors + key events), 1 = all RX/TX frames, 2 = + broadcasts
+#define LOG_LEVEL 0
+
 // ---------- CAN BUS ----------
 #define CAN_SPEED          500E3
 #define ECU_CAN_ID         0x7E0
