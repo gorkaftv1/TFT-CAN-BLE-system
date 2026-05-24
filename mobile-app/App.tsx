@@ -5,6 +5,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { useSettingsStore } from './src/stores/settingsStore';
 import { useDashboardStore } from './src/stores/dashboardStore';
 import { usePidSupportStore } from './src/stores/pidSupportStore';
+import { requestBlePermissions } from './src/utils/blePermissions';
 
 export default function App() {
   const loadSettings  = useSettingsStore((s) => s.loadFromStorage);
@@ -15,6 +16,7 @@ export default function App() {
     void loadSettings();
     void loadDashboard();
     void loadPidCache();
+    void requestBlePermissions();
   }, []);
 
   return (
