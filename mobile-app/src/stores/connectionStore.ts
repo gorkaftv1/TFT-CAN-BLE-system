@@ -12,6 +12,7 @@ interface ConnectionState {
   status: ConnectionStatus;
   deviceName: string | null;
   error: string | null;
+  disconnectedUnexpectedly: boolean;
   scannedDevices: ScannedDevice[];
   stopScanFn: (() => void) | null;
 
@@ -19,12 +20,14 @@ interface ConnectionState {
   stopScan: () => void;
   connect: (deviceId: string, deviceLabel: string) => Promise<void>;
   disconnect: () => Promise<void>;
+  clearDisconnectError: () => void;
 }
 
 export const useConnectionStore = create<ConnectionState>((set, get) => ({
   status: 'disconnected',
   deviceName: null,
   error: null,
+  disconnectedUnexpectedly: false,
   scannedDevices: [],
   stopScanFn: null,
 
@@ -52,11 +55,17 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   connect: async (deviceId, deviceLabel) => {
     get().stopScanFn?.();
-    set({ status: 'connecting', error: null, stopScanFn: null });
+    set({ status: 'connecting', error: null, disconnectedUnexpectedly: false, stopScanFn: null });
     // Brief pause: let BLE stack settle after stopping scan before connecting
     await new Promise((r) => setTimeout(r, 300));
     try {
       await getAdapter().connect(deviceId, deviceLabel);
+      BleAdapter.getInstance().onUnexpectedDisconnect = () => {
+        VehicleService.stop();
+        useVehicleStore.getState().clear();
+        usePidSupportStore.getState().clear();
+        set({ status: 'disconnected', deviceName: null, error: null, disconnectedUnexpectedly: true, scannedDevices: [] });
+      };
       set({ status: 'connected', deviceName: deviceLabel });
       LogService.add('info', `Conectado a ${deviceLabel}`);
       VehicleService.fetchVin();
@@ -72,6 +81,9 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
     VehicleService.stop();
     await getAdapter().disconnect();
     useVehicleStore.getState().clear();
-    set({ status: 'disconnected', deviceName: null, error: null, scannedDevices: [] });
+    usePidSupportStore.getState().clear();
+    set({ status: 'disconnected', deviceName: null, error: null, disconnectedUnexpectedly: false, scannedDevices: [] });
   },
+
+  clearDisconnectError: () => set({ disconnectedUnexpectedly: false }),
 }));

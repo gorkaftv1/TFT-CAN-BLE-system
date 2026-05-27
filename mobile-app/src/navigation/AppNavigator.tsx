@@ -2,14 +2,15 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { NavigationContainer } from '@react-navigation/native';
 import React from 'react';
 import { Alert, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { DashboardScreen } from '../screens/dashboard/DashboardScreen';
-import { DtcScreen }       from '../screens/dtcs/DtcScreen';
-import { ConsoleScreen }   from '../screens/console/ConsoleScreen';
-import { SettingsScreen }  from '../screens/settings/SettingsScreen';
+import { DashboardScreen }  from '../screens/dashboard/DashboardScreen';
+import { DtcScreen }        from '../screens/dtcs/DtcScreen';
+import { SessionsScreen }   from '../screens/sessions/SessionsScreen';
+import { ConsoleScreen }    from '../screens/console/ConsoleScreen';
+import { SettingsScreen }   from '../screens/settings/SettingsScreen';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useSettingsStore }   from '../stores/settingsStore';
 import { colors, fontSize, spacing } from '../shared/theme';
-import { DashboardIcon, WarningIcon, ConsoleIcon, SettingsIcon } from '../assets/icons';
+import { DashboardIcon, WarningIcon, ConsoleIcon, SettingsIcon, HistoryIcon } from '../assets/icons';
 
 const Tab = createBottomTabNavigator();
 
@@ -68,6 +69,7 @@ export function AppNavigator() {
             switch (route.name) {
               case 'Panel':    return <DashboardIcon color={color} size={size} />;
               case 'Averias':  return <WarningIcon   color={color} size={size} />;
+              case 'Sesiones': return <HistoryIcon   color={color} size={size} />;
               case 'Consola':  return <ConsoleIcon   color={color} size={size} />;
               case 'Ajustes':  return <SettingsIcon  color={color} size={size} />;
               default:         return null;
@@ -90,8 +92,9 @@ export function AppNavigator() {
         })}
       >
         <Tab.Screen name="Panel"   component={DashboardScreen} options={{ title: 'Panel' }}   />
-        <Tab.Screen name="Averias" component={DtcScreen}       options={{ title: 'Averias' }} />
-        <Tab.Screen name="Consola" component={ConsoleScreen}   options={{ title: 'Consola' }} />
+        <Tab.Screen name="Averias"  component={DtcScreen}       options={{ title: 'Averias' }}   />
+        <Tab.Screen name="Sesiones" component={SessionsScreen}  options={{ title: 'Sesiones' }}  />
+        <Tab.Screen name="Consola"  component={ConsoleScreen}   options={{ title: 'Consola' }}   />
         <Tab.Screen name="Ajustes" component={SettingsScreen}  options={{ title: 'Ajustes' }} />
       </Tab.Navigator>
     </NavigationContainer>

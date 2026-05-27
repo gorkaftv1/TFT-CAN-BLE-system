@@ -16,6 +16,21 @@ const CLIENT_TIMEOUT_MS  = 20_000;
 const INACTIVITY_CHECK_MS = 5_000;
 const PING_INTERVAL_MS   = 7_000;
 
+function translateBleError(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  if (/was disconnected/i.test(raw))      return 'El dispositivo se desconectó durante la conexión. Asegúrate de que la Pi está encendida y cerca.';
+  if (/timed out/i.test(raw))             return 'Tiempo de espera agotado. El dispositivo no respondió a tiempo.';
+  if (/not found/i.test(raw))             return 'Dispositivo no encontrado. Comprueba que está encendido y visible.';
+  if (/powered off/i.test(raw))           return 'Bluetooth desactivado. Actívalo e inténtalo de nuevo.';
+  if (/unauthorized|permission/i.test(raw)) return 'Permiso Bluetooth denegado. Concede los permisos en Ajustes del sistema.';
+  if (/MTU/i.test(raw))                   return 'Error al negociar el tamaño de paquete (MTU) con el dispositivo.';
+  if (/discover/i.test(raw))              return 'Error al descubrir los servicios del dispositivo.';
+  if (/characteristic/i.test(raw))        return 'Servicio NUS no disponible. Comprueba que el firmware de la Pi es correcto.';
+  if (/already connected/i.test(raw))     return 'El dispositivo ya está conectado. Desconéctalo e inténtalo de nuevo.';
+  if (/scanning/i.test(raw))              return 'Error durante la búsqueda de dispositivos Bluetooth.';
+  return raw;
+}
+
 function b64ToStr(b64: string): string {
   const bin = atob(b64);
   const bytes = new Uint8Array(bin.length);
@@ -47,6 +62,7 @@ export class BleAdapter implements IVehicleAdapter {
   private lastActivityTime = 0;
   private activityMonitorInterval: ReturnType<typeof setInterval> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  onUnexpectedDisconnect: (() => void) | null = null;
 
   static getInstance(): BleAdapter {
     if (!BleAdapter.instance) BleAdapter.instance = new BleAdapter();
@@ -77,6 +93,8 @@ export class BleAdapter implements IVehicleAdapter {
     if (!deviceId) throw new Error('No hay dispositivo seleccionado — elige uno de la lista');
     const label = deviceLabel ?? deviceId;
     LogService.add('info', `[1/5] Conectando GATT a ${label}...`);
+    // Cancel any stale OS-level GATT connection left by a previous unexpected disconnect
+    await this.manager.cancelDeviceConnection(deviceId).catch(() => {});
     try {
       const raw = await this.manager.connectToDevice(deviceId, { autoConnect: false, timeout: 10000 });
       LogService.add('info', `[2/5] GATT conectado — solicitando MTU ${MTU}...`);
@@ -86,14 +104,16 @@ export class BleAdapter implements IVehicleAdapter {
       LogService.add('info', '[4/5] Servicios descubiertos — suscribiendo RX...');
       raw.onDisconnected(() => this.handleUnexpectedDisconnect());
       this.device = raw;
+      LogService.add('info', '[5/5] Suscribiendo canal de recepción...');
+      await this.subscribeToTx();
+      LogService.add('info', '[6/6] Autenticando con la Pi...');
+      await this.authenticate();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      LogService.add('error', `Conexion fallida a nivel GATT: ${msg}`);
-      throw e;
+      this.device = null;
+      const friendly = translateBleError(e);
+      LogService.add('error', `Error de conexión: ${friendly}`);
+      throw new Error(friendly);
     }
-    await this.subscribeToTx();
-    LogService.add('info', '[5/5] Autenticando con la Pi...');
-    await this.authenticate();
     LogService.add('success', 'Autenticacion correcta — sesion activa');
     this.lastActivityTime = Date.now();
     this.startPingInterval();
@@ -105,6 +125,10 @@ export class BleAdapter implements IVehicleAdapter {
   }
 
   async disconnect(): Promise<void> {
+    this.onUnexpectedDisconnect = null; // intentional — prevent callback from firing
+    if (this.device) {
+      try { await this.writeRx(JSON.stringify({ cmd: 'disconnect' }) + '\n', false); } catch { /* ignore */ }
+    }
     if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
     if (this.activityMonitorInterval) { clearInterval(this.activityMonitorInterval); this.activityMonitorInterval = null; }
     this.txSub?.remove();
@@ -161,6 +185,10 @@ export class BleAdapter implements IVehicleAdapter {
 
   async getSessions(limit = 50): Promise<any[]> {
     return await this.request({ cmd: 'sessions', limit });
+  }
+
+  async getSessionDtcs(sessionId: number): Promise<Array<{ code: string; description: string; raw: string }>> {
+    return await this.request({ cmd: 'session_dtcs', session_id: sessionId }) ?? [];
   }
 
   async getSessionSamples(sessionId: number, pid?: number, limit = 1000): Promise<any[]> {
@@ -315,7 +343,8 @@ export class BleAdapter implements IVehicleAdapter {
       const elapsed = Date.now() - this.lastActivityTime;
       if (elapsed > CLIENT_TIMEOUT_MS) {
         LogService.add('error', `Tiempo sin actividad (${elapsed}ms) — desconectando`);
-        this.disconnect().catch(() => {});
+        const cb = this.onUnexpectedDisconnect;
+        this.disconnect().catch(() => {}).finally(() => cb?.());
       }
     }, INACTIVITY_CHECK_MS);
   }
@@ -335,6 +364,10 @@ export class BleAdapter implements IVehicleAdapter {
     this.txSub = null;
     this.rxBuf = '';
     this.device = null;
+    this.sampleCbs.clear();
     this.drainQueue(new Error('Device disconnected unexpectedly'));
+    const cb = this.onUnexpectedDisconnect;
+    this.onUnexpectedDisconnect = null;
+    cb?.();
   }
 }

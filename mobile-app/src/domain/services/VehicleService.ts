@@ -68,7 +68,7 @@ export class VehicleService {
   static stop(): void {
     stopMonitor?.();
     stopMonitor = null;
-    useVehicleStore.getState().clear();
+    useVehicleStore.getState().setMonitoring(false);
     LogService.add('info', 'monitor_stop');
   }
 

@@ -5,9 +5,7 @@ import {
 } from 'react-native';
 import { useLogsStore } from '../../stores/logsStore';
 import { LogEntry, LogSection, LogType } from '../../domain/models/LogEntry';
-import { useConnectionStore } from '../../stores/connectionStore';
-import { useSettingsStore } from '../../stores/settingsStore';
-import { DisconnectedState } from '../../components/DisconnectedState';
+import { exportLogsToCsv } from '../../domain/services/LogExportService';
 import { colors, fontSize, spacing } from '../../shared/theme';
 
 const monoFont = Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' });
@@ -62,16 +60,11 @@ function EntryRow({ entry }: { entry: LogEntry }) {
 }
 
 export function ConsoleScreen() {
-  const { status } = useConnectionStore();
-  const useMock = useSettingsStore((s) => s.useMock);
   const entries    = useLogsStore((s) => s.entries);
   const clearSection = useLogsStore((s) => s.clearSection);
   const clearAll   = useLogsStore((s) => s.clearAll);
   const [tab, setTab] = useState<TabKey>('bluetooth');
 
-  if (!useMock && status !== 'connected') {
-    return <DisconnectedState screen="console" />;
-  }
   const [autoScroll, setAutoScroll] = useState(true);
   const listRef = useRef<FlatList<LogEntry>>(null);
 
@@ -115,6 +108,18 @@ export function ConsoleScreen() {
       ],
     );
   }, [clearAll]);
+
+  const handleExport = useCallback(() => {
+    Alert.alert(
+      'Exportar CSV',
+      '¿Exportar solo la pestaña actual o todos los registros?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Esta pestaña', onPress: () => void exportLogsToCsv(entries, activeTab.key, activeTab.key) },
+        { text: 'Todo', onPress: () => void exportLogsToCsv(entries, 'completo') },
+      ],
+    );
+  }, [entries, activeTab]);
 
   const renderItem: ListRenderItem<LogEntry> = useCallback(
     ({ item }) => <EntryRow entry={item} />,
@@ -165,6 +170,9 @@ export function ConsoleScreen() {
           </TouchableOpacity>
           <TouchableOpacity onPress={handleClearAll}>
             <Text style={styles.clearAllLabel}>Todo</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleExport}>
+            <Text style={styles.iconBtnLabel}>CSV</Text>
           </TouchableOpacity>
         </View>
       </View>
