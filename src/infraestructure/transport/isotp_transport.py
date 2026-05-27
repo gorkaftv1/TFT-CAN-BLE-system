@@ -26,7 +26,7 @@ class IsoTpTransport(ITransport):
         channel: str = "can0",
         tx_id: int = CAN_TX_ID,
         rx_id: int = CAN_RX_ID,
-        timeout: float = 5.0,
+        timeout: float = 2.0,
     ) -> None:
         self._channel = channel
         self._timeout = timeout
