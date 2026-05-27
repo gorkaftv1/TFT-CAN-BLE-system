@@ -62,7 +62,8 @@ from session.logged_diagnostic_session import LoggedDiagnosticSession
 from server.bluetooth_server import BLEDiagServer
 from server.bt_command_handler import BtCommandHandler
 
-_DB_PATH = "diagnostics.db"
+_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "diagnostics.db")
+_DB_PATH = os.path.abspath(_DB_PATH)
 _TOKEN_FILE = os.path.expanduser("~/.seat_diag_token")
 _DEFAULT_TOKEN = "1234"
 

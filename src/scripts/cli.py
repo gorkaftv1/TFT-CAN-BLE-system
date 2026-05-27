@@ -28,6 +28,7 @@ from infraestructure.protocol.obd2_builder import Obd2ProtocolBuilder
 from infraestructure.transport.isotp_transport import IsoTpTransport
 from infraestructure.transport.logging_transport import LoggingTransport
 from infraestructure.transport.mock_transport import MockTransport
+from config.obd_pids import PIDS
 from monitor.live_data_monitor import LiveDataMonitor
 from session.diagnostic_session import DiagnosticSession
 from session.logged_diagnostic_session import LoggedDiagnosticSession
@@ -94,6 +95,7 @@ _MENU = """\
   [7]  UDS — change session
   [8]  UDS — read standard DIDs (VIN / Serial / SW)
   [9]  UDS — read extended DIDs (requires extended session)
+  [p]  Probe supported PIDs
   [0]  Exit"""
 
 _MONITOR_PIDS = [0x05, 0x04, 0x0C, 0x0D, 0x11]
@@ -229,6 +231,53 @@ def _option_live_monitor(
     print("  Live monitor stopped.")
 
 
+def _option_probe_pids(log_transport: LoggingTransport) -> None:
+    print(_SEP)
+    print("  Probing PIDs — please wait...")
+
+    # Step 1: collect declared PIDs via OBD2 availability bitmasks
+    declared: set[int] = set()
+    for support_pid in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
+        try:
+            log_transport.send(bytes([0x01, support_pid]))
+            raw = log_transport.receive()
+            if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == support_pid:
+                mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
+                for i in range(32):
+                    if mask & (0x80000000 >> i):
+                        declared.add(support_pid + i + 1)
+                if not (mask & 0x01):
+                    break
+        except Exception:
+            break
+
+    # Step 2: real poll each declared PID to confirm it actually responds
+    confirmed: list[tuple[int, str, str]] = []
+    for pid in sorted(declared):
+        try:
+            log_transport.send(bytes([0x01, pid]))
+            raw = log_transport.receive()
+            if len(raw) >= 2 and raw[0] == 0x41 and raw[1] == pid:
+                name = PIDS[pid].name if pid in PIDS else f"PID_0x{pid:02X}"
+                unit = PIDS[pid].unit if pid in PIDS else ""
+                confirmed.append((pid, name, unit))
+        except Exception:
+            pass
+
+    print(_SEP)
+    if not confirmed:
+        print("  No PIDs responded.")
+        return
+    for pid, name, unit in confirmed:
+        known = "" if pid in PIDS else "  *"
+        suffix = f" ({unit})" if unit else ""
+        print(f"  [0x{pid:02X}]  {name:<32}{suffix}{known}")
+    print(f"\n  {len(confirmed)} PIDs confirmed ({len(declared)} declared by ECU).")
+    unknown = [pid for pid, _, _ in confirmed if pid not in PIDS]
+    if unknown:
+        print(f"  * {len(unknown)} without decoder — not monitorable")
+
+
 def run_menu(
     session: LoggedDiagnosticSession,
     logger: SqliteDataLogger,
@@ -245,6 +294,7 @@ def run_menu(
         "7": lambda: _option_uds_session(log_transport),
         "8": lambda: _option_uds_read_dids(log_transport, _STANDARD_DIDS),
         "9": lambda: _option_uds_read_dids(log_transport, _EXTENDED_DIDS),
+        "p": lambda: _option_probe_pids(log_transport),
     }
 
     while True:
@@ -293,9 +343,10 @@ if __name__ == "__main__":
 ╚══════════════════════════════════════════════╝""")
 
     log_transport = LoggingTransport(raw_transport)
-    logger = SqliteDataLogger("diagnostics.db")
+    _db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "diagnostics.db"))
+    logger = SqliteDataLogger(_db_path)
     session_id = logger.start_session(f"CLI {banner_transport}")
-    print(f"  [LOG] Session #{session_id} → diagnostics.db")
+    print(f"  [LOG] Session #{session_id} → {_db_path}")
 
     inner = DiagnosticSession(log_transport, Obd2ProtocolBuilder(), Obd2DataDecoder())
     session = LoggedDiagnosticSession(inner, logger, session_id, log_transport)
