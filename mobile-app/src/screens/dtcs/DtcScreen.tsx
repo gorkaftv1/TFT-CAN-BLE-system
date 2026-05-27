@@ -18,7 +18,12 @@ function DtcRow({ item }: { item: DtcCode }) {
         <Text style={[styles.codeText, { color }]}>{item.code}</Text>
         <Text style={[styles.severityText, { color }]}>{SEVERITY_LABEL[item.severity]}</Text>
       </View>
-      <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
+      <View style={styles.descCol}>
+        <Text style={styles.desc} numberOfLines={3}>{item.description}</Text>
+        {item.manufacturer && (
+          <Text style={styles.mfrTag}>{item.manufacturer}</Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -121,7 +126,9 @@ const styles = StyleSheet.create({
   codeBadge:    { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 6, borderWidth: 1, marginRight: spacing.md, minWidth: 80, alignItems: 'center' },
   codeText:     { fontSize: fontSize.sm, fontWeight: '700', fontFamily: 'monospace' },
   severityText: { fontSize: 9, marginTop: 2, fontWeight: '500' },
-  desc:         { flex: 1, fontSize: fontSize.sm, color: colors.text, lineHeight: 19 },
+  descCol:      { flex: 1 },
+  desc:         { fontSize: fontSize.sm, color: colors.text, lineHeight: 19 },
+  mfrTag:       { marginTop: 4, fontSize: 10, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase' },
   emptyContainer:{ alignItems: 'center', padding: spacing.xl },
   emptyTitle:   { fontSize: fontSize.md, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.sm },
   emptyText:    { fontSize: fontSize.sm, color: colors.textMuted, textAlign: 'center', lineHeight: 22 },

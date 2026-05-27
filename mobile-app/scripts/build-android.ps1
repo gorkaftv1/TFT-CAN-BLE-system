@@ -1,5 +1,5 @@
 # =============================================================================
-# build-android.ps1 - Build a standalone Android APK for vehicle-diag
+# build-android.ps1 - Build a standalone Android APK for diag_tool
 #
 # No Google account or Play Store required.
 # The resulting APK can be installed on any Android device directly.
@@ -21,8 +21,7 @@
 # =============================================================================
 param(
     [switch]$Release,
-    [switch]$Install,
-    [switch]$Mock        # keep USE_MOCK = true (simulated data, no BLE hardware needed)
+    [switch]$Install
 )
 
 $ErrorActionPreference = 'Stop'
@@ -34,25 +33,12 @@ function Warn($msg)    { Write-Host "  $msg" -ForegroundColor Yellow }
 function Err($msg)     { Write-Host "  $msg" -ForegroundColor Red; exit 1 }
 
 # -- Paths --------------------------------------------------------------------
-$ScriptDir      = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Root           = Split-Path -Parent $ScriptDir
-$AndroidDir     = Join-Path $Root 'android'
-$AdapterFactory = Join-Path $Root 'src\infrastructure\adapterFactory.ts'
+$ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
+$Root         = Split-Path -Parent $ScriptDir
+$AndroidDir   = Join-Path $Root 'android'
 # Keystore lives in mobile-app/ root — outside android/ so expo prebuild --clean never wipes it
-$KeystoreFile   = Join-Path $Root 'vehiclediag-release.keystore'
-$BuildVariant   = if ($Release) { 'release' } else { 'debug' }
-
-# -- USE_MOCK restore on exit -------------------------------------------------
-$MockWasTrue = $false
-
-function Restore-Mock {
-    if ($MockWasTrue) {
-        (Get-Content $AdapterFactory -Raw) `
-            -replace 'export const USE_MOCK = false', 'export const USE_MOCK = true' |
-            Set-Content $AdapterFactory -Encoding utf8
-        Warn "USE_MOCK restored to true (dev mode)."
-    }
-}
+$KeystoreFile = Join-Path $Root 'vehiclediag-release.keystore'
+$BuildVariant = if ($Release) { 'release' } else { 'debug' }
 
 # -- Prerequisite checks ------------------------------------------------------
 Info "Checking prerequisites..."
@@ -101,41 +87,15 @@ $env:PATH = "$env:ANDROID_HOME\platform-tools;$env:PATH"
 Success "Android SDK: $env:ANDROID_HOME"
 Success "Prerequisites OK."
 
-# -- Step 1: USE_MOCK handling ------------------------------------------------
-$factoryContent = Get-Content $AdapterFactory -Raw
-
-if ($Mock) {
-    Info "USE_MOCK = true  (-Mock flag set, simulated data)"
-    if ($factoryContent -match 'export const USE_MOCK = false') {
-        $MockWasTrue = $false   # was false → restore to false on exit
-        $factoryContent -replace 'export const USE_MOCK = false', 'export const USE_MOCK = true' |
-            Set-Content $AdapterFactory -Encoding utf8
-        # Override $MockWasTrue so Restore-Mock puts it back to false
-        $MockWasTrue = $true
-    } else {
-        Success "USE_MOCK already true."
-    }
-} else {
-    Info "Setting USE_MOCK = false (real BLE build)..."
-    if ($factoryContent -match 'export const USE_MOCK = true') {
-        $MockWasTrue = $true
-        $factoryContent -replace 'export const USE_MOCK = true', 'export const USE_MOCK = false' |
-            Set-Content $AdapterFactory -Encoding utf8
-        Success "USE_MOCK -> false"
-    } else {
-        Success "USE_MOCK already false."
-    }
-}
-
-# -- Step 2: JS dependencies --------------------------------------------------
+# -- Step 1: JS dependencies --------------------------------------------------
 Info "Installing JS dependencies..."
 Push-Location $Root
 try {
     npm install --silent
-    if ($LASTEXITCODE -ne 0) { Restore-Mock; Err "npm install failed." }
+    if ($LASTEXITCODE -ne 0) { Err "npm install failed." }
     Success "npm install done."
 
-    # -- Step 3: Expo prebuild ------------------------------------------------
+    # -- Step 2: Expo prebuild ------------------------------------------------
     # Kill lingering Gradle daemons that lock files in android/ from failed builds
     Get-Process -Name "java" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 
@@ -147,13 +107,13 @@ try {
 
     Info "Running expo prebuild (generates android/ native project)..."
     npx expo prebuild --platform android
-    if ($LASTEXITCODE -ne 0) { Restore-Mock; Err "expo prebuild failed." }
+    if ($LASTEXITCODE -ne 0) { Err "expo prebuild failed." }
     Success "Prebuild complete."
 } finally {
     Pop-Location
 }
 
-# -- Step 4 (release only): signing keystore ----------------------------------
+# -- Step 3 (release only): signing keystore ----------------------------------
 if ($Release) {
     if (-not (Test-Path $KeystoreFile)) {
         Info "Generating release keystore (one-time)..."
@@ -163,26 +123,26 @@ if ($Release) {
             -keyalg RSA `
             -keysize 2048 `
             -validity 10000 `
-            -dname "CN=vehicle-diag, OU=Dev, O=Dev, L=Unknown, ST=Unknown, C=ES" `
+            -dname "CN=diag_tool, OU=Dev, O=Dev, L=Unknown, ST=Unknown, C=ES" `
             -storepass vehiclediag_keystore `
             -keypass vehiclediag_keystore `
             -noprompt
-        if ($LASTEXITCODE -ne 0) { Restore-Mock; Err "keytool failed." }
+        if ($LASTEXITCODE -ne 0) { Err "keytool failed." }
         Success "Keystore created: $KeystoreFile"
         Warn "Guarda vehiclediag-release.keystore en un lugar seguro -- lo necesitas para actualizar la app."
     } else {
         Success "Keystore already exists: $KeystoreFile"
     }
 
-    # Write signing.gradle into android/ (recreated each build after --clean — that's fine).
+    # Write signing.gradle into android/ (recreated each build after prebuild — that's fine).
     # Uses apply from so it merges with the existing android{} block without duplicating signingConfigs.
-    $utf8NoBom    = New-Object System.Text.UTF8Encoding $false
+    $utf8NoBom     = New-Object System.Text.UTF8Encoding $false
     $SigningGradle = Join-Path $AndroidDir 'signing.gradle'
     # rootProject.projectDir = android/  →  parentFile = mobile-app/  →  keystore next to package.json
     $signingContent = "def ksFile = new File(rootProject.projectDir.parentFile, `"vehiclediag-release.keystore`")`nandroid {`n    signingConfigs {`n        vehiclediag {`n            storeFile     ksFile`n            storePassword `"vehiclediag_keystore`"`n            keyAlias      `"vehiclediag`"`n            keyPassword   `"vehiclediag_keystore`"`n        }`n    }`n    buildTypes {`n        release {`n            signingConfig signingConfigs.vehiclediag`n        }`n    }`n}`n"
     [System.IO.File]::WriteAllText($SigningGradle, $signingContent, $utf8NoBom)
 
-    # Append apply line to app/build.gradle (only once — prebuild --clean regenerates it each time)
+    # Append apply line to app/build.gradle (only once — prebuild regenerates it each time)
     $BuildGradle   = Join-Path $AndroidDir 'app\build.gradle'
     $gradleContent = Get-Content $BuildGradle -Raw
     if ($gradleContent -notmatch 'signing\.gradle') {
@@ -192,7 +152,7 @@ if ($Release) {
     }
 }
 
-# -- Step 5: Build ------------------------------------------------------------
+# -- Step 4: Build ------------------------------------------------------------
 Push-Location $AndroidDir
 try {
     if ($Release) {
@@ -202,7 +162,7 @@ try {
         Info "Building debug APK..."
         .\gradlew.bat assembleDebug --no-daemon -q
     }
-    if ($LASTEXITCODE -ne 0) { Restore-Mock; Err "Gradle build failed. Re-run without -q for full output." }
+    if ($LASTEXITCODE -ne 0) { Err "Gradle build failed. Re-run without -q for full output." }
 } finally {
     Pop-Location
 }
@@ -216,13 +176,12 @@ $ApkPath = Get-ChildItem -Path $apkSearchDir -Filter '*.apk' -ErrorAction Silent
     Select-Object -First 1 -ExpandProperty FullName
 
 if (-not $ApkPath) {
-    Restore-Mock
     Err "APK no encontrado -- el build puede haber fallado. Re-ejecuta sin -q para ver el log completo."
 }
 
 $ApkSize = [math]::Round((Get-Item $ApkPath).Length / 1MB, 1)
 
-# -- Step 6 (optional): install on device -------------------------------------
+# -- Step 5 (optional): install on device -------------------------------------
 if ($Install) {
     $adb = if (Get-Command adb -ErrorAction SilentlyContinue) { 'adb' } else {
         $p = Join-Path $env:ANDROID_HOME 'platform-tools\adb.exe'
@@ -242,8 +201,6 @@ if ($Install) {
 }
 
 # -- Done ---------------------------------------------------------------------
-Restore-Mock
-
 Write-Host ""
 Success "=================================================="
 Success " APK listo ($BuildVariant, ${ApkSize} MB)"

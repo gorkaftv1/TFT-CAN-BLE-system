@@ -25,6 +25,10 @@ export function SettingsIcon({ color, size }: IconProps) {
   return <Text style={{ color, fontSize: size * 0.75 }}>⚙</Text>;
 }
 
+export function HistoryIcon({ color, size }: IconProps) {
+  return <Text style={{ color, fontSize: size * 0.75 }}>⏱</Text>;
+}
+
 export function LogsIcon({ color, size }: IconProps) {
   return <Text style={{ color, fontSize: size * 0.75 }}>≡</Text>;
 }

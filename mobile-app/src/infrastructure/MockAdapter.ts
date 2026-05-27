@@ -70,9 +70,54 @@ export class MockAdapter implements IVehicleAdapter {
     }
     return result;
   }
-  async getSessions(): Promise<any[]> { return []; }
-  async getSessionSamples(): Promise<any[]> { return []; }
-  async getSessionCommands(): Promise<any[]> { return []; }
+  async probeAvailablePids(): Promise<number[]> {
+    await new Promise((r) => setTimeout(r, 400));
+    return PIDS.map((p) => p.pid);
+  }
+
+  async getSessions(): Promise<any[]> {
+    return [
+      { session_id: 3, label: 'BLE real session', started_at: '2026-05-20T09:10:00.000Z', ended_at: '2026-05-20T09:45:12.000Z', sample_count: 128 },
+      { session_id: 2, label: 'BLE real session', started_at: '2026-05-18T17:30:00.000Z', ended_at: '2026-05-18T17:52:44.000Z', sample_count: 87  },
+      { session_id: 1, label: 'CLI IsoTpTransport (can0)', started_at: '2026-05-15T08:00:00.000Z', ended_at: null, sample_count: 34  },
+    ];
+  }
+  async getSessionDtcs(sessionId: number): Promise<Array<{ code: string; description: string; raw: string }>> {
+    if (sessionId === 3) return [
+      { code: 'P0501', description: 'Vehicle Speed Sensor Range/Performance', raw: '0501' },
+      { code: 'U0415', description: 'Invalid Data Received From ABS Control Module', raw: '0415' },
+    ];
+    return [];
+  }
+  async getSessionSamples(sessionId: number): Promise<any[]> {
+    if (sessionId !== 3) return [];
+    const base = new Date('2026-05-20T09:10:00.000Z').getTime();
+    const samples: any[] = [];
+    for (let i = 0; i < 30; i++) {
+      const ts = new Date(base + i * 5000).toISOString();
+      samples.push({ pid: 0x0C, name: 'RPM',               value: Math.round(820 + Math.sin(i * 0.3) * 300), unit: 'rpm',  ts });
+      samples.push({ pid: 0x05, name: 'Temp. refrigerante', value: parseFloat((86 + Math.sin(i * 0.05) * 3).toFixed(1)),   unit: '°C',  ts });
+      samples.push({ pid: 0x0D, name: 'Velocidad',          value: Math.max(0, Math.round(55 + Math.sin(i * 0.12) * 30)), unit: 'km/h', ts });
+      samples.push({ pid: 0x04, name: 'Carga del motor',    value: parseFloat((28 + Math.sin(i * 0.2) * 15).toFixed(1)),  unit: '%',   ts });
+    }
+    return samples;
+  }
+
+  async getSessionCommands(sessionId: number): Promise<any[]> {
+    if (sessionId !== 3) return [];
+    return [
+      { ts: '2026-05-20T09:10:00.100Z', direction: 'tx', raw: '{"cmd":"auth","token":"1234"}' },
+      { ts: '2026-05-20T09:10:00.250Z', direction: 'rx', raw: '{"status":"ok","data":"authenticated"}' },
+      { ts: '2026-05-20T09:10:00.300Z', direction: 'tx', raw: '{"cmd":"probe_pids"}' },
+      { ts: '2026-05-20T09:10:01.800Z', direction: 'rx', raw: '{"status":"ok","data":[12,5,13,4,17,47,66]}' },
+      { ts: '2026-05-20T09:10:02.000Z', direction: 'tx', raw: '{"cmd":"monitor_start","pids":[12,5,13,4],"interval_ms":500}' },
+      { ts: '2026-05-20T09:10:02.150Z', direction: 'rx', raw: '{"status":"ok","data":"monitor_started"}' },
+      { ts: '2026-05-20T09:44:55.000Z', direction: 'tx', raw: '{"cmd":"monitor_stop"}' },
+      { ts: '2026-05-20T09:44:55.100Z', direction: 'rx', raw: '{"status":"ok","data":"monitor_stopped"}' },
+      { ts: '2026-05-20T09:44:56.000Z', direction: 'tx', raw: '{"cmd":"dtcs"}' },
+      { ts: '2026-05-20T09:44:56.800Z', direction: 'rx', raw: '{"status":"ok","data":[{"code":"P0501","description":"Vehicle Speed Sensor Range/Performance"},{"code":"U0415","description":"Invalid Data Received From ABS Control Module"}]}' },
+    ];
+  }
 
   async setUdsSession(sessionType: number): Promise<{ session_type: number; p2_server_ms: number; p2_extended_ms: number }> {
     await new Promise((r) => setTimeout(r, 200));

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useConnectionStore } from '../../stores/connectionStore';
 import { useDashboardStore, Widget } from '../../stores/dashboardStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePidSupportStore } from '../../stores/pidSupportStore';
 import { useVehicleStore } from '../../stores/vehicleStore';
 import { ScanModal, useConnectionFlow } from '../../components/ConnectionFlowModals';
 import { colors, fontSize, spacing } from '../../shared/theme';
@@ -15,13 +16,15 @@ import { colors, fontSize, spacing } from '../../shared/theme';
 // ── Widget row ────────────────────────────────────────────────────
 
 function WidgetRow({
-  item, index, total, onToggle, onUp, onDown,
+  item, index, total, supported, onToggle, onUp, onDown,
 }: {
   item: Widget; index: number; total: number;
+  supported?: boolean;
   onToggle: (id: string) => void; onUp: (id: string) => void; onDown: (id: string) => void;
 }) {
+  const notDetected = supported === false;
   return (
-    <View style={styles.widgetRow}>
+    <View style={[styles.widgetRow, notDetected && styles.widgetRowUnsupported]}>
       <Switch
         value={item.visible}
         onValueChange={() => onToggle(item.id)}
@@ -30,7 +33,10 @@ function WidgetRow({
       />
       <View style={styles.widgetInfo}>
         <Text style={[styles.widgetLabel, !item.visible && styles.widgetLabelDim]}>{item.label}</Text>
-        <Text style={styles.widgetUnit}>{item.unit}</Text>
+        {notDetected
+          ? <Text style={styles.widgetUnsupportedHint}>No detectado</Text>
+          : <Text style={styles.widgetUnit}>{item.unit}</Text>
+        }
       </View>
       <View style={styles.arrows}>
         <TouchableOpacity
@@ -71,6 +77,8 @@ export function SettingsScreen() {
     deviceName, monitorIntervalMs, useMock, loaded: settingsLoaded,
     setDeviceName, setMonitorInterval, setUseMock, loadFromStorage: loadSettings,
   } = useSettingsStore();
+
+  const { supportedPids } = usePidSupportStore();
 
   const { scanOpen, openScan, closeScan } = useConnectionFlow();
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
@@ -127,6 +135,7 @@ export function SettingsScreen() {
   const renderWidget: ListRenderItem<Widget> = ({ item, index }) => (
     <WidgetRow
       item={item} index={index} total={sorted.length}
+      supported={supportedPids === null ? undefined : supportedPids.includes(item.pid)}
       onToggle={toggleWidget} onUp={moveUp} onDown={moveDown}
     />
   );
@@ -248,7 +257,8 @@ export function SettingsScreen() {
         {/* ── Datos mostrados en Diagnosis ── */}
         <Text style={styles.sectionTitle}>Datos mostrados en Diagnosis</Text>
         <Text style={styles.sectionHint}>
-          Selecciona aqui que datos quieres visualizar en el Panel de Datos.
+          Selecciona que datos quieres visualizar en el Panel OBD.
+          {supportedPids !== null ? ' Los sensores marcados en naranja no fueron detectados en el ultimo escaneo.' : ' Escanea los PIDs desde el Panel OBD para saber cuales soporta tu vehiculo.'}
         </Text>
 
         {/* Select / deselect all toolbar */}
@@ -355,10 +365,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
     borderRadius: 10, padding: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
-  widgetInfo:    { flex: 1, marginLeft: spacing.sm },
-  widgetLabel:   { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
-  widgetLabelDim:{ color: colors.textMuted },
-  widgetUnit:    { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  widgetRowUnsupported: { borderColor: colors.warning + '60', backgroundColor: colors.warning + '08' },
+  widgetInfo:           { flex: 1, marginLeft: spacing.sm },
+  widgetLabel:          { fontSize: fontSize.md, color: colors.text, fontWeight: '500' },
+  widgetLabelDim:       { color: colors.textMuted },
+  widgetUnit:           { fontSize: fontSize.xs, color: colors.textSecondary, marginTop: 2 },
+  widgetUnsupportedHint:{ fontSize: fontSize.xs, color: colors.warning, marginTop: 2, fontWeight: '600' },
   arrows:        { flexDirection: 'row', gap: spacing.xs },
   arrowBtn:      { padding: spacing.xs, borderRadius: 6, backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border },
   arrowBtnDim:   { opacity: 0.25 },

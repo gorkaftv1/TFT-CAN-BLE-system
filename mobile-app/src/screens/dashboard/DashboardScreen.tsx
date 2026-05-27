@@ -8,6 +8,7 @@ import { useDashboardStore, Widget } from '../../stores/dashboardStore';
 import { useVehicleStore, PidSample } from '../../stores/vehicleStore';
 import { useUdsStore } from '../../stores/udsStore';
 import { useSettingsStore } from '../../stores/settingsStore';
+import { usePidSupportStore } from '../../stores/pidSupportStore';
 import { DisconnectedState } from '../../components/DisconnectedState';
 import { VehicleService } from '../../domain/services/VehicleService';
 import { PID_MAP } from '../../config/obd_pids';
@@ -165,12 +166,16 @@ export function DashboardScreen() {
   const intervalMs = useSettingsStore((s) => s.monitorIntervalMs);
   const useMock = useSettingsStore((s) => s.useMock);
 
+  const { supportedPids, probing, probe } = usePidSupportStore();
+
   const [protocol, setProtocol] = useState<Protocol>('obd');
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [udsMonitoring, setUdsMonitoring] = useState(false);
   const udsMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const visibleWidgets = [...widgets].filter((w) => w.visible).sort((a, b) => a.order - b.order);
+  const visibleWidgets = [...widgets]
+    .filter((w) => w.visible && (supportedPids === null || supportedPids.includes(w.pid)))
+    .sort((a, b) => a.order - b.order);
   const udsItems = sessionType === UDS_SESSION_EXTENDED ? ALL_DIDS : STANDARD_DIDS;
 
   const handleProtocolSwitch = useCallback((p: Protocol) => {
@@ -299,6 +304,27 @@ export function DashboardScreen() {
         </View>
       )}
 
+      {/* ── PID probe row (OBD only) ── */}
+      {protocol === 'obd' && (
+        <View style={styles.probeRow}>
+          <Text style={styles.probeStatus}>
+            {supportedPids === null
+              ? 'Sin escanear'
+              : `${supportedPids.length} PIDs detectados`}
+          </Text>
+          <TouchableOpacity
+            style={[styles.probeScanBtn, (probing || isMonitoring) && styles.probeScanBtnDisabled]}
+            onPress={() => void probe()}
+            disabled={probing || isMonitoring}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.probeScanBtnLabel}>
+              {probing ? 'Escaneando...' : supportedPids === null ? 'Escanear PIDs' : 'Re-escanear'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* ── Card list ── */}
       <ScrollView contentContainerStyle={styles.list}>
         {protocol === 'obd' ? (
@@ -398,6 +424,17 @@ const styles = StyleSheet.create({
   cardTs:    { fontSize: 9, color: colors.textMuted, fontFamily: 'monospace' },
   cardValue: { fontSize: fontSize.sm, fontWeight: '600', textAlign: 'right' },
   cardUnit:  { fontSize: fontSize.xs, fontWeight: '400', color: colors.textMuted },
+
+  probeRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+  },
+  probeStatus:          { fontSize: fontSize.xs, color: colors.textMuted },
+  probeScanBtn:         { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, backgroundColor: colors.primary },
+  probeScanBtnDisabled: { opacity: 0.5 },
+  probeScanBtnLabel:    { fontSize: fontSize.sm, fontWeight: '700', color: colors.background },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyTitle: { fontSize: fontSize.lg, color: colors.textSecondary, marginBottom: spacing.sm, fontWeight: '600' },
