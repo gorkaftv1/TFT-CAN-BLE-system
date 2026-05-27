@@ -203,6 +203,7 @@ class BLEDiagServer:
                         logger.warning(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         print(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         await self._handle_disconnect()
+                        return  # restart created a new watchdog; this one exits
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -227,6 +228,35 @@ class BLEDiagServer:
         self._handler.on_disconnect()
         logger.info("[BLE] Client disconnected — state reset")
         print("[BLE] Client disconnected — state reset")
+        await self._restart_server()
+
+    async def _restart_server(self) -> None:
+        """Stop and restart the BLE server so advertising resumes for new connections."""
+        logger.info("[BLE] Restarting server to re-enable advertising...")
+        print("[BLE] Restarting server to re-enable advertising...")
+        self._server_running = False
+
+        current_task = asyncio.current_task()
+        for task in [self._watchdog_task, self._heartbeat_task]:
+            if task and not task.done() and task is not current_task:
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        self._watchdog_task = None
+        self._heartbeat_task = None
+
+        if self._server:
+            try:
+                await self._server.stop()
+            except Exception as e:
+                logger.warning(f"[BLE] Error stopping server during restart: {e}")
+            self._server = None
+
+        await asyncio.sleep(1)
+        await self._start_server()
+        print("[BLE] Server restarted — advertising again")
 
     # ── Dispatch and notify ────────────────────────────────────────────
 
@@ -234,6 +264,8 @@ class BLEDiagServer:
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(None, self._handler.handle, cmd)
         self._notify_from_loop(response)
+        if cmd.get("cmd") == "disconnect":
+            await self._handle_disconnect()
 
     def notify(self, data: dict) -> None:
         """Send data to BLE client. Thread-safe."""
