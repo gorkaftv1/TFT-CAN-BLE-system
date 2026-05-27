@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# build-android.sh — Build a standalone Android APK for vehicle-diag
+# build-android.sh — Build a standalone Android APK for diag_tool
 #
 # No Google account or Play Store required.
 # The resulting APK can be installed on any Android device directly.
@@ -40,9 +40,8 @@ done
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 ANDROID_DIR="$ROOT/android"
-ADAPTER_FACTORY="$ROOT/src/infrastructure/adapterFactory.ts"
-KEYSTORE_FILE="$ANDROID_DIR/vehiclediag-release.keystore"
-KEYSTORE_PROPS="$ANDROID_DIR/keystore.properties"
+# Keystore lives in mobile-app/ root — outside android/ so expo prebuild --clean never wipes it
+KEYSTORE_FILE="$ROOT/vehiclediag-release.keystore"
 
 # ── Colours ───────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -57,7 +56,6 @@ info "Checking prerequisites…"
 command -v node >/dev/null 2>&1 || err "Node.js not found. Install from https://nodejs.org"
 command -v npx  >/dev/null 2>&1 || err "npx not found. Update Node.js."
 
-# Java
 if ! command -v java >/dev/null 2>&1; then
   err "JDK not found. Install JDK 17 from https://adoptium.net\n  macOS: brew install openjdk@17"
 fi
@@ -65,9 +63,7 @@ JAVA_VER=$(java -version 2>&1 | awk -F '"' '/version/ {print $2}' | cut -d. -f1)
 [[ "$JAVA_VER" -lt 17 ]] && err "JDK 17+ required (found $JAVA_VER). Install from https://adoptium.net"
 success "Java $JAVA_VER OK."
 
-# Android SDK
 if [[ -z "${ANDROID_HOME:-}" ]]; then
-  # Try common default locations
   for candidate in \
     "$HOME/Library/Android/sdk" \
     "$HOME/Android/Sdk" \
@@ -82,39 +78,20 @@ fi
 [[ -z "${ANDROID_HOME:-}" ]] && err "ANDROID_HOME not set and SDK not found in default locations.\n  Install Android Studio or set: export ANDROID_HOME=/path/to/sdk"
 export PATH="$ANDROID_HOME/platform-tools:$PATH"
 success "Android SDK: $ANDROID_HOME"
-
 success "Prerequisites OK."
 
-# ── Step 1: USE_MOCK = false ──────────────────────────────────────────────────
-info "Setting USE_MOCK = false…"
-if grep -q "USE_MOCK = true" "$ADAPTER_FACTORY"; then
-  sed -i '' 's/export const USE_MOCK = true/export const USE_MOCK = false/' "$ADAPTER_FACTORY" 2>/dev/null || \
-  sed -i    's/export const USE_MOCK = true/export const USE_MOCK = false/' "$ADAPTER_FACTORY"
-  success "USE_MOCK → false"
-else
-  success "USE_MOCK already false."
-fi
-
-# Restore on exit
-restore_mock() {
-  sed -i '' 's/export const USE_MOCK = false/export const USE_MOCK = true/' "$ADAPTER_FACTORY" 2>/dev/null || \
-  sed -i    's/export const USE_MOCK = false/export const USE_MOCK = true/' "$ADAPTER_FACTORY" 2>/dev/null || true
-  warn "USE_MOCK restored to true (dev mode)."
-}
-trap restore_mock EXIT
-
-# ── Step 2: JS dependencies ───────────────────────────────────────────────────
+# ── Step 1: JS dependencies ───────────────────────────────────────────────────
 info "Installing JS dependencies…"
 cd "$ROOT"
 npm install --silent
 success "npm install done."
 
-# ── Step 3: Expo prebuild ─────────────────────────────────────────────────────
+# ── Step 2: Expo prebuild ─────────────────────────────────────────────────────
 info "Running expo prebuild (generates android/ native project)…"
 npx expo prebuild --platform android --clean
 success "Prebuild complete."
 
-# ── Step 4 (release only): Set up signing keystore ───────────────────────────
+# ── Step 3 (release only): Set up signing keystore ───────────────────────────
 if [[ "$BUILD_VARIANT" == "release" ]]; then
   if [[ ! -f "$KEYSTORE_FILE" ]]; then
     info "Generating release keystore (one-time)…"
@@ -124,7 +101,7 @@ if [[ "$BUILD_VARIANT" == "release" ]]; then
       -keyalg RSA \
       -keysize 2048 \
       -validity 10000 \
-      -dname "CN=vehicle-diag, OU=Dev, O=Dev, L=Unknown, ST=Unknown, C=ES" \
+      -dname "CN=diag_tool, OU=Dev, O=Dev, L=Unknown, ST=Unknown, C=ES" \
       -storepass vehiclediag_keystore \
       -keypass vehiclediag_keystore \
       -noprompt
@@ -134,34 +111,39 @@ if [[ "$BUILD_VARIANT" == "release" ]]; then
     success "Keystore already exists: $KEYSTORE_FILE"
   fi
 
-  # Write keystore.properties for Gradle
-  cat > "$KEYSTORE_PROPS" << EOF
-storeFile=../vehiclediag-release.keystore
-storePassword=vehiclediag_keystore
-keyAlias=vehiclediag
-keyPassword=vehiclediag_keystore
+  # Write signing.gradle into android/ (recreated each build after prebuild --clean — that's fine).
+  # rootProject.projectDir = android/  →  parentFile = mobile-app/  →  keystore next to package.json
+  SIGNING_GRADLE="$ANDROID_DIR/signing.gradle"
+  cat > "$SIGNING_GRADLE" << 'EOF'
+def ksFile = new File(rootProject.projectDir.parentFile, "vehiclediag-release.keystore")
+android {
+    signingConfigs {
+        vehiclediag {
+            storeFile     ksFile
+            storePassword "vehiclediag_keystore"
+            keyAlias      "vehiclediag"
+            keyPassword   "vehiclediag_keystore"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.vehiclediag
+        }
+    }
+}
 EOF
 
-  # Inject signing config into build.gradle if not already there
+  # Append apply line to app/build.gradle (only once — prebuild regenerates it each time)
   BUILD_GRADLE="$ANDROID_DIR/app/build.gradle"
-  if ! grep -q "keystorePropertiesFile" "$BUILD_GRADLE"; then
-    info "Injecting signing config into build.gradle…"
-    # Add keystoreProperties loader at the top of the file
-    SIGNING_HEADER='def keystorePropertiesFile = rootProject.file("keystore.properties")\ndef keystoreProperties = new Properties()\nif (keystorePropertiesFile.exists()) { keystoreProperties.load(new FileInputStream(keystorePropertiesFile)) }\n'
-    sed -i "1s|^|${SIGNING_HEADER}|" "$BUILD_GRADLE" 2>/dev/null || \
-    sed -i "1s/^/${SIGNING_HEADER}/" "$BUILD_GRADLE"
-
-    # Add signingConfigs block before buildTypes
-    SIGNING_CONFIG='    signingConfigs {\n        release {\n            storeFile keystoreProperties["storeFile"] ? file(keystoreProperties["storeFile"]) : null\n            storePassword keystoreProperties["storePassword"]\n            keyAlias keystoreProperties["keyAlias"]\n            keyPassword keystoreProperties["keyPassword"]\n        }\n    }\n'
-    sed -i "s/    buildTypes {/${SIGNING_CONFIG}    buildTypes {/" "$BUILD_GRADLE" 2>/dev/null || true
-
-    # Reference signing config in release buildType
-    sed -i "s/buildTypes {/buildTypes {\n        release { signingConfig signingConfigs.release }/" "$BUILD_GRADLE" 2>/dev/null || true
-    success "Signing config injected."
+  if ! grep -q "signing\.gradle" "$BUILD_GRADLE"; then
+    info "Applying signing.gradle…"
+    echo "" >> "$BUILD_GRADLE"
+    echo "apply from: '../signing.gradle'" >> "$BUILD_GRADLE"
+    success "Signing config applied."
   fi
 fi
 
-# ── Step 5: Build ─────────────────────────────────────────────────────────────
+# ── Step 4: Build ─────────────────────────────────────────────────────────────
 cd "$ANDROID_DIR"
 
 if [[ "$BUILD_VARIANT" == "release" ]]; then
@@ -179,7 +161,7 @@ cd "$ROOT"
 
 APK_SIZE=$(du -sh "$APK_PATH" | cut -f1)
 
-# ── Step 6 (optional): Install on device ──────────────────────────────────────
+# ── Step 5 (optional): Install on device ──────────────────────────────────────
 if [[ "$AUTO_INSTALL" == true ]]; then
   if ! command -v adb >/dev/null 2>&1; then
     warn "adb not found in PATH, trying $ANDROID_HOME/platform-tools/adb"

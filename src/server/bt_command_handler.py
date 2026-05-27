@@ -4,6 +4,7 @@ import threading
 from typing import Any
 
 from config.obd_pids import PIDS
+from core.exceptions import DiagnosticTimeoutError
 from core.interfaces.i_data_logger import IDataLogger
 from core.interfaces.i_diagnostic_session import IDiagnosticSession
 from core.interfaces.i_transport import ITransport
@@ -77,6 +78,7 @@ class BtCommandHandler:
         self._monitor: LiveDataMonitor | None = None
         self._monitor_lock = threading.Lock()
         self._uds_session_type: int = 1
+        self._supported_pids: set[int] | None = None
 
     def set_push_callback(self, cb) -> None:
         self._push = cb
@@ -104,8 +106,12 @@ class BtCommandHandler:
             "sessions":         self._sessions,
             "session_samples":  self._session_samples,
             "session_commands": self._session_commands,
+            "session_dtcs":     self._session_dtcs,
             "uds_session":      self._uds_session,
             "uds_read_did":     self._uds_read_did,
+            "probe_pids":       self._probe_pids,
+            "disconnect":       self._cmd_disconnect,
+            "auth":             self._cmd_auth,
         }
         fn = dispatch.get(name)
         if fn is None:
@@ -119,17 +125,57 @@ class BtCommandHandler:
         return {"status": "ok", "data": "pong"}
 
     def _snapshot(self, _cmd: dict) -> dict:
+        pid_ids = self._supported_pids if self._supported_pids is not None else set(PIDS.keys())
         data = {}
-        for pid_def in PIDS.values():
+        for pid_id in pid_ids:
+            pid_def = PIDS[pid_id]
             try:
                 with self._lock:
                     self._transport.send(pid_def.request)
                     raw = self._transport.receive()
                 value = pid_def.decode(raw)
                 data[pid_def.name] = {"value": value, "unit": pid_def.unit}
+            except DiagnosticTimeoutError:
+                if self._supported_pids is not None:
+                    self._supported_pids.discard(pid_id)
             except Exception:
-                pass  # absent key → app marks PID as timeout error
+                pass
         return {"status": "ok", "data": data}
+
+    def _probe_pids(self, _cmd: dict) -> dict:
+        """Discover supported PIDs via OBD2 bitmasks, then confirm each with a real poll."""
+        # Step 1: collect declared PIDs via availability bitmasks
+        declared: set[int] = set()
+        for support_pid in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
+            try:
+                with self._lock:
+                    self._transport.send(bytes([0x01, support_pid]))
+                    raw = self._transport.receive()
+                if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == support_pid:
+                    mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
+                    for i in range(32):
+                        if mask & (0x80000000 >> i):
+                            declared.add(support_pid + i + 1)
+                    if not (mask & 0x01):
+                        break
+            except Exception:
+                break
+
+        # Step 2: real poll each declared PID to filter false positives (NRC)
+        confirmed: set[int] = set()
+        for pid in sorted(declared):
+            try:
+                with self._lock:
+                    self._transport.send(bytes([0x01, pid]))
+                    raw = self._transport.receive()
+                if len(raw) >= 2 and raw[0] == 0x41 and raw[1] == pid:
+                    confirmed.add(pid)
+            except Exception:
+                pass
+
+        # Only expose PIDs that have a decoder (required for monitor_start)
+        self._supported_pids = confirmed & set(PIDS.keys())
+        return {"status": "ok", "data": sorted(self._supported_pids)}
 
     def _dtcs(self, _cmd: dict) -> dict:
         with self._lock:
@@ -230,6 +276,17 @@ class BtCommandHandler:
             ],
         }
 
+    def _session_dtcs(self, cmd: dict) -> dict:
+        sid = int(cmd.get("session_id", 0))
+        dtcs = self._logger.get_dtcs_for_session(session_id=sid)
+        return {
+            "status": "ok",
+            "data": [
+                {"code": d.code, "description": d.description, "raw": d.raw_bytes.hex()}
+                for d in dtcs
+            ],
+        }
+
     def _session_commands(self, cmd: dict) -> dict:
         sid = int(cmd.get("session_id", 0))
         commands = self._logger.get_commands(session_id=sid)
@@ -295,6 +352,16 @@ class BtCommandHandler:
             "value": value,
             "unit":  unit,
         }}
+
+    def _cmd_auth(self, cmd: dict) -> dict:
+        provided = cmd.get("token", "")
+        if self._auth_token is None or provided == self._auth_token:
+            return {"status": "ok", "data": "authenticated"}
+        return {"status": "error", "message": "invalid token"}
+
+    def _cmd_disconnect(self, _cmd: dict) -> dict:
+        self.on_disconnect()
+        return {"status": "ok"}
 
     def stop_monitor(self) -> None:
         with self._monitor_lock:

@@ -62,7 +62,8 @@ from session.logged_diagnostic_session import LoggedDiagnosticSession
 from server.bluetooth_server import BLEDiagServer
 from server.bt_command_handler import BtCommandHandler
 
-_DB_PATH = "diagnostics.db"
+_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "diagnostics.db")
+_DB_PATH = os.path.abspath(_DB_PATH)
 _TOKEN_FILE = os.path.expanduser("~/.seat_diag_token")
 _DEFAULT_TOKEN = "1234"
 
@@ -80,11 +81,13 @@ def _load_auth_token() -> str:
 
 
 async def main(mock: bool) -> None:
-    print("╔══════════════════════════════════════════════╗")
-    print("║  SEAT Ibiza 6J — BLE OBD-II Server          ║")
-    print(f"║  Transport: {'MockTransport' if mock else 'IsoTpTransport (can0)  ':<33}║")
-    print("║  Logging:   diagnostics.db + ble_comms.log  ║")
-    print("╚══════════════════════════════════════════════╝")
+    _W = 46
+    _transport = "MockTransport" if mock else "IsoTpTransport (can0)"
+    print(f"╔{'═' * _W}╗")
+    print(f"║{'  diag_tool — BLE OBD-II Server':<{_W}}║")
+    print(f"║{'  Transport:  ' + _transport:<{_W}}║")
+    print(f"║{'  Logging:    diagnostics.db + ble_comms.log':<{_W}}║")
+    print(f"╚{'═' * _W}╝")
 
     auth_token = _load_auth_token()
     token_src = "env" if os.environ.get("BLE_AUTH_TOKEN") else (_TOKEN_FILE if os.path.exists(_TOKEN_FILE) else "default")

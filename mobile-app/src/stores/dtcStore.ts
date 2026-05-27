@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { DtcCode } from '../domain/models/DtcCode';
 import { getAdapter } from '../infrastructure/adapterFactory';
 import { LogService } from '../domain/services/LogService';
+import { dtcEnrich } from '../domain/services/DtcLookupService';
 
 interface DtcState {
   codes: DtcCode[];
@@ -20,7 +21,7 @@ export const useDtcStore = create<DtcState>((set) => ({
     set({ loading: true, error: null });
     try {
       const raw = await getAdapter().fetchDtcs();
-      const codes: DtcCode[] = raw.map((d) => ({ ...d, timestamp: Date.now() }));
+      const codes: DtcCode[] = raw.map((d) => ({ ...dtcEnrich(d), timestamp: Date.now() }));
       set({ codes, loading: false });
       LogService.add('info', `DTCs: ${codes.length} encontrados`);
     } catch (e) {

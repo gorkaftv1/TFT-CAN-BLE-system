@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
+from core.models.dtc import Dtc
 from core.models.monitor_sample import MonitorSample
 from core.models.log_session import LogSession
 from core.models.command_log import CommandLog
@@ -39,3 +40,9 @@ class IDataLogger(ABC):
 
     @abstractmethod
     def get_commands(self, session_id: int) -> list[CommandLog]: ...
+
+    @abstractmethod
+    def log_dtcs(self, session_id: int, dtcs: list[Dtc]) -> None: ...
+
+    @abstractmethod
+    def get_dtcs_for_session(self, session_id: int) -> list[Dtc]: ...

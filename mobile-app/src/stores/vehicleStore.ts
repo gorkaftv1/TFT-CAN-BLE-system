@@ -31,5 +31,5 @@ export const useVehicleStore = create<VehicleState>((set, get) => ({
   setVin: (vin) => set({ vin }),
   setMonitoring: (v) => set({ monitoring: v }),
   getSample: (pid) => get().samples[pid],
-  clear: () => set({ samples: {}, monitoring: false }),
+  clear: () => set({ samples: {}, monitoring: false, vin: null }),
 }));
