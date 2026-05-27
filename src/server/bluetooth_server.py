@@ -27,10 +27,9 @@ _NUS_TX      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 _BLE_NAME              = "diag_tool"
 _MTU                   = 240
-_CLIENT_TIMEOUT_S      = 15.0
-_SERVER_TIMEOUT_S      = 20.0
+_CLIENT_TIMEOUT_S      = 30.0
+_SERVER_TIMEOUT_S      = 40.0
 _WATCHDOG_INTERVAL     = 5.0
-_HEARTBEAT_INTERVAL    = 8.0
 _RECV_BUFFER_MAX_SIZE  = 4096
 _MAX_RECONNECT_RETRIES = 5
 
@@ -50,7 +49,6 @@ class BLEDiagServer:
         self._client_connected: bool = False
         self._server_running: bool = False
         self._watchdog_task: asyncio.Task | None = None
-        self._heartbeat_task: asyncio.Task | None = None
         self._reconnect_count: int = 0
 
     async def start(self) -> None:
@@ -103,18 +101,16 @@ class BLEDiagServer:
         print(f"[BLE] Advertising '{_BLE_NAME}' — waiting for connection...")
         logger.info(f"[BLE] Advertising '{_BLE_NAME}'")
 
-        self._watchdog_task  = asyncio.create_task(self._watchdog_loop())
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
     async def _shutdown(self) -> None:
         self._server_running = False
-        for task in [self._watchdog_task, self._heartbeat_task]:
-            if task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
         if self._server:
             try:
                 await self._server.stop()
@@ -172,11 +168,6 @@ class BLEDiagServer:
                 self._notify_from_loop({"status": "error", "message": f"Invalid JSON: {exc}"})
                 continue
 
-            if cmd.get("type") == "heartbeat_ack":
-                # Client acknowledged our heartbeat — keep _last_rx_time fresh
-                self._last_rx_time = time.time()
-                continue
-
             logger.info(format_ble_rx(line, cmd))
             print(format_ble_rx(line, cmd))
 
@@ -210,18 +201,6 @@ class BLEDiagServer:
             logger.error(f"[Watchdog] Error: {e}")
             raise
 
-    async def _heartbeat_loop(self) -> None:
-        try:
-            while True:
-                await asyncio.sleep(_HEARTBEAT_INTERVAL)
-                if self._client_connected:
-                    elapsed = time.time() - self._last_rx_time
-                    if elapsed > _HEARTBEAT_INTERVAL:
-                        self._notify_from_loop({"type": "heartbeat", "timestamp": time.time()})
-                        logger.debug("[Heartbeat] Sent")
-        except asyncio.CancelledError:
-            pass
-
     async def _handle_disconnect(self) -> None:
         self._client_connected = False
         self._recv_buf = ""
@@ -237,15 +216,13 @@ class BLEDiagServer:
         self._server_running = False
 
         current_task = asyncio.current_task()
-        for task in [self._watchdog_task, self._heartbeat_task]:
-            if task and not task.done() and task is not current_task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        if self._watchdog_task and not self._watchdog_task.done() and self._watchdog_task is not current_task:
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
         self._watchdog_task = None
-        self._heartbeat_task = None
 
         if self._server:
             try:
