@@ -9,7 +9,7 @@ interface SessionState {
   fetch: () => Promise<void>;
 }
 
-export const useSessionStore = create<SessionState>((set, get) => ({
+export const useSessionStore = create<SessionState>((set) => ({
   sessions: [],
   loading: false,
   error: null,
@@ -26,6 +26,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         sample_count: s.sample_count ?? 0,
         dtc_count:    null,
       }));
+      sessions.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
       set({ sessions, loading: false });
 
       // load DTC counts sequentially in background (BLE is serial)
