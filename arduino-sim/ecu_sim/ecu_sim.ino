@@ -22,8 +22,6 @@ bool keyOn = false;
 uint8_t responseBuffer[7];
 uint8_t responseLength = 0;
 
-#define BROADCAST_INTERVAL_MS 100
-
 // ---------- PROTOTYPES ----------
 void handleIgnitionButton();
 void broadcastVehicleState();
@@ -101,7 +99,9 @@ void setup() {
 void loop() {
   handleIgnitionButton();
   updateVehicleSimulation();
+#if BROADCAST_ENABLE
   broadcastVehicleState();
+#endif
   processCANMessages();
   delay(10);
 }
@@ -109,7 +109,7 @@ void loop() {
 // ---------- INITIALIZATION ----------
 
 void initVehicleData() {
-  strcpy(vehicle.vin, "00000000000000000");
+  strcpy(vehicle.vin, "ARDUINO00000000000");
 
   vehicle.engineType         = ENGINE_TYPE_GENERIC;
   vehicle.odometer           = 0;
@@ -121,8 +121,14 @@ void initVehicleData() {
   vehicle.intakeTemp         = 20;
   vehicle.mafFlow            = 0;
   vehicle.throttlePos        = 0;
+  vehicle.throttlePosB       = 0;
+  vehicle.pedalAccelD        = 0;
+  vehicle.pedalAccelE        = 0;
   vehicle.fuelLevel          = 75;
+  vehicle.fuelPressure       = 0;
+  vehicle.intakeMAP          = 101;
   vehicle.fuelRailPressure   = 0;
+  vehicle.fuelConsumptionRate= 0;
   vehicle.batteryVoltage     = 12450;
   vehicle.oilTemp            = 20;
   vehicle.ambientTemp        = 20;
@@ -177,10 +183,16 @@ void updateVehicleSimulation() {
     force *= ((float)dtMs / 200.0f);
     vehicle.speed = (uint8_t)constrain((int16_t)vehicle.speed + (int16_t)force, 0, 180);
 
-    vehicle.engineLoad    = (uint8_t)map(vehicle.throttlePos, 0, 100, 15, 85);
-    vehicle.mafFlow       = (uint16_t)((vehicle.rpm * vehicle.engineLoad) / 500);
-    vehicle.timingAdvance = (int8_t)map(vehicle.rpm, 800, 6000, 8, 32);
-    vehicle.fuelRailPressure = 30;
+    vehicle.engineLoad         = (uint8_t)map(vehicle.throttlePos, 0, 100, 15, 85);
+    vehicle.mafFlow            = (uint16_t)((vehicle.rpm * vehicle.engineLoad) / 500);
+    vehicle.timingAdvance      = (int8_t)map(vehicle.rpm, 800, 6000, 8, 32);
+    vehicle.fuelRailPressure   = 30;
+    vehicle.fuelPressure       = (uint8_t)map(vehicle.engineLoad, 0, 100, 30, 60); // kPa
+    vehicle.intakeMAP          = (uint8_t)map(vehicle.engineLoad, 0, 100, 30, 100);// kPa
+    vehicle.throttlePosB       = vehicle.throttlePos;
+    vehicle.pedalAccelD        = vehicle.throttlePos;
+    vehicle.pedalAccelE        = vehicle.throttlePos;
+    vehicle.fuelConsumptionRate= (uint16_t)((vehicle.rpm * vehicle.engineLoad) / 800); // L/h ×20
 
     if (vehicle.coolantTemp < 90) vehicle.coolantTemp += random(1, 4);
     if (vehicle.oilTemp     < 95) vehicle.oilTemp     += random(1, 3);
@@ -215,12 +227,15 @@ void updateVehicleSimulation() {
     if ((int16_t)vehicle.mafFlow < 0) vehicle.mafFlow = 0;
 
   } else {
-    vehicle.runtimeSinceStart = 0;
-    vehicle.rpm               = 0;
-    vehicle.engineLoad        = 0;
-    vehicle.mafFlow           = 0;
-    vehicle.fuelRailPressure  = 0;
-    vehicle.timingAdvance     = 0;
+    vehicle.runtimeSinceStart  = 0;
+    vehicle.rpm                = 0;
+    vehicle.engineLoad         = 0;
+    vehicle.mafFlow            = 0;
+    vehicle.fuelRailPressure   = 0;
+    vehicle.fuelPressure       = 0;
+    vehicle.intakeMAP          = (uint8_t)vehicle.barometricPressure;
+    vehicle.fuelConsumptionRate= 0;
+    vehicle.timingAdvance      = 0;
 
     if (vehicle.speed > 0)
       vehicle.speed = (uint8_t)constrain((int16_t)vehicle.speed - 2, 0, 255);
@@ -372,8 +387,12 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[4] = 0x80; responseBuffer[5] = 0x01;
 #else
       // Full: 0x04-0x07,0x0A-0x11,0x1F + next-range
-      responseBuffer[2] = 0xBE; responseBuffer[3] = 0x7F;
-      responseBuffer[4] = 0xA8; responseBuffer[5] = 0x13;
+      // byte[2] 0x01-0x08: 0x04(b4),0x05(b3),0x06(b2),0x07(b1) = 0x1E
+      // byte[3] 0x09-0x10: 0x0A(b6),0x0B(b5),0x0C(b4),0x0D(b3),0x0E(b2),0x0F(b1),0x10(b0) = 0x7F
+      // byte[4] 0x11-0x18: 0x11(b7) = 0x80
+      // byte[5] 0x19-0x20: 0x1F(b1),next(b0) = 0x03
+      responseBuffer[2] = 0x1E; responseBuffer[3] = 0x7F;
+      responseBuffer[4] = 0x80; responseBuffer[5] = 0x03;
 #endif
       responseLength = 6;
       break;
@@ -387,6 +406,10 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[4] = 0x00; responseBuffer[5] = 0x01;
 #else
       // Full: 0x23,0x2F,0x31,0x33 + next-range
+      // byte[2] 0x21-0x28: 0x23(b5) = 0x20
+      // byte[3] 0x29-0x30: 0x2F(b1) = 0x02
+      // byte[4] 0x31-0x38: 0x31(b7),0x33(b5) = 0xA0
+      // byte[5] 0x39-0x40: next(b0) = 0x01
       responseBuffer[2] = 0x20; responseBuffer[3] = 0x02;
       responseBuffer[4] = 0xA0; responseBuffer[5] = 0x01;
 #endif
@@ -401,8 +424,12 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[2] = 0x40; responseBuffer[3] = 0x00;
       responseBuffer[4] = 0x00; responseBuffer[5] = 0x00;
 #else
-      // Full: 0x42,0x46,0x5C,0x5E
-      responseBuffer[2] = 0x44; responseBuffer[3] = 0x00;
+      // Full: 0x42,0x46,0x47,0x49,0x4A,0x5C,0x5E
+      // byte[2] 0x41-0x48: 0x42(b6),0x46(b2),0x47(b1) = 0x46
+      // byte[3] 0x49-0x50: 0x49(b7),0x4A(b6) = 0xC0
+      // byte[4] 0x51-0x58: none = 0x00
+      // byte[5] 0x59-0x60: 0x5C(b4),0x5E(b2) = 0x14
+      responseBuffer[2] = 0x46; responseBuffer[3] = 0xC0;
       responseBuffer[4] = 0x00; responseBuffer[5] = 0x14;
 #endif
       responseLength = 6;
@@ -411,6 +438,18 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
       responseBuffer[1] = pid;
       responseBuffer[2] = encodePercent(vehicle.engineLoad);
+      responseLength = 3;
+      break;
+    case PID_FUEL_PRESSURE:          // 0x0A — kPa, wire: A = kPa/3
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = vehicle.fuelPressure / 3;
+      responseLength = 3;
+      break;
+    case PID_INTAKE_MAP:             // 0x0B — kPa, wire: A = kPa
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = vehicle.intakeMAP;
       responseLength = 3;
       break;
     case PID_COOLANT_TEMP:
@@ -495,6 +534,24 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[2] = encodeTemp(vehicle.ambientTemp);
       responseLength = 3;
       break;
+    case PID_THROTTLE_POS_B:         // 0x47
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = encodePercent(vehicle.throttlePosB);
+      responseLength = 3;
+      break;
+    case PID_ACCEL_PEDAL_D:          // 0x49
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = encodePercent(vehicle.pedalAccelD);
+      responseLength = 3;
+      break;
+    case PID_ACCEL_PEDAL_E:          // 0x4A
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = encodePercent(vehicle.pedalAccelE);
+      responseLength = 3;
+      break;
     case PID_ENGINE_OIL_TEMP:
       responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
       responseBuffer[1] = pid;
@@ -518,6 +575,13 @@ bool handleMode01(uint8_t pid) {
       responseBuffer[1] = pid;
       responseBuffer[2] = (vehicle.fuelRailPressure >> 8) & 0xFF;
       responseBuffer[3] = vehicle.fuelRailPressure & 0xFF;
+      responseLength = 4;
+      break;
+    case PID_FUEL_RATE:              // 0x5E — L/h ×20, 2 bytes BE
+      responseBuffer[0] = MODE_01_CURRENT_DATA + RESPONSE_SUCCESS;
+      responseBuffer[1] = pid;
+      responseBuffer[2] = (vehicle.fuelConsumptionRate >> 8) & 0xFF;
+      responseBuffer[3] = vehicle.fuelConsumptionRate & 0xFF;
       responseLength = 4;
       break;
     default:

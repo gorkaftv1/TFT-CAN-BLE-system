@@ -7,9 +7,6 @@
 #include <Arduino.h>
 
 // ---------- SIMULATION CONFIG ----------
-// ADD_NOISE: 1 = sensor noise enabled, 0 = clean deterministic values
-#define ADD_NOISE     1
-
 // SIM_MODE: selects which PIDs the simulated ECU reports as supported
 //   SIM_MODE_FULL  — all PIDs handled by this firmware (matches a full ECU)
 //   SIM_MODE_BASIC — only the 6 core PIDs: RPM, Speed, Coolant, Load, Throttle, Battery
@@ -92,10 +89,10 @@
 #define PID_ABSOLUTE_LOAD          0x43
 #define PID_AMBIENT_TEMP           0x46
 #define PID_THROTTLE_POS_B         0x47
-#define PID_THROTTLE_POS_C         0x48
-#define PID_FUEL_TYPE              0x51
-#define PID_ETHANOL_FUEL           0x52
+#define PID_ACCEL_PEDAL_D          0x49
+#define PID_ACCEL_PEDAL_E          0x4A
 #define PID_ENGINE_OIL_TEMP        0x5C
+#define PID_FUEL_RATE              0x5E
 
 // ---------- OBD-II RESPONSES ----------
 #define RESPONSE_SUCCESS           0x40
@@ -119,20 +116,19 @@
 #define DTC_FAULT_PIN        6
 #define DTC_DEBOUNCE_MS      300
 
-// ---------- CAN NOISE ----------
-#define CAN_NOISE_DROP_PCT         2
-#define CAN_NOISE_NRC_PCT          1
-#define CAN_NOISE_LATENCY_MIN_MS   1
-#define CAN_NOISE_LATENCY_MAX_MS   15
-#define CAN_NOISE_BG_TRAFFIC_PCT   30
-#define CAN_BG_ID_COUNT            4
-static const uint32_t CAN_BG_IDS[CAN_BG_ID_COUNT] = {0x280, 0x480, 0x320, 0x520};
+// ---------- NOISE & BROADCAST ----------
+// Master switches — set both to 0 for a silent, deterministic bus
+//
+// BROADCAST_ENABLE: 1 = emit 0x280/0x320/0x3D0 frames every BROADCAST_INTERVAL_MS
+//                   0 = no unsolicited frames (bus silent except OBD responses)
+#define BROADCAST_ENABLE       0
+#define BROADCAST_INTERVAL_MS  100
 
-// ---------- VEHICLE ----------
-#define VIN_LENGTH           17
-#define ENGINE_TYPE_GENERIC  0x01
+// ADD_NOISE: 1 = add random jitter to sensor values each update cycle
+//            0 = clean deterministic values
+#define ADD_NOISE              0
 
-// ---------- SENSOR NOISE AMPLITUDES ----------
+// Per-sensor noise amplitude (only active when ADD_NOISE 1)
 #define NOISE_RPM_MAX        25
 #define NOISE_COOLANT_MAX     1
 #define NOISE_OIL_MAX         1
@@ -142,6 +138,10 @@ static const uint32_t CAN_BG_IDS[CAN_BG_ID_COUNT] = {0x280, 0x480, 0x320, 0x520}
 #define NOISE_VOLTAGE_MAX    30
 #define NOISE_FUEL_TRIM_MAX   1
 #define NOISE_BARO_MAX        0
+
+// ---------- VEHICLE ----------
+#define VIN_LENGTH           17
+#define ENGINE_TYPE_GENERIC  0x01
 
 // ---------- DATA STRUCTURES ----------
 struct VehicleData {
@@ -157,8 +157,14 @@ struct VehicleData {
   int16_t  intakeTemp;
   uint16_t mafFlow;
   uint8_t  throttlePos;
+  uint8_t  throttlePosB;
+  uint8_t  pedalAccelD;
+  uint8_t  pedalAccelE;
   uint8_t  fuelLevel;
-  uint16_t fuelRailPressure;
+  uint8_t  fuelPressure;       // kPa, wire: value/3
+  uint8_t  intakeMAP;          // kPa, wire: raw
+  uint16_t fuelRailPressure;   // kPa
+  uint16_t fuelConsumptionRate;// L/h ×20, 2 bytes BE
   uint16_t batteryVoltage;     // mV
   int16_t  oilTemp;
   int16_t  ambientTemp;
