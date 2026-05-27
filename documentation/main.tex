@@ -13,6 +13,7 @@
 \usepackage{ragged2e}
 \usepackage{array}
 \usepackage{multirow}
+\usepackage{longtable}
 \usepackage{parskip}
 \usepackage{listings}
 \usepackage{epigraph}
@@ -90,22 +91,22 @@
 
 \begin{document}
 %\maketittle
-\input{Portada.tex}
+\input{00_Portada.tex}
 
-\input{TFT04C.tex}
+\input{01_TFT04C.tex}
 
 \newpage
 \pagenumbering{roman}
 {\Large{\textbf{Agradecimientos}}}
-\input{Agradecimientos.tex}
+\input{02_Agradecimientos.tex}
 
 \clearpage
-\input{Resumen.tex}
+\input{03_Resumen.tex}
 \tableofcontents
 
 \addcontentsline{toc}{section}{Listings}
 \lstlistoflistings
-\listofalgorithms 
+\listofalgorithms
 
 \listoffigures
 
@@ -116,32 +117,32 @@
 \pagenumbering{arabic}
 
 \chapter{Introducción}
-\input{Cap1_Introduccion.tex}
+\input{04_Introduccion.tex}
 
 \chapter{Estado actual y objetivos}
-\input{Cap2_EstadoArte.tex}
+\input{05_EstadoDelArte.tex}
 
 \chapter{Aportaciones del trabajo}
 \chaptermark{Aportaciones, competencias y ODS}
-\input{Cap3_Aportaciones.tex}
+\input{06_Competencias.tex}
 
 \chapter{Metodología de desarrollo}
-\input{Cap4_Metodologia.tex}
+\input{07_Metodologia.tex}
 
 \chapter{Desarrollo del sistema}
-\input{Cap5_Desarrollo.tex}
+\input{08_Desarrollo.tex}
 
 \chapter{Resultados}
-\input{Cap6_Resultados.tex}
+\input{09_Resultados.tex}
 
 \chapter{Conclusiones y trabajo futuro}
-\input{Cap7_Conclusiones.tex}
+\input{10_Conclusiones.tex}
 
 \appendix
-% \input{AnexoA_CodigoArduino.tex}
-% \input{AnexoB_CodigoPython.tex}
-% \input{AnexoC_CodigoApp.tex}
-% \input{AnexoD_BaseDatos.tex}
+% \input{anexos/AnexoA_CodigoArduino.tex}
+% \input{anexos/AnexoB_CodigoPython.tex}
+% \input{anexos/AnexoC_CodigoApp.tex}
+% \input{anexos/AnexoD_BaseDatos.tex}
 
 
 \clearpage

@@ -32,23 +32,10 @@
 %                                              │  Zustand state stores    │
 %                                              └──────────────────────────┘
 %
-%   Detalles adicionales a mostrar:
-%   - Junto al bus CAN: flecha bidireccional con etiquetas:
-%       TX: 0x7E0 | RX: 0x7E8 | 500 kbps
-%   - Junto al BLE: flecha bidireccional con:
-%       NUS UUID: 6E400001-... | MTU: 240 bytes
-%   - En el Arduino: botón D7 (ignición) y botón D6 (DTC fault) como componentes externos
-%   - En la Raspberry Pi: icono cilindro para SQLite
-%   - Leyenda de colores por capa de protocolo:
-%       Rojo = Capa física (CAN/BLE radio)
-%       Naranja = Capa transporte (ISO-TP / ATT)
-%       Verde = Capa aplicación (OBD-II / NUS JSON)
-%   - Título: "Arquitectura general del sistema de monitorización OBD-II"
+%   Junto al bus CAN: TX: 0x7E0 | RX: 0x7E8 | 500 kbps
+%   Junto al BLE: NUS UUID: 6E400001-... | MTU: 240 bytes
+%   Botones D7 (ignición) y D6 (DTC fault) en Arduino
+%   Leyenda de colores: Rojo=física, Naranja=transporte, Verde=aplicación
 % =========================================================
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{Ilustraciones/arch_general.png}
-\caption{Arquitectura general del sistema. El simulador Arduino genera tráfico OBD-II y ruido CAN sobre bus CAN a 500~kbps. La Raspberry Pi actúa como escáner ISO-TP, decodifica las respuestas, las persiste en SQLite y las expone vía BLE GATT (servicio NUS). La aplicación móvil React Native se conecta por BLE y presenta los datos en tiempo real.}
-\label{fig:arch_general}
-\end{figure}
+% TODO draw.io: dibujar arquitectura 3 nodos (Arduino ↔ CAN ↔ RPi ↔ BLE ↔ App) y exportar como arch_general.png
+% \includegraphics[width=\textwidth]{Ilustraciones/arch_general.png}
