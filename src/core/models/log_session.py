@@ -10,3 +10,4 @@ class LogSession:
     started_at: str
     ended_at: str | None  # None while session is still open
     sample_count: int
+    dtc_count: int

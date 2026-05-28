@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 from core.interfaces.i_data_logger import IDataLogger
 from core.models.command_log import CommandLog
+from core.models.dtc import Dtc
 from core.models.log_session import LogSession
 from core.models.monitor_sample import MonitorSample
 
@@ -40,8 +41,18 @@ CREATE TABLE IF NOT EXISTS commands (
     wall_ts      TEXT    NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS dtcs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    code         TEXT    NOT NULL,
+    raw_hex      TEXT    NOT NULL,
+    description  TEXT    NOT NULL DEFAULT '',
+    wall_ts      TEXT    NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_samples_session  ON samples(session_id, pid);
 CREATE INDEX IF NOT EXISTS idx_commands_session ON commands(session_id);
+CREATE INDEX IF NOT EXISTS idx_dtcs_session     ON dtcs(session_id);
 """
 
 _BUFFER_SIZE = 50
@@ -115,9 +126,11 @@ class SqliteDataLogger(IDataLogger):
         cur = self._conn.execute(
             """
             SELECT s.id, s.label, s.started_at, s.ended_at,
-                   COUNT(sa.id) AS sample_count
+                   COUNT(DISTINCT sa.id) AS sample_count,
+                   COUNT(DISTINCT d.id)  AS dtc_count
             FROM sessions s
             LEFT JOIN samples sa ON sa.session_id = s.id
+            LEFT JOIN dtcs    d  ON d.session_id  = s.id
             GROUP BY s.id
             ORDER BY s.id DESC
             LIMIT ?
@@ -131,6 +144,7 @@ class SqliteDataLogger(IDataLogger):
                 started_at=row[2],
                 ended_at=row[3],
                 sample_count=row[4],
+                dtc_count=row[5],
             )
             for row in cur.fetchall()
         ]
@@ -168,6 +182,31 @@ class SqliteDataLogger(IDataLogger):
         )
         return [
             CommandLog(command=r[0], request_hex=r[1], response_hex=r[2], timestamp=r[3])
+            for r in cur.fetchall()
+        ]
+
+    def log_dtcs(self, session_id: int, dtcs: list[Dtc]) -> None:
+        if not dtcs:
+            return
+        with self._lock:
+            self._conn.executemany(
+                "INSERT INTO dtcs (session_id, code, raw_hex, description, wall_ts)"
+                " VALUES (?, ?, ?, ?, ?)",
+                [
+                    (session_id, d.code, d.raw_bytes.hex(), d.description, _now_iso())
+                    for d in dtcs
+                ],
+            )
+            self._conn.commit()
+
+    def get_dtcs_for_session(self, session_id: int) -> list[Dtc]:
+        cur = self._conn.execute(
+            "SELECT code, raw_hex, description FROM dtcs"
+            " WHERE session_id = ? ORDER BY id",
+            (session_id,),
+        )
+        return [
+            Dtc(code=r[0], raw_bytes=bytes.fromhex(r[1]), description=r[2])
             for r in cur.fetchall()
         ]
 

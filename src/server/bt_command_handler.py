@@ -106,9 +106,12 @@ class BtCommandHandler:
             "sessions":         self._sessions,
             "session_samples":  self._session_samples,
             "session_commands": self._session_commands,
+            "session_dtcs":     self._session_dtcs,
             "uds_session":      self._uds_session,
             "uds_read_did":     self._uds_read_did,
             "probe_pids":       self._probe_pids,
+            "disconnect":       self._cmd_disconnect,
+            "auth":             self._cmd_auth,
         }
         fn = dispatch.get(name)
         if fn is None:
@@ -140,22 +143,38 @@ class BtCommandHandler:
         return {"status": "ok", "data": data}
 
     def _probe_pids(self, _cmd: dict) -> dict:
-        """Query OBD2 supported-PID bitmasks (0x00/0x20/0x40/0x60), return supported subset."""
-        supported: set[int] = set()
-        with self._lock:
-            for support_pid in (0x00, 0x20, 0x40, 0x60):
-                try:
+        """Discover supported PIDs via OBD2 bitmasks, then confirm each with a real poll."""
+        # Step 1: collect declared PIDs via availability bitmasks
+        declared: set[int] = set()
+        for support_pid in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
+            try:
+                with self._lock:
                     self._transport.send(bytes([0x01, support_pid]))
                     raw = self._transport.receive()
-                    # expected: 41 <support_pid> B1 B2 B3 B4
-                    if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == support_pid:
-                        mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
-                        for i in range(32):
-                            if mask & (0x80000000 >> i):
-                                supported.add(support_pid + i + 1)
-                except DiagnosticTimeoutError:
-                    pass
-        self._supported_pids = supported & set(PIDS.keys())
+                if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == support_pid:
+                    mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
+                    for i in range(32):
+                        if mask & (0x80000000 >> i):
+                            declared.add(support_pid + i + 1)
+                    if not (mask & 0x01):
+                        break
+            except Exception:
+                break
+
+        # Step 2: real poll each declared PID to filter false positives (NRC)
+        confirmed: set[int] = set()
+        for pid in sorted(declared):
+            try:
+                with self._lock:
+                    self._transport.send(bytes([0x01, pid]))
+                    raw = self._transport.receive()
+                if len(raw) >= 2 and raw[0] == 0x41 and raw[1] == pid:
+                    confirmed.add(pid)
+            except Exception:
+                pass
+
+        # Only expose PIDs that have a decoder (required for monitor_start)
+        self._supported_pids = confirmed & set(PIDS.keys())
         return {"status": "ok", "data": sorted(self._supported_pids)}
 
     def _dtcs(self, _cmd: dict) -> dict:
@@ -235,6 +254,7 @@ class BtCommandHandler:
                     "started_at":   s.started_at,
                     "ended_at":     s.ended_at,
                     "sample_count": s.sample_count,
+                    "dtc_count":    s.dtc_count,
                 }
                 for s in sessions
             ],
@@ -254,6 +274,17 @@ class BtCommandHandler:
             "data": [
                 {"pid": s.pid, "name": s.name, "value": s.value, "unit": s.unit, "ts": s.timestamp}
                 for s in samples
+            ],
+        }
+
+    def _session_dtcs(self, cmd: dict) -> dict:
+        sid = int(cmd.get("session_id", 0))
+        dtcs = self._logger.get_dtcs_for_session(session_id=sid)
+        return {
+            "status": "ok",
+            "data": [
+                {"code": d.code, "description": d.description, "raw": d.raw_bytes.hex()}
+                for d in dtcs
             ],
         }
 
@@ -322,6 +353,16 @@ class BtCommandHandler:
             "value": value,
             "unit":  unit,
         }}
+
+    def _cmd_auth(self, cmd: dict) -> dict:
+        provided = cmd.get("token", "")
+        if self._auth_token is None or provided == self._auth_token:
+            return {"status": "ok", "data": "authenticated"}
+        return {"status": "error", "message": "invalid token"}
+
+    def _cmd_disconnect(self, _cmd: dict) -> dict:
+        self.on_disconnect()
+        return {"status": "ok"}
 
     def stop_monitor(self) -> None:
         with self._monitor_lock:
