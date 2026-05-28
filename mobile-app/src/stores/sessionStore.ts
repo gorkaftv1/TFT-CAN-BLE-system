@@ -24,28 +24,10 @@ export const useSessionStore = create<SessionState>((set) => ({
         started_at:   s.started_at,
         ended_at:     s.ended_at ?? null,
         sample_count: s.sample_count ?? 0,
-        dtc_count:    null,
+        dtc_count:    s.dtc_count ?? 0,
       }));
       sessions.sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
       set({ sessions, loading: false });
-
-      // load DTC counts sequentially in background (BLE is serial)
-      for (const session of sessions) {
-        try {
-          const dtcs = await getAdapter().getSessionDtcs(session.session_id);
-          set((state) => ({
-            sessions: state.sessions.map((s) =>
-              s.session_id === session.session_id ? { ...s, dtc_count: dtcs.length } : s
-            ),
-          }));
-        } catch {
-          set((state) => ({
-            sessions: state.sessions.map((s) =>
-              s.session_id === session.session_id ? { ...s, dtc_count: 0 } : s
-            ),
-          }));
-        }
-      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       set({ loading: false, error: msg });
