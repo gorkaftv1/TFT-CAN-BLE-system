@@ -1,0 +1,51 @@
+\section{Aplicación móvil — React Native}
+\label{sec:app_movil}
+
+La aplicación móvil es la interfaz de usuario del sistema de diagnóstico. Se implementa con React Native y Expo, lo que permite compartir una única base de código entre Android e iOS. El código fuente se recoge en el Anexo~C.
+
+
+\subsection{Arquitectura de la aplicación}
+
+La aplicación sigue una arquitectura basada en tres capas:
+
+\begin{enumerate}
+    \item \textbf{Capa de adaptadores}: abstrae el acceso al hardware BLE mediante la interfaz \texttt{IBleAdapter}. La implementación concreta \texttt{BleAdapter} utiliza la librería \texttt{react-native-ble-plx} para las operaciones de escaneo, conexión, escritura y suscripción a notificaciones. La implementación \texttt{MockAdapter} simula un dispositivo BLE para el desarrollo sin hardware, con respuestas predefinidas para todos los comandos.
+
+    \item \textbf{Capa de estado}: gestiona el estado global de la aplicación mediante almacenes Zustand. Los almacenes principales son \texttt{useConnectionStore} (estado de la conexión BLE y dispositivo activo), \texttt{useTelemetryStore} (últimos valores de los PIDs monitorizados), \texttt{useDtcStore} (lista de DTCs activos) y \texttt{useSessionStore} (historial de sesiones y muestras).
+
+    \item \textbf{Capa de presentación}: las cinco pantallas de la aplicación consumen el estado de los almacenes Zustand y despachan comandos a través del adaptador BLE.
+\end{enumerate}
+
+
+\subsection{Pantallas y funcionalidades}
+
+\subsubsection{Pantalla Connection}
+
+La pantalla de conexión permite al usuario escanear dispositivos BLE cercanos, filtrar por nombre (\texttt{PiDiag}) y establecer la conexión con la Raspberry Pi. Durante el proceso de conexión se muestra el progreso de las fases: escaneo, conexión física, negociación de MTU, descubrimiento de servicios, suscripción a notificaciones y autenticación por token.
+
+El adaptador BLE implementa reintentos automáticos con \textit{backoff} exponencialante fallos de conexión, con un máximo de tres intentos antes de notificar el erroral usuario. Un timeout configurable de inactividad BLE desconecta automáticamente lasesión si no hay actividad durante el periodo establecido.
+
+\subsubsection{Pantalla Dashboard}
+
+La pantalla principal del diagnóstico muestra en tiempo real los parámetros delvehículo recibidos por monitorización continua. Los indicadores se presentan en formade tarjetas con el valor actual, la unidad y una barra de progreso visual que reflejael rango normal de operación de cada parámetro.
+
+Al establecer la conexión, la aplicación inicia automáticamente la monitorización deun conjunto por defecto de PIDs: RPM, velocidad, temperatura del refrigerante yposición del acelerador. El usuario puede añadir o eliminar PIDs de la lista demonitorización activa.
+
+\subsubsection{Pantalla DTCs}
+
+La pantalla de códigos de avería muestra la lista de DTCs activos leída desde la ECU.Cada código se presenta con su identificador alfanumérico (formato J2012), sudescripción en texto y un indicador de categoría (P/C/B/U). La pantalla ofrece laacción de borrado de todos los DTCs, con un diálogo de confirmación antes de ejecutarel comando al ser una operación irreversible.
+
+\subsubsection{Pantalla Logs}
+
+La pantalla de historial muestra la lista de sesiones de diagnóstico almacenadas enla base de datos SQLite de la Raspberry Pi, ordenadas por fecha. Al seleccionar unasesión, se presenta la lista de muestras de telemetría con sus valores y timestamps.Cada muestra puede expandirse para mostrar la trama CAN en hexadecimal correspondiente,permitiendo la inspección detallada de la comunicación a nivel de protocolo.
+
+\subsubsection{Pantalla Console}
+
+La consola de comandos directa permite al usuario enviar comandos JSON arbitrariosa la Raspberry Pi y visualizar la respuesta en formato JSON formateado. Estafuncionalidad está orientada al desarrollo y la depuración, y permite probar comandosfuera del flujo habitual de la interfaz gráfica.
+
+
+\subsection{Comunicación BLE}
+
+La librería \texttt{react-native-ble-plx} gestiona las operaciones BLE de bajo nivel.La característica RX del servicio NUS se escribe mediante operaciones\texttt{writeCharacteristicWithResponse}, que garantizan la entrega del comandoantes de esperar la respuesta. La característica TX se monitoriza mediante\texttt{monitorCharacteristicForDevice}, que invoca un callback cada vez que laRaspberry Pi envía una notificación.
+
+Los objetos JSON de respuesta que superan el MTU negociado se fragmentan a nivel deaplicación: la Raspberry Pi los divide en fragmentos con un campo \texttt{chunk}y los reassambla la aplicación antes de procesarlos. En la práctica, con el MTU de240 bytes configurado, este caso solo se produce en las respuestas de historialde sesiones con un número elevado de muestras.

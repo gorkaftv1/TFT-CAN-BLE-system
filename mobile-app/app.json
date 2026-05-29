@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "DIAG",
+    "slug": "diag",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "icon": "./src/assets/icons/diag_clear.png",
+    "plugins": [
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "Allow DIAG to connect to the vehicle diagnostic interface"
+        }
+      ]
+    ],
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./src/assets/icons/diag_clear.png",
+        "backgroundColor": "#0a0a0f"
+      },
+      "permissions": [
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT",
+        "android.permission.BLUETOOTH_SCAN",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "package": "com.diag.app"
+    },
+    "ios": {
+      "bundleIdentifier": "com.gorka.diag",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "Needed to connect to the vehicle OBD diagnostic interface"
+      }
+    }
+  }
+}

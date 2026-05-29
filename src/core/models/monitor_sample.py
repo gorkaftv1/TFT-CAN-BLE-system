@@ -10,4 +10,4 @@ class MonitorSample:
     value: float
     unit: str
     timestamp: float        # time.monotonic() — immune to clock adjustments
-    wall_ts: str = ""       # ISO-8601 UTC wall clock time
+    wall_ts: str | None = None  # ISO 8601 UTC — populated when loaded from DB

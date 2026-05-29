@@ -1,0 +1,7 @@
+export interface DtcCode {
+  code: string;
+  description: string;
+  severity: 'info' | 'warning' | 'error';
+  manufacturer?: string;
+  timestamp?: number;
+}

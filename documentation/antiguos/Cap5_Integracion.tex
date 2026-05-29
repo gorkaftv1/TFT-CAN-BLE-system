@@ -1,0 +1,30 @@
+\section{Integración y pruebas}
+\label{sec:integracion}
+
+La validación del sistema completo se realizó sobre el banco de ensayo formado por el Arduino MKR con shield CAN, la Raspberry Pi con controlador MCP2515 y un teléfono Android con la aplicación instalada. Los tres nodos se conectaron mediante un bus CAN de dos hilos de 30\,cm de longitud con terminación de 120\,$\Omega$ en cada extremo.
+
+
+\subsection{Escenarios de prueba}
+
+Se definieron los siguientes escenarios de prueba que cubren los flujos principales del sistema y los casos de error más relevantes:
+
+\textbf{Escenario 1 — Ciclo OBD-II básico.} Verificación del ciclo completo de consulta de un PID del modo 0x01 (RPM, \texttt{0x0C}): envío de la petición desde la aplicación móvil, transmisión CAN de la petición ISO-TP, respuesta del simulador con el valor codificado, decodificación en la Raspberry Pi y presentación en el Dashboard. Se verificó la coherencia del valor decodificado con el modelo físico del simulador y la correcta persistencia de la muestra en SQLite.
+
+\textbf{Escenario 2 — Respuesta VIN multi-frame.} Verificación de la secuencia ISO-TP completa para la consulta del VIN (\texttt{0x09 0x02}): First Frame, Flow Control y dos Consecutive Frames. Se comprobó que el VIN reconstruido coincide exactamente con la cadena configurada en el simulador y que las tres tramas CAN correspondientes se registran individualmente en la base de datos.
+
+\textbf{Escenario 3 — Gestión de DTCs.} Verificación del ciclo completo de gestión de averías: lectura de DTCs inicial (lista vacía), inyección de un DTC mediante la interrupción hardware del pin D6, lectura de DTCs tras la inyección (DTC presente), borrado de DTCs mediante la aplicación y lectura final (lista vacía de nuevo).
+
+\textbf{Escenario 4 — Monitorización continua prolongada.} Sesión de monitorización de 10 minutos con cuatro PIDs activos (RPM, velocidad, temperatura, acelerador) a 500\,ms de periodo. Se verificó la estabilidad de la conexión BLE, la ausencia de pérdidas de muestras y el correcto comportamiento del sistema bajo carga sostenida.
+
+\textbf{Escenario 5 — Robustez ante ruido CAN.} Verificación del comportamiento de la herramienta Python ante los mecanismos de ruido del simulador activos. Se comprobó que el sistema recupera correctamente de los descartes de paquetes (retransmisión ISO-TP automática), que las respuestas negativas UDS se registran en el log y no bloquean el hilo de monitorización, y que el tráfico de fondo no es interpretado erróneamente como respuesta válida.
+
+\textbf{Escenario 6 — Reconexión BLE.} Verificación del mecanismo de reconexión automática tras la pérdida de la conexión Bluetooth: el adaptador BLE detecta la desconexión, inicia el proceso de reintento con backoff exponencial y reanuda la sesión de monitorización sin pérdida de datos históricos.
+
+
+\subsection{Resultados de las pruebas de integración}
+
+Todos los escenarios de prueba definidos se completaron con resultado satisfactorio en el banco de ensayo. Los aspectos más relevantes observados durante las pruebas se describen en detalle en el Capítulo~6.
+
+La principal dificultad encontrada durante las pruebas de integración fue la sincronización de la secuencia ISO-TP multi-frame para el VIN. En las primeras iteraciones, el simulador Arduino enviaba el Flow Control con un valor de \texttt{STmin} incorrecto que provocaba que la librería \texttt{can-isotp} de la Raspberry Pi rechazara la sesión por timeout. La corrección consistió en reducir \texttt{FC\_ST\_MIN} a 10\,ms y añadir un delay explícito entre la recepción del Flow Control y el envío del primer Consecutive Frame en el simulador.
+
+Las pruebas con ruido CAN confirmaron que el mecanismo de descarte aleatorio de paquetes (2\% de probabilidad) requería un timeout de recepción suficientemente generoso en la herramienta Python para no generar falsos errores en condiciones de baja carga del bus. Con el timeout de 1\,segundo finalmente establecido, la tasa de errores no recuperables se situó por debajo del 0,1\% en todas las sesiones de prueba.

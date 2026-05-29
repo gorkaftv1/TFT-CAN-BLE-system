@@ -1,0 +1,62 @@
+\begin{table}[!htbp]
+\caption{PIDs del Modo 0x01 implementados en el sistema según SAE~J1979~\cite{SAEJ1979:2014}. Los PIDs marcados con~(*) son obligatorios para todo vehículo OBD-II conforme. Tabla completa en el Anexo~\ref{anx:obd2_pids_full}.}
+\label{tab:obd2_pids_impl}
+\centering
+\small
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{|c|p{4.8cm}|c|p{3.8cm}|c|}
+\hline
+\textbf{PID} & \textbf{Descripción} & \textbf{Bytes} & \textbf{Fórmula} & \textbf{Unidad} \\
+\hline
+\texttt{0x04}~(*) & Carga calculada del motor        & 1 & $A/2{,}55$                    & \% \\
+\hline
+\texttt{0x05}~(*) & Temperatura del refrigerante     & 1 & $A - 40$                      & \textdegree C \\
+\hline
+\texttt{0x06}     & Trim combustible corto (banco~1) & 1 & $(A \cdot 100/128) - 100$     & \% \\
+\hline
+\texttt{0x07}     & Trim combustible largo (banco~1) & 1 & $(A \cdot 100/128) - 100$     & \% \\
+\hline
+\texttt{0x0A}     & Presión de combustible           & 1 & $3A$                          & kPa \\
+\hline
+\texttt{0x0B}     & Presión colector admisión (MAP)  & 1 & $A$                           & kPa \\
+\hline
+\texttt{0x0C}~(*) & Régimen del motor (RPM)          & 2 & $(256A + B)/4$                & rpm \\
+\hline
+\texttt{0x0D}~(*) & Velocidad del vehículo           & 1 & $A$                           & km/h \\
+\hline
+\texttt{0x0E}     & Avance del encendido             & 1 & $A/2 - 64$                    & \textdegree \\
+\hline
+\texttt{0x0F}     & Temperatura aire admisión        & 1 & $A - 40$                      & \textdegree C \\
+\hline
+\texttt{0x10}     & Caudal másico de aire (MAF)      & 2 & $(256A + B)/100$              & g/s \\
+\hline
+\texttt{0x11}~(*) & Posición del acelerador          & 1 & $100A/255$                    & \% \\
+\hline
+\texttt{0x1F}     & Tiempo en marcha desde arranque  & 2 & $256A + B$                    & s \\
+\hline
+\texttt{0x23}     & Presión rampa combustible (abs.) & 2 & $10(256A + B)$                & kPa \\
+\hline
+\texttt{0x2F}     & Nivel de combustible             & 1 & $100A/255$                    & \% \\
+\hline
+\texttt{0x31}     & Distancia desde borrado de DTCs  & 2 & $256A + B$                    & km \\
+\hline
+\texttt{0x33}     & Presión barométrica absoluta     & 1 & $A$                           & kPa \\
+\hline
+\texttt{0x42}     & Tensión del módulo de control    & 2 & $(256A + B)/1000$             & V \\
+\hline
+\texttt{0x43}     & Carga absoluta del motor         & 2 & $100(256A + B)/255$           & \% \\
+\hline
+\texttt{0x46}     & Temperatura del aire exterior    & 1 & $A - 40$                      & \textdegree C \\
+\hline
+\texttt{0x47}     & Posición acelerador B            & 1 & $100A/255$                    & \% \\
+\hline
+\texttt{0x49}     & Posición pedal acelerador D      & 1 & $100A/255$                    & \% \\
+\hline
+\texttt{0x4A}     & Posición pedal acelerador E      & 1 & $100A/255$                    & \% \\
+\hline
+\texttt{0x5C}     & Temperatura del aceite de motor  & 1 & $A - 40$                      & \textdegree C \\
+\hline
+\texttt{0x5E}     & Caudal de combustible            & 2 & $(256A + B)/20$               & L/h \\
+\hline
+\end{tabular}
+\end{table}

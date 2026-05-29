@@ -1,0 +1,190 @@
+\chapter*{Anexo C — Código fuente de la aplicación móvil}
+\addcontentsline{toc}{chapter}{Anexo C — Código fuente de la aplicación móvil}
+\label{anexo:app}
+
+Este anexo recoge los fragmentos más representativos del adaptador BLE de la
+aplicación móvil React Native.
+
+\section*{C.1 — Constantes NUS y conexión GATT}
+
+\begin{lstlisting}[language=JavaScript, caption={UUIDs del servicio NUS y configuracion de la conexion BLE}]
+import { BleManager, Device, Subscription } from 'react-native-ble-plx';
+
+const NUS_SERVICE = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
+const RX_CHAR     = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
+const TX_CHAR     = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
+
+const MTU                = 240;   // NUS safe max
+const SCAN_TIMEOUT_MS    = 20_000;
+const REQUEST_TIMEOUT_MS = 15_000;
+const PING_INTERVAL_MS   = 7_000; // < server timeout (15s) con margen
+
+export class BleAdapter implements IVehicleAdapter {
+  private static instance: BleAdapter;
+  private readonly manager = new BleManager();
+  private device: Device | null = null;
+  private txSub: Subscription | null = null;
+  private rxBuf = '';
+  private queue: Pending[] = [];
+
+  static getInstance(): BleAdapter {
+    if (!BleAdapter.instance) BleAdapter.instance = new BleAdapter();
+    return BleAdapter.instance;
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=JavaScript, caption={Flujo de conexion: GATT, MTU, servicios, suscripcion y autenticacion}]
+async connect(deviceId?: string): Promise<void> {
+  if (!deviceId) throw new Error('No device selected');
+
+  // 1. Conexion GATT fisica
+  const raw = await this.manager.connectToDevice(deviceId,
+               { autoConnect: false, timeout: 10000 });
+
+  // 2. Negociacion MTU
+  const mtuResult = await raw.requestMTU(MTU);
+
+  // 3. Descubrimiento de servicios y caracteristicas
+  await raw.discoverAllServicesAndCharacteristics();
+
+  // 4. Registro de callback de desconexion inesperada
+  raw.onDisconnected(() => this.handleUnexpectedDisconnect());
+  this.device = raw;
+
+  // 5. Suscripcion a notificaciones TX (RX desde perspectiva del servidor)
+  await this.subscribeToTx();
+
+  // 6. Autenticacion por token
+  await this.request({ cmd: 'auth', token: '1234' });
+
+  this.startPingInterval();
+  this.startActivityMonitor();
+}
+\end{lstlisting}
+
+\section*{C.2 — Buffer NDJSON y despachador de mensajes}
+
+\begin{lstlisting}[language=JavaScript, caption={Procesamiento del buffer NDJSON recibido por notificaciones BLE}]
+private feedBuffer(chunk: string): void {
+  this.lastActivityTime = Date.now();
+  this.rxBuf += chunk;
+  // Separar por lineas completas; la ultima puede estar incompleta
+  const lines = this.rxBuf.split('\n');
+  this.rxBuf = lines.pop() ?? '';
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      const parsed = JSON.parse(t) as Record<string, unknown>;
+      this.dispatch(parsed);
+    } catch {
+      // JSON malformado -- descartar fragmento
+    }
+  }
+}
+
+private dispatch(msg: Record<string, unknown>): void {
+  // Muestras de monitorizacion continua: enviar a todos los callbacks
+  if (msg.type === 'samples') {
+    const batch = msg.samples as MonitorSample[];
+    batch.forEach((s) => this.sampleCbs.forEach((cb) => cb(s)));
+    return;
+  }
+
+  // Heartbeat del servidor: responder con ack
+  if (msg.type === 'heartbeat') {
+    this.sendHeartbeatAck();
+    return;
+  }
+
+  // Respuesta a comando: resolver o rechazar la promesa en cola
+  const pending = this.queue.shift();
+  if (!pending) return;
+  clearTimeout(pending.timer);
+
+  if (msg.status === 'ok') {
+    pending.resolve(msg.data);
+  } else {
+    pending.reject(new Error((msg.message as string) ?? 'Server error'));
+  }
+}
+\end{lstlisting}
+
+\section*{C.3 — Escritura BLE con chunking y timeout}
+
+\begin{lstlisting}[language=JavaScript, caption={Sistema de peticion-respuesta con timeout y chunking por MTU}]
+private request<T = unknown>(cmd: object): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const json = JSON.stringify(cmd) + '\n';
+
+    // Timeout por si la Raspberry Pi no responde
+    const timer = setTimeout(() => {
+      const idx = this.queue.findIndex((p) => p.timer === timer);
+      if (idx !== -1) this.queue.splice(idx, 1);
+      reject(new Error(`Timeout: ${JSON.stringify(cmd)}`));
+    }, REQUEST_TIMEOUT_MS);
+
+    this.queue.push({ resolve: resolve as (d: unknown) => void, reject, timer });
+    this.writeRx(json).catch((e) => {
+      const idx = this.queue.findIndex((p) => p.timer === timer);
+      if (idx !== -1) { clearTimeout(timer); this.queue.splice(idx, 1); }
+      reject(e);
+    });
+  });
+}
+
+private async writeRx(data: string, withResponse = true): Promise<void> {
+  if (!this.device) throw new Error('Not connected');
+  const bytes = new TextEncoder().encode(data);
+
+  // Fragmentar en chunks de MTU bytes para el caso de payloads grandes
+  for (let offset = 0; offset < bytes.length; offset += MTU) {
+    const slice = bytes.subarray(offset, offset + MTU);
+    let bin = '';
+    for (let i = 0; i < slice.length; i++) bin += String.fromCharCode(slice[i]);
+    const b64 = btoa(bin);
+
+    if (withResponse) {
+      await this.device.writeCharacteristicWithResponseForService(
+        NUS_SERVICE, RX_CHAR, b64);
+    } else {
+      await this.device.writeCharacteristicWithoutResponseForService(
+        NUS_SERVICE, RX_CHAR, b64);
+    }
+  }
+}
+\end{lstlisting}
+
+\section*{C.4 — Keepalive y monitor de inactividad}
+
+\begin{lstlisting}[language=JavaScript, caption={Ping periodico y desconexion automatica por inactividad}]
+private startPingInterval(): void {
+  this.pingInterval = setInterval(() => {
+    if (!this.device) return;
+    // Write sin respuesta: el pong se descarta silenciosamente en dispatch()
+    this.writeRx(JSON.stringify({ cmd: 'ping' }) + '\n', false).catch(() => {});
+  }, PING_INTERVAL_MS);
+}
+
+private startActivityMonitor(): void {
+  this.activityMonitorInterval = setInterval(() => {
+    if (!this.device) return;
+    const elapsed = Date.now() - this.lastActivityTime;
+    if (elapsed > CLIENT_TIMEOUT_MS) {
+      this.disconnect().catch(() => {});
+    }
+  }, INACTIVITY_CHECK_MS);
+}
+
+private handleUnexpectedDisconnect(): void {
+  if (this.pingInterval) clearInterval(this.pingInterval);
+  if (this.activityMonitorInterval) clearInterval(this.activityMonitorInterval);
+  this.txSub?.remove();
+  this.txSub = null;
+  this.rxBuf = '';
+  this.device = null;
+  this.drainQueue(new Error('Device disconnected unexpectedly'));
+}
+\end{lstlisting}

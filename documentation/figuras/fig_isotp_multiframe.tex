@@ -1,0 +1,34 @@
+% =========================================================
+% DIAGRAMA: Secuencia ISO-TP multi-frame (FF → FC → CF×N)
+% Archivo imagen: Ilustraciones/isotp_multiframe.png
+%
+% QUÉ DIBUJAR EN DRAW.IO:
+%   Diagrama de secuencia (sequence diagram) con dos actores verticales:
+%   Izquierda: "Escáner / Raspberry Pi"   Derecha: "ECU"
+%
+%   Flujo (flechas horizontales de izq a der y der a izq):
+%
+%   Escáner ──────[ Request SF: 02 09 02 ]──────────────► ECU
+%           (petición VIN, Single Frame, Mode 09 PID 02)
+%
+%   ECU     ──────[ FF: 10 14 49 02 01 57 30 30 ]───────► Escáner
+%           (First Frame, longitud total=20 bytes, primeros 6 bytes payload)
+%
+%   Escáner ──────[ FC: 30 00 00 AA AA AA AA AA ]───────► ECU
+%           (Flow Control: ContinueToSend, BS=0, STmin=0)
+%
+%   ECU     ──────[ CF SN=1: 21 30 30 30 30 30 30 30 ]──► Escáner
+%   ECU     ──────[ CF SN=2: 22 30 30 30 30 30 30 30 ]──► Escáner
+%           (Consecutive Frames hasta completar 20 bytes)
+%
+%   - Línea de vida vertical punteada para cada actor
+%   - Cada flecha etiquetada con el tipo de trama y bytes hex
+%   - Nota al lado del FF: "Payload total: 20 bytes (3 header + 17 VIN)"
+%   - Nota al lado del FC: "BS=0: sin límite de bloques"
+%   - Franja temporal destacando "Segmento multi-frame"
+%   - Título: "Secuencia ISO-TP: petición VIN (20 bytes)"
+% =========================================================
+
+\centering
+% TODO draw.io: secuencia ISO-TP multi-frame VIN (SF request → FF → FC → CF×2) y exportar como isotp_multiframe.png
+% \includegraphics[width=0.85\textwidth]{Ilustraciones/isotp_multiframe.png}

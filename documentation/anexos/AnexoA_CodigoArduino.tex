@@ -1,0 +1,212 @@
+\chapter*{Anexo A — Código fuente del simulador Arduino}
+\addcontentsline{toc}{chapter}{Anexo A — Código fuente del simulador Arduino}
+\label{anexo:arduino}
+
+Este anexo recoge los fragmentos más representativos del código fuente del simulador
+de ECU implementado sobre Arduino MKR. El código completo está disponible en el
+repositorio del proyecto.
+
+\section*{A.1 — Definiciones de protocolo (\texttt{ecu\_protocol.h})}
+
+El fichero de cabecera centraliza todas las constantes del protocolo, las estructuras
+de datos y las funciones de codificación/decodificación OBD-II.
+
+\begin{lstlisting}[language=C++, caption={Constantes de CAN, ISO-TP y ruido — ecu\_protocol.h}]
+// ---------- CAN BUS ----------
+#define CAN_SPEED          500E3
+#define ECU_CAN_ID         0x7E0
+#define ECU_RESPONSE_ID    0x7E8
+
+// ---------- ISO-TP ----------
+#define ISOTP_PCI_SF       0x00  // Single Frame
+#define ISOTP_PCI_FF       0x10  // First Frame
+#define ISOTP_PCI_CF       0x20  // Consecutive Frame
+#define ISOTP_PCI_FC       0x30  // Flow Control
+
+#define ISOTP_CF_SEP_MS      25
+#define ISOTP_SF_MAX_PAYLOAD 7
+#define ISOTP_FF_DATA_BYTES  6
+
+// ---------- CAN NOISE ----------
+#define CAN_NOISE_DROP_PCT         2
+#define CAN_NOISE_NRC_PCT          1
+#define CAN_NOISE_LATENCY_MIN_MS   1
+#define CAN_NOISE_LATENCY_MAX_MS   15
+#define CAN_NOISE_BG_TRAFFIC_PCT   30
+static const uint32_t CAN_BG_IDS[4] = {0x280, 0x480, 0x320, 0x520};
+
+// ---------- HARDWARE ----------
+#define DTC_FAULT_PIN        6
+#define DTC_DEBOUNCE_MS      300
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={Estructura VehicleData y funciones de codificación OBD-II}]
+struct VehicleData {
+  char     vin[18];
+  uint16_t rpm;
+  uint8_t  speed;
+  int16_t  coolantTemp;
+  uint8_t  throttlePos;
+  uint8_t  engineLoad;
+  uint16_t batteryVoltage;  // mV
+  bool     checkEngine;
+  uint8_t  numDTCs;
+};
+
+// Codificacion OBD-II: rpm*4 en dos bytes big-endian
+inline void encodeRPM(uint8_t* data, uint16_t rpm) {
+  uint16_t encoded = rpm * 4;
+  data[0] = (encoded >> 8) & 0xFF;
+  data[1] = encoded & 0xFF;
+}
+
+// Temperatura: T_raw = T_celsius + 40
+inline uint8_t encodeTemp(int16_t temp) {
+  return (uint8_t)(temp + 40);
+}
+
+// Porcentaje: val_raw = percent * 255 / 100
+inline uint8_t encodePercent(uint8_t percent) {
+  return (percent * 255) / 100;
+}
+\end{lstlisting}
+
+\section*{A.2 — Bucle principal y mecanismos de ruido CAN (\texttt{ecu\_sim.ino})}
+
+\begin{lstlisting}[language=C++, caption={Interrupción hardware para inyección de DTCs e inicialización}]
+volatile bool dtcFaultPressed  = false;
+unsigned long lastDtcDebounce  = 0;
+bool canNoiseEnabled = true;
+
+void onDtcFaultButton() {
+  dtcFaultPressed = true;
+}
+
+void setup() {
+  Serial.begin(SERIAL_BAUDRATE);
+  CAN.begin(CAN_SPEED);
+
+  pinMode(DTC_FAULT_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(DTC_FAULT_PIN),
+                  onDtcFaultButton, FALLING);
+
+  initVehicleData();
+}
+
+void loop() {
+  updatePhysicsModel();
+  handleDtcFaultButton();
+  generateBackgroundTraffic();
+
+  int packetSize = CAN.parsePacket();
+  if (packetSize > 0) {
+    processCANMessage();
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={Inyección de DTC por interrupción hardware con debounce}]
+static const uint16_t DTC_POOL[] = {
+  0x0300, 0x0301, 0x0302, 0x0303,
+  0x0113, 0x0118, 0x0340, 0x0341,
+  0x0500, 0x0501, 0x0171, 0x0172
+};
+#define DTC_POOL_SIZE 12
+
+void handleDtcFaultButton() {
+  if (!dtcFaultPressed) return;
+  dtcFaultPressed = false;
+
+  unsigned long now = millis();
+  if (now - lastDtcDebounce < DTC_DEBOUNCE_MS) return;
+  lastDtcDebounce = now;
+
+  uint16_t candidate = DTC_POOL[random(DTC_POOL_SIZE)];
+
+  // Deduplicacion: no insertar si ya esta presente
+  for (uint8_t i = 0; i < numStoredDTCs; i++) {
+    if (dtcList[i] == candidate) return;
+  }
+
+  if (numStoredDTCs < MAX_DTCS) {
+    dtcList[numStoredDTCs++] = candidate;
+    checkEngineLight = true;
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={Mecanismos de ruido CAN dentro del procesador de mensajes}]
+void processCANMessage() {
+  uint8_t buf[8];
+  int len = 0;
+  while (CAN.available() && len < 8) {
+    buf[len++] = CAN.read();
+  }
+
+  if (canNoiseEnabled) {
+    // Latencia variable: simula carga del bus
+    delay(random(CAN_NOISE_LATENCY_MIN_MS, CAN_NOISE_LATENCY_MAX_MS));
+
+    // Descarte aleatorio de paquetes (2%)
+    if (random(100) < CAN_NOISE_DROP_PCT) return;
+
+    // Respuesta negativa UDS esporadica (1%)
+    if (random(100) < CAN_NOISE_NRC_PCT) {
+      sendNegativeResponse(buf[1], NRC_CONDITIONS_NOT_CORRECT);
+      return;
+    }
+  }
+
+  // Decodificacion del modo y PID
+  uint8_t mode = buf[1];
+  uint8_t pid  = buf[2];
+  dispatchMode(mode, pid);
+}
+
+void generateBackgroundTraffic() {
+  if (!canNoiseEnabled) return;
+  if (random(100) >= CAN_NOISE_BG_TRAFFIC_PCT) return;
+
+  uint32_t id = CAN_BG_IDS[random(CAN_BG_ID_COUNT)];
+  CAN.beginPacket(id);
+  for (int i = 0; i < 8; i++) CAN.write(random(256));
+  CAN.endPacket();
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language=C++, caption={Respuesta VIN con secuencia ISO-TP multi-frame}]
+void sendVIN() {
+  const char* vin = vehicleData.vin;  // 17 bytes ASCII
+
+  // First Frame: PCI 0x10 0x14 (longitud total = 20 bytes)
+  uint8_t ff[8] = {
+    0x10, 0x14,          // FF PCI: len=20
+    0x49, 0x02, 0x01,    // modo respuesta, PID, count
+    (uint8_t)vin[0], (uint8_t)vin[1], (uint8_t)vin[2]
+  };
+  CAN.beginExtendedPacket(ECU_RESPONSE_ID);
+  for (int i = 0; i < 8; i++) CAN.write(ff[i]);
+  CAN.endPacket();
+
+  // Espera Flow Control del tester
+  waitFlowControl();
+
+  // Consecutive Frame 1: bytes VIN[3..9]
+  uint8_t cf1[8] = {0x21};
+  for (int i = 0; i < 7; i++) cf1[i+1] = (uint8_t)vin[3+i];
+  delay(ISOTP_CF_SEP_MS);
+  CAN.beginExtendedPacket(ECU_RESPONSE_ID);
+  for (int i = 0; i < 8; i++) CAN.write(cf1[i]);
+  CAN.endPacket();
+
+  // Consecutive Frame 2: bytes VIN[10..16] + padding
+  uint8_t cf2[8] = {0x22};
+  for (int i = 0; i < 7; i++) {
+    cf2[i+1] = (10+i < VIN_LENGTH) ? (uint8_t)vin[10+i] : ISOTP_PADDING_BYTE;
+  }
+  delay(ISOTP_CF_SEP_MS);
+  CAN.beginExtendedPacket(ECU_RESPONSE_ID);
+  for (int i = 0; i < 8; i++) CAN.write(cf2[i]);
+  CAN.endPacket();
+}
+\end{lstlisting}

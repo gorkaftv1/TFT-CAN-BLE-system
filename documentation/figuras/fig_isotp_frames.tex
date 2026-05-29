@@ -1,0 +1,36 @@
+\centering
+\renewcommand{\arraystretch}{1.4}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|l|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{Tipo} &
+\textbf{Byte 0} & \textbf{Byte 1} & \textbf{Byte 2} & \textbf{Byte 3} &
+\textbf{Byte 4} & \textbf{Byte 5} & \textbf{Byte 6} & \textbf{Byte 7} \\
+\hline
+\textbf{SF} \textit{Single Frame} &
+\textbf{0x0N} & D\textsubscript{1} & D\textsubscript{2} & D\textsubscript{3} &
+D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7} \\
+\hline
+\textbf{FF} \textit{First Frame} &
+\textbf{0x1H} & \textbf{0xLL} & D\textsubscript{1} & D\textsubscript{2} &
+D\textsubscript{3} & D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} \\
+\hline
+\textbf{CF} \textit{Consecutive Frame} &
+\textbf{0x2N} & D\textsubscript{1} & D\textsubscript{2} & D\textsubscript{3} &
+D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7} \\
+\hline
+\textbf{FC} \textit{Flow Control} &
+\textbf{0x3\{FS\}} & \textbf{BS} & \textbf{STmin} & \textit{0xAA} &
+\textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
+\hline
+\end{tabular}%
+}
+\vspace{0.5em}
+
+\begin{tabular}{@{}ll@{}}
+\textbf{N}    & longitud \textit{payload} (SF, 1--7) o número de secuencia módulo 16 (CF, 0x1--0xF\,$\rightarrow$\,0x0) \\
+\textbf{H:LL} & longitud total del mensaje en 12 bits (FF, máx.\ 4\,095 bytes) \\
+\textbf{FS}   & \textit{Flow Status}: 0 = \textit{ContinueSending}, 1 = \textit{Wait}, 2 = \textit{Overflow} \\
+\textbf{BS}   & \textit{Block Size}: CFs antes del siguiente FC (0 = sin límite) \\
+\textbf{STmin}& separación mínima entre CFs: 0x00--0x7F\,=\,0--127\,ms;\enspace 0xF1--0xF9\,=\,100--900\,\textmu s \\
+\end{tabular}

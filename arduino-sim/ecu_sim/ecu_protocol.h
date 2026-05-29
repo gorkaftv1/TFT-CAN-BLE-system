@@ -6,6 +6,18 @@
 
 #include <Arduino.h>
 
+// ---------- SIMULATION CONFIG ----------
+// SIM_MODE: selects which PIDs the simulated ECU reports as supported
+//   SIM_MODE_FULL  — all PIDs handled by this firmware (matches a full ECU)
+//   SIM_MODE_BASIC — only the 6 core PIDs: RPM, Speed, Coolant, Load, Throttle, Battery
+#define SIM_MODE_FULL  0
+#define SIM_MODE_BASIC 1
+#define SIM_MODE       SIM_MODE_FULL
+
+// ---------- LOGGING ----------
+// 0 = quiet (only errors + key events), 1 = all RX/TX frames, 2 = + broadcasts
+#define LOG_LEVEL 0
+
 // ---------- CAN BUS ----------
 #define CAN_SPEED          500E3
 #define ECU_CAN_ID         0x7E0
@@ -77,10 +89,10 @@
 #define PID_ABSOLUTE_LOAD          0x43
 #define PID_AMBIENT_TEMP           0x46
 #define PID_THROTTLE_POS_B         0x47
-#define PID_THROTTLE_POS_C         0x48
-#define PID_FUEL_TYPE              0x51
-#define PID_ETHANOL_FUEL           0x52
+#define PID_ACCEL_PEDAL_D          0x49
+#define PID_ACCEL_PEDAL_E          0x4A
 #define PID_ENGINE_OIL_TEMP        0x5C
+#define PID_FUEL_RATE              0x5E
 
 // ---------- OBD-II RESPONSES ----------
 #define RESPONSE_SUCCESS           0x40
@@ -98,15 +110,32 @@
 #define MAX_CAN_DATA_LEN             8
 #define SIM_UPDATE_INTERVAL_DEFAULT  200
 
+// ---------- THROTTLE RAMP SIMULATION ----------
+// Auto cycle: idle → ramp up → cruise → ramp down → repeat
+#define RAMP_IDLE_TICKS    15   // ticks at idle before ramping up   (15 × 200ms = 3s)
+#define RAMP_CRUISE_TICKS  15   // ticks at max throttle             (15 × 200ms = 3s)
+#define RAMP_MAX_THROTTLE  65   // peak throttle %
+#define RAMP_STEP           5   // throttle change per tick (%)
+
 // ---------- HARDWARE ----------
-#define ENGINE_START_PIN     7
-#define IGNITION_DEBOUNCE_MS 200
+#define ENGINE_START_PIN        5
+#define IGNITION_HYSTERESIS_MS  300
+#define DTC_FAULT_PIN           4
+#define DTC_HYSTERESIS_MS       300
 
-// ---------- VEHICLE ----------
-#define VIN_LENGTH           17
-#define ENGINE_TYPE_GENERIC  0x01
+// ---------- NOISE & BROADCAST ----------
+// Master switches — set both to 0 for a silent, deterministic bus
+//
+// BROADCAST_ENABLE: 1 = emit 0x280/0x320/0x3D0 frames every BROADCAST_INTERVAL_MS
+//                   0 = no unsolicited frames (bus silent except OBD responses)
+#define BROADCAST_ENABLE       0
+#define BROADCAST_INTERVAL_MS  100
 
-// ---------- SENSOR NOISE AMPLITUDES ----------
+// ADD_NOISE: 1 = add random jitter to sensor values each update cycle
+//            0 = clean deterministic values
+#define ADD_NOISE              0
+
+// Per-sensor noise amplitude (only active when ADD_NOISE 1)
 #define NOISE_RPM_MAX        25
 #define NOISE_COOLANT_MAX     1
 #define NOISE_OIL_MAX         1
@@ -116,6 +145,10 @@
 #define NOISE_VOLTAGE_MAX    30
 #define NOISE_FUEL_TRIM_MAX   1
 #define NOISE_BARO_MAX        0
+
+// ---------- VEHICLE ----------
+#define VIN_LENGTH           17
+#define ENGINE_TYPE_GENERIC  0x01
 
 // ---------- DATA STRUCTURES ----------
 struct VehicleData {
@@ -131,8 +164,14 @@ struct VehicleData {
   int16_t  intakeTemp;
   uint16_t mafFlow;
   uint8_t  throttlePos;
+  uint8_t  throttlePosB;
+  uint8_t  pedalAccelD;
+  uint8_t  pedalAccelE;
   uint8_t  fuelLevel;
-  uint16_t fuelRailPressure;
+  uint8_t  fuelPressure;       // kPa, wire: value/3
+  uint8_t  intakeMAP;          // kPa, wire: raw
+  uint16_t fuelRailPressure;   // kPa
+  uint16_t fuelConsumptionRate;// L/h ×20, 2 bytes BE
   uint16_t batteryVoltage;     // mV
   int16_t  oilTemp;
   int16_t  ambientTemp;
@@ -160,6 +199,46 @@ struct DTC {
 #define DTC_P0420  0x0420
 #define DTC_P0299  0x0299
 #define DTC_P0401  0x0401
+#define DTC_P0300  0x0300
+#define DTC_P0301  0x0301
+#define DTC_P0113  0x0113
+#define DTC_P0118  0x0118
+#define DTC_P0340  0x0340
+#define DTC_P0500  0x0500
+
+// ---------- UDS (ISO 14229-1) ----------
+#define UDS_SID_SESSION_CTRL       0x10  // DiagnosticSessionControl
+#define UDS_SID_READ_DATA_BY_ID    0x22  // ReadDataByIdentifier
+
+#define UDS_RESP_SESSION_CTRL      0x50  // 0x10 + 0x40
+#define UDS_RESP_READ_DATA_BY_ID   0x62  // 0x22 + 0x40
+
+// Session types
+#define UDS_SESSION_DEFAULT        0x01
+#define UDS_SESSION_PROGRAMMING    0x02
+#define UDS_SESSION_EXTENDED       0x03
+
+// NRC: service not available in active session
+#define NRC_SESSION_NOT_SUPPORTED  0x7E
+
+// Session inactivity timeout before auto-revert to Default
+#define UDS_SESSION_TIMEOUT_MS     5000
+
+// ---------- UDS DIDs ----------
+// ISO 14229-1 standard DIDs (available in Default + Extended)
+#define DID_VIN                    0xF190  // Vehicle Identification Number (17 ASCII)
+#define DID_ECU_SERIAL             0xF18C  // ECU Serial Number (4 ASCII)
+#define DID_SW_VERSION             0xF189  // Software Version (4 ASCII)
+
+// Proprietary live-data DIDs — Extended session only
+#define DID_ENGINE_LOAD_UDS        0x2001  // uint8, percent×255/100
+#define DID_COOLANT_TEMP_UDS       0x2002  // int16 BE, °C
+#define DID_RPM_UDS                0x2003  // uint16 BE, rpm
+#define DID_VEHICLE_SPEED_UDS      0x2004  // uint8, km/h
+#define DID_THROTTLE_POS_UDS       0x2005  // uint8, percent×255/100
+#define DID_FUEL_LEVEL_UDS         0x2006  // uint8, percent×255/100
+#define DID_OIL_TEMP_UDS           0x2007  // int16 BE, °C
+#define DID_BATTERY_VOLTAGE_UDS    0x2008  // uint16 BE, mV
 
 // ---------- ENCODING UTILITIES ----------
 // OBD-II wire format: rpm*4, temp+40, percent*255/100, fuel trim 0-255 centered at 128

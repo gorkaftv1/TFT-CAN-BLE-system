@@ -1,0 +1,50 @@
+% TODO - revisar y redactar todo el capítulo
+% TODO - CONTRADICCIÓN: línea 16 dice "ausencia de validación sobre vehículo real" pero 09_Resultados tiene sección entera sobre pruebas en vehículo real. Resolver antes de redactar conclusiones.
+\section{Conclusiones}
+\label{sec:conclusiones}
+
+Este Trabajo de Fin de Título ha demostrado la viabilidad técnica de implementar un sistema completo de diagnóstico del vehículo OBD-II sobre hardware de bajo coste, sin recurrir a adaptadores comerciales que abstraen el protocolo mediante firmware cerrado. Los resultados obtenidos en el banco de ensayo Arduino confirman que la plataforma desarrollada es funcional, robusta ante condiciones adversas del bus CAN y extensible en sus tres componentes de forma independiente.
+
+Las conclusiones técnicas más relevantes del trabajo se agrupan en torno a los tres componentes del sistema:
+
+\textbf{Sobre la pila de protocolos.} La implementación directa de ISO-TP y OBD-II sobre \texttt{SocketCAN} en Python ha resultado viable y de rendimiento adecuado para el uso previsto. La librería \texttt{can-isotp} proporciona una abstracción suficiente para gestionar la segmentación y el Flow Control de forma transparente, si bien la correcta sincronización de la secuencia multi-frame para el VIN requirió un ajuste cuidadoso de los parámetros de timing en el simulador. La latencia extremo a extremo del sistema (28--62\,ms por consulta) es significativamente inferior a la introducida por los adaptadores ELM327, cuyo protocolo AT añade retardos de cientos de milisegundos.
+
+\textbf{Sobre el simulador Arduino.} El simulador de ECU desarrollado se ha revelado como una herramienta de validación de alto valor, que va más allá de la simple emulación de respuestas fijas. El modelo físico del motor, los mecanismos de ruido CAN controlado y la inyección de DTCs por interrupción hardware dotan al banco de ensayo de una capacidad de simulación de escenarios reales que resulta difícil de reproducir sin acceso continuo a un vehículo. Esta combinación de funcionalidades no se encuentra, al menos de forma integrada, en las implementaciones similares disponibles en la literatura revisada.
+
+\textbf{Sobre la arquitectura software.} La decisión de estructurar la herramienta Python con interfaces abstractas e inyección de dependencias ha demostrado su valor a lo largo del desarrollo: la posibilidad de sustituir el transporte CAN real por un \textit{mock} en cualquier momento redujo significativamente los ciclos de depuración y permitió trabajar con la capa de aplicación de forma independiente del hardware. Esta arquitectura se considera una contribución metodológica de este trabajo, reproducible en proyectos de naturaleza similar.
+
+Desde el punto de vista del proceso de desarrollo, la metodología basada en prototipos incrementales resultó especialmente adecuada para un proyecto de esta naturaleza, en el que la validez de las hipótesis técnicas no podía garantizarse a priori. Los ciclos cortos de implementación y prueba sobre el banco de ensayo permitieron detectar y corregir problemas de sincronización ISO-TP en etapas tempranas, antes de que estos afectaran al desarrollo de las capas superiores.
+
+Como limitación principal del trabajo cabe señalar la ausencia de validación sobre vehículo real, que hubiera permitido confirmar el comportamiento del sistema frente a la arquitectura Gateway Central presente en el SEAT Ibiza objetivo. Esta limitación, debida a restricciones de acceso al hardware vehicular durante el período de desarrollo, no invalida los resultados obtenidos en el banco de ensayo, pero sí condiciona el alcance de las conclusiones sobre la aplicabilidad práctica del sistema.
+
+
+% TODO - revisar y redactar
+\section{Líneas de trabajo futuro}
+\label{sec:trabajo_futuro}
+
+Los resultados obtenidos y las limitaciones identificadas abren varias líneas de continuación natural para este trabajo:
+
+\textbf{Validación sobre vehículo real.} La línea más inmediata es la prueba del sistema sobre el vehículo objetivo (SEAT Ibiza PQ25 o similar con arquitectura Gateway Central). Esta validación permitiría verificar si la herramienta es capaz de comunicarse correctamente a través del Gateway J533, identificar las diferencias entre el comportamiento del simulador y la ECU real, y calibrar el modelo físico del simulador con datos reales.
+
+\textbf{Soporte de servicios UDS extendidos.} El sistema actual se limita a los modos OBD-II estándar definidos por SAE J1979. Una extensión natural es el soporte de servicios UDS adicionales (ISO 14229-1), como la lectura de datos por identificador (\texttt{0x22}), la escritura de datos (\texttt{0x2E}) o el control de rutinas (\texttt{0x31}), que permiten acceder a parámetros de configuración y calibración de las ECUs no expuestos por el estándar OBD-II.
+
+\textbf{Soporte de CAN FD.} El estándar CAN FD (ISO 11898-7), ampliamente adoptado en los vehículos más modernos, permite tramas de hasta 64 bytes y velocidades de datos de hasta 8\,Mbps. La migración del sistema a CAN FD requeriría la sustitución del controlador MCP2515 por un controlador compatible con CAN FD, así como la adaptación de la capa ISO-TP (ISO 15765-4 define las extensiones para CAN FD).
+
+\textbf{Visualización gráfica de tendencias.} La aplicación móvil actual presenta los valores de telemetría como indicadores numéricos instantáneos. Una mejora de alto valor para el usuario sería la incorporación de gráficas de tendencia temporal que permitan observar la evolución de los parámetros durante la sesión, funcionalidad que fue descartada del alcance inicial por restricciones de tiempo.
+
+\textbf{Exportación de datos y análisis offline.} La base de datos SQLite de la Raspberry Pi almacena toda la información de la sesión, incluyendo las tramas CAN en hexadecimal. Una extensión útil sería la implementación de un módulo de exportación a formato CSV o JSON que permita analizar los datos offline con herramientas como pandas o importarlos en plataformas de visualización de datos.
+
+\textbf{Seguridad en la comunicación BLE.} El mecanismo de autenticación por token implementado proporciona un nivel básico de protección, pero no cifra el canal de comunicación. Para un uso en entornos de producción sería recomendable implementar cifrado de la comunicación BLE mediante los mecanismos definidos en la especificación Bluetooth 5.x o bien añadir un protocolo de seguridad a nivel de aplicación.
+
+
+% TODO - revisar y redactar
+\section{Reflexión sobre el uso de herramientas de inteligencia artificial}
+\label{sec:uso_ia}
+
+Durante el desarrollo de este trabajo se hizo uso de herramientas de inteligencia artificial generativa como asistente de programación, concretamente mediante el acceso a modelos de lenguaje de gran escala a través de interfaces de línea de comandos.
+
+El uso de estas herramientas se circunscribió a tres contextos concretos: la generación de fragmentos de código repetitivos o bien definidos por un estándar (como las tablas de decodificación de PIDs OBD-II), la resolución de dudas puntuales sobre la API de las librerías utilizadas (\texttt{python-can}, \texttt{bless}, \texttt{react-native-ble-plx}) y la revisión de la sintaxis de LaTeX en secciones con tablas complejas.
+
+En ningún caso se delegó en estas herramientas el diseño de la arquitectura del sistema, la implementación de los protocolos de comunicación ni la interpretación de los resultados experimentales. Todas las decisiones técnicas relevantes, el análisis de los errores encontrados durante las pruebas de integración y la redacción de las conclusiones son producto del trabajo propio del autor.
+
+La experiencia ha puesto de manifiesto tanto el valor como los límites de estas herramientas en el contexto de un proyecto de ingeniería. Son especialmente útiles para reducir el tiempo invertido en tareas de codificación mecánica y para obtener una primera orientación ante problemas con librerías poco documentadas. Sin embargo, la generación de código incorrecto sin diagnóstico claro del error sigue siendo habitual, y la verificación de cada sugerencia mediante prueba real es indispensable. El criterio y el conocimiento del dominio del ingeniero siguen siendo el elemento central e insustituible del proceso de desarrollo.

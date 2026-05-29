@@ -1,0 +1,107 @@
+\chapter*{Anexo D — Esquema de la base de datos SQLite}
+\addcontentsline{toc}{chapter}{Anexo D — Esquema de la base de datos SQLite}
+\label{anexo:bbdd}
+
+La base de datos SQLite empleada para la persistencia de datos de diagnóstico se
+compone de tres tablas relacionadas. El esquema completo, incluyendo los índices
+y la configuración WAL, se muestra a continuación.
+
+\section*{D.1 — Esquema SQL}
+
+\begin{lstlisting}[language=SQL, caption={Esquema completo de la base de datos diagnostics.db}]
+PRAGMA journal_mode=WAL;
+
+-- Sesiones de diagnostico
+CREATE TABLE IF NOT EXISTS sessions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    label      TEXT    NOT NULL DEFAULT '',
+    started_at TEXT    NOT NULL,  -- ISO 8601 UTC
+    ended_at   TEXT               -- NULL si la sesion sigue activa
+);
+
+-- Muestras de telemetria OBD-II
+CREATE TABLE IF NOT EXISTS samples (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    pid          INTEGER NOT NULL,   -- PID OBD-II en decimal
+    name         TEXT    NOT NULL,   -- nombre legible del parametro
+    value        REAL    NOT NULL,   -- valor decodificado con unidades
+    unit         TEXT    NOT NULL,   -- unidad de medida (rpm, km/h, ...)
+    monotonic_ts REAL    NOT NULL,   -- time.monotonic() para ordenacion
+    wall_ts      TEXT    NOT NULL    -- ISO 8601 UTC para presentacion
+);
+
+-- Comandos ejecutados y tramas CAN asociadas
+CREATE TABLE IF NOT EXISTS commands (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    command      TEXT    NOT NULL,   -- nombre del comando (query, dtcs, vin...)
+    request_hex  TEXT    NOT NULL,   -- trama ISO-TP de peticion en hex
+    response_hex TEXT    NOT NULL,   -- trama ISO-TP de respuesta en hex
+    wall_ts      TEXT    NOT NULL    -- ISO 8601 UTC
+);
+
+-- Indices para consultas por sesion
+CREATE INDEX IF NOT EXISTS idx_samples_session
+    ON samples(session_id, pid);
+
+CREATE INDEX IF NOT EXISTS idx_commands_session
+    ON commands(session_id);
+\end{lstlisting}
+
+\section*{D.2 — Descripción de las tablas}
+
+La tabla \textbf{sessions} registra cada sesión de diagnóstico con sus timestamps de
+inicio y fin. El campo \texttt{ended\_at} es \texttt{NULL} mientras la sesión está
+activa y se actualiza al cerrarla mediante \texttt{end\_session()}.
+
+La tabla \textbf{samples} almacena cada muestra individual de telemetría. El campo
+\texttt{pid} permite filtrar las muestras de un PID concreto dentro de una sesión,
+y el campo \texttt{request\_hex} / \texttt{response\_hex} en la tabla
+\texttt{commands} almacena las tramas CAN en formato hexadecimal compacto (sin
+espacios), lo que permite reconstruir la secuencia ISO-TP completa para cada
+comando ejecutado.
+
+La tabla \textbf{commands} registra todos los comandos ejecutados desde la aplicación
+móvil, incluyendo los de gestión de DTCs y obtención de VIN. El campo
+\texttt{response\_hex} de un comando de modo 0x09 (VIN) contiene la concatenación
+de la First Frame y las Consecutive Frames recibidas.
+
+\section*{D.3 — Ejemplo de contenido}
+
+La tabla~\ref{tab:ejemplo_samples} muestra un fragmento representativo del contenido
+de la tabla \texttt{samples} tras una sesión de monitorización de cuatro PIDs.
+
+\begin{table}[!htbp]
+\caption{Fragmento de la tabla \texttt{samples} — sesión de ejemplo.}
+\label{tab:ejemplo_samples}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|c|l|c|l|l|}
+\hline
+\textbf{id} & \textbf{pid} & \textbf{name} & \textbf{value} & \textbf{unit} & \textbf{wall\_ts} \\
+\hline
+1 & 12  & rpm            & 1724.0 & rpm  & 2025-04-10T10:23:01Z \\
+2 & 13  & vehicle\_speed & 87.0   & km/h & 2025-04-10T10:23:01Z \\
+3 & 5   & coolant\_temp  & 91.0   & °C   & 2025-04-10T10:23:02Z \\
+4 & 17  & throttle\_pos  & 23.5   & \%   & 2025-04-10T10:23:02Z \\
+5 & 12  & rpm            & 1756.0 & rpm  & 2025-04-10T10:23:02Z \\
+\hline
+\end{tabular}
+\end{table}
+
+\section*{D.4 — Consideraciones de concurrencia}
+
+La activación del modo WAL (\textit{Write-Ahead Logging}) mediante
+\texttt{PRAGMA journal\_mode=WAL} es esencial para el correcto funcionamiento
+concurrente del sistema. Sin WAL, las escrituras del hilo de monitorización
+bloquearían las lecturas del hilo BLE durante el volcado del buffer, introduciendo
+latencias variables en las respuestas a la aplicación móvil. Con WAL, los lectores
+no se bloquean por los escritores en ningún caso, al operar sobre versiones
+consistentes del fichero de base de datos.
+
+El buffer de escritura de 50 muestras implementado en \texttt{SqliteDataLogger}
+reduce la frecuencia de escrituras a disco a una transacción cada 50 muestras
+(aproximadamente cada 25\,segundos a 500\,ms de periodo de muestreo con cuatro
+PIDs activos), minimizando el tiempo de bloqueo del \textit{write lock} WAL y
+el desgaste de la tarjeta SD de la Raspberry Pi.

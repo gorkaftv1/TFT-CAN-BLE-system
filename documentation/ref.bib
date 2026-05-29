@@ -1,12 +1,191 @@
-@Article{Castrillon11-mva,
-  Title                    = {A comparison of face and facial feature detectors based on the ViolaJones general object detection framework},
-  Author                   = {Modesto Castrill\'on and Oscar D\'eniz and Daniel Hern\'andez and Javier Lorenzo},
-  Journal                  = {Machine Vision and Applications},
-  Year                     = {2011},
-  Number                   = {3},
-  Pages                    = {481-494},
-  Volume                   = {22},
+% ============================================================
+% Referencias bibliográficas — TFT Gorka Eimar
+% Última actualización: 2026-05-23
+% ============================================================
 
-  Owner                    = {Modesto},
-  Timestamp                = {2010.05.24}
+% --- Estándares ISO ---
+
+@techreport{ISO11898:1993,
+  title        = {{Road vehicles --- Interchange of digital information ---
+                   Controller area network (CAN) for high-speed communication}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 11898:1993},
+  year         = {1993},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/20380.html}
+}
+
+@techreport{ISO11898-1:2024,
+  title        = {{Road vehicles --- Controller area network (CAN) ---
+                   Part 1: Data link layer and physical coding sublayer}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 11898-1:2024},
+  year         = {2024},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/86384.html}
+}
+
+@techreport{ISO11898-2:2024,
+  title        = {{Road vehicles --- Controller area network (CAN) ---
+                   Part 2: High-speed physical medium attachment (PMA) sublayer}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 11898-2:2024},
+  year         = {2024},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/85120.html}
+}
+
+@techreport{ISO15765-2:2016,
+  title        = {{Road vehicles --- Diagnostic communication over Controller Area
+                   Network (DoCAN) --- Part 2: Transport protocol and network layer
+                   services}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 15765-2:2016},
+  year         = {2016},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/66574.html}
+}
+
+@techreport{ISO15765-4:2021,
+  title        = {{Road vehicles --- Diagnostic communication over Controller Area
+                   Network (DoCAN) --- Part 4: Requirements for emissions-related
+                   systems}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 15765-4:2021},
+  year         = {2021},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/78384.html}
+}
+
+@techreport{ISO14229-1:2020,
+  title        = {{Road vehicles --- Unified diagnostic services (UDS) ---
+                   Part 1: Application layer}},
+  institution  = {International Organization for Standardization},
+  number       = {ISO 14229-1:2020},
+  year         = {2020},
+  type         = {Standard},
+  address      = {Geneva, Switzerland},
+  url          = {https://www.iso.org/standard/72439.html}
+}
+
+% --- Estándares SAE ---
+
+@techreport{SAEJ1979:2014,
+  title        = {{E/E Diagnostic Test Modes}},
+  institution  = {SAE International},
+  number       = {SAE J1979},
+  year         = {2014},
+  type         = {Standard},
+  address      = {Warrendale, PA, USA},
+  url          = {https://www.sae.org/standards/content/j1979da_202305/}
+}
+
+@techreport{SAEJ2012:2016,
+  title        = {{Diagnostic Trouble Code Definitions}},
+  institution  = {SAE International},
+  number       = {SAE J2012},
+  year         = {2016},
+  type         = {Standard},
+  address      = {Warrendale, PA, USA},
+  url          = {https://www.sae.org/standards/content/j2012_201303/}
+}
+
+% --- Organismos oficiales y reguladores ---
+
+@misc{CiA_CANhistory,
+  title        = {{History of {CAN} Technology}},
+  author       = {{CAN in Automation (CiA)}},
+  howpublished = {\url{https://www.can-cia.org/can-knowledge/history-of-can-technology}},
+  year         = {2024},
+  note         = {CAN in Automation e.V. Organismo normativo oficial del bus CAN.
+                  Accedido: 2026-05-23}
+}
+
+@misc{CARB_OBDII,
+  title        = {{On-Board Diagnostic II ({OBD-II}) Systems Fact Sheet}},
+  author       = {{California Air Resources Board}},
+  howpublished = {\url{https://ww2.arb.ca.gov/resources/fact-sheets/board-diagnostic-ii-obd-ii-systems-fact-sheet}},
+  year         = {2023},
+  note         = {California Air Resources Board (CARB). Accedido: 2026-05-23}
+}
+
+@misc{EPA_OBD,
+  title        = {{Vehicle Emissions On-Board Diagnostics ({OBD})}},
+  author       = {{United States Environmental Protection Agency}},
+  howpublished = {\url{https://www.epa.gov/regulations-emissions-vehicles-and-engines}},
+  year         = {2022},
+  note         = {U.S. Environmental Protection Agency. Accedido: 2026-05-23}
+}
+
+% --- Datasheets y documentación de hardware ---
+
+@manual{Microchip_MCP2515,
+  title        = {{MCP2515 Stand-Alone CAN Controller with {SPI} Interface ---
+                   Data Sheet}},
+  author       = {{Microchip Technology Inc.}},
+  organization = {Microchip Technology Inc.},
+  number       = {DS20001801K},
+  year         = {2021},
+  url          = {https://www.microchip.com/en-us/product/mcp2515},
+  note         = {Accedido: 2026-05-23}
+}
+
+@manual{Waveshare_RS485CANHAT,
+  title        = {{RS485 CAN HAT for Raspberry Pi --- User Manual}},
+  author       = {{Waveshare Electronics}},
+  organization = {Waveshare Electronics},
+  year         = {2023},
+  url          = {https://www.waveshare.com/wiki/RS485_CAN_HAT},
+  note         = {Accedido: 2026-05-23}
+}
+
+@manual{Arduino_MKRWAN1310,
+  title        = {{Arduino MKR WAN 1310 --- Official Documentation}},
+  author       = {{Arduino SA}},
+  organization = {Arduino SA},
+  year         = {2024},
+  url          = {https://docs.arduino.cc/hardware/mkr-wan-1310},
+  note         = {Accedido: 2026-05-23}
+}
+
+% --- Documentación de protocolos y servicios ---
+
+@misc{Nordic_NUS,
+  title        = {{Nordic UART Service ({NUS}) --- nRF Connect SDK Documentation}},
+  author       = {{Nordic Semiconductor ASA}},
+  howpublished = {\url{https://docs.nordicsemi.com/bundle/ncs-3.0.2/page/nrf/libraries/bluetooth/services/nus.html}},
+  year         = {2024},
+  note         = {Nordic Semiconductor ASA. Accedido: 2026-05-23}
+}
+
+@misc{LinuxKernel_ISOTP,
+  title        = {{ISO 15765-2 ({ISO-TP}) --- The Linux Kernel Documentation}},
+  author       = {{The Linux Kernel Organization}},
+  howpublished = {\url{https://docs.kernel.org/networking/iso15765-2.html}},
+  year         = {2024},
+  note         = {Documentación oficial del kernel Linux para el socket CAN ISO-TP.
+                  Accedido: 2026-05-23}
+}
+
+@misc{WaleedDTC,
+  title        = {{DTC Database --- Diagnostic Trouble Code Reference}},
+  author       = {{Waleed Judah}},
+  howpublished = {\url{https://github.com/Wal33D/dtc-database}},
+  year         = {2024},
+  note         = {Base de datos de referencia de códigos DTC para diagnóstico OBD-II.
+                  Accedido: 2026-05-27}
+}
+
+@misc{CSSElec_OBD2,
+  title        = {{OBD2 Explained --- A Simple Intro}},
+  author       = {{CSS Electronics}},
+  howpublished = {\url{https://www.csselectronics.com/pages/obd2-explained-simple-intro}},
+  year         = {2026},
+  note         = {CSS Electronics. Referencia técnica de ingeniería industrial.
+                  Accedido: 2026-05-23}
 }

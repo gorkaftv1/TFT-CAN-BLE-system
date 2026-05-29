@@ -1,0 +1,52 @@
+\section{Principales aportaciones}
+
+Este trabajo presenta un conjunto de aportaciones técnicas que, consideradas en su conjunto, constituyen una plataforma de diagnóstico del vehículo OBD-II completa, de código abierto y bajo coste, diferenciada de las soluciones comerciales existentes en varios aspectos relevantes.
+
+\textbf{Implementación directa de la pila de protocolos.} A diferencia de los adaptadores comerciales de tipo ELM327, que abstraen el protocolo OBD-II mediante comandos AT propietarios, el sistema desarrollado implementa directamente las capas ISO-TP y OBD-II sobre hardware de propósito general. Esto proporciona control total sobre los tiempos de comunicación, la gestión de errores y la extensibilidad del sistema, sin depender de firmware cerrado de terceros.
+
+\textbf{Banco de pruebas reproducible basado en Arduino.} El simulador de ECU desarrollado sobre Arduino MKR con shield CAN constituye una herramienta de validación independiente del vehículo real. El simulador implementa un modelo físico del motor, responde a los cuatro modos OBD-II estándar y permite reproducir condiciones adversas del bus CAN de forma controlada y repetible: pérdida de tramas, latencia variable, respuestas negativas esporádicas e inyección aleatoria de códigos de avería mediante interrupción hardware. Esta capacidad de simulación de ruido es una aportación que distingue este trabajo de implementaciones similares disponibles en la literatura.
+
+\textbf{Arquitectura software modular con separación de capas.} La herramienta de diagnóstico implementada en Python sobre Raspberry Pi sigue un diseño basado en interfaces y capas desacopladas mediante inyección de dependencias. Esta arquitectura facilita la sustitución de cualquier componente (transporte, decodificador, logger) sin modificar el resto del sistema, y permite el uso de un transporte  (\textit{mock}) para el desarrollo y las pruebas sin necesidad de hardware CAN.
+
+\textbf{Acceso inalámbrico mediante BLE GATT con logging persistente.} La integración de un servidor BLE GATT sobre Raspberry Pi, combinada con el registro estructurado de datos en SQLite, permite no solo el acceso en tiempo real a los parámetros del vehículo, sino también la consulta posterior de sesiones históricas completas, incluyendo las tramas CAN en hexadecimal correspondientes a cada comando ejecutado.
+
+\textbf{Aplicación móvil multiplataforma.} La aplicación React Native desarrollada opera sobre Android e iOS con una única base de código, implementa el protocolo JSON sobre NUS para la comunicación con la Raspberry Pi y ofrece una experiencia de usuario orientada tanto a la monitorización en tiempo real como al análisis de datos históricos.
+
+\section{Competencias específicas desarrolladas}
+
+La realización de este Trabajo de Fin de Título ha requerido la aplicación y el desarrollo de competencias específicas del Grado de Ingeniería Informática, plan 41, de la Universidad de Las Palmas de Gran Canaria. A continuación se describe la relación de las competencias más directamente implicadas con el trabajo realizado.
+
+\textbf{CI1 — Capacidad para diseñar, desarrollar, evaluar y asegurar la accesibilidad, ergonomía, usabilidad y seguridad de los sistemas, servicios y aplicaciones informáticas, así como de la información que gestionan.} Esta competencia se ha desarrollado en el diseño de la aplicación móvil, prestando atención a la usabilidad de la interfaz de diagnóstico, y en la implementación de mecanismos de seguridad básicos en la comunicación BLE (autenticación por token, timeout de inactividad).
+
+\textbf{CI5 — Capacidad para especificar, diseñar, implementar y evaluar interfaces persona-computador que garanticen la accesibilidad y usabilidad de los sistemas, servicios y aplicaciones informáticas.} Esta competencia se ha aplicado en el diseño e implementación de la aplicación móvil React Native, con sus cinco pantallas funcionales y el sistema de navegación por pestañas.
+
+\textbf{CI8 — Capacidad para diseñar y evaluar sistemas operativos y servidores, y aplicaciones y sistemas basados en computación distribuida.} El sistema desarrollado es por naturaleza un sistema distribuido: Arduino, Raspberry Pi y dispositivo móvil son tres nodos que se comunican mediante protocolos bien definidos. La Raspberry Pi actúa simultáneamente como cliente CAN y como servidor BLE, gestionando concurrencia mediante hilos y comunicación asíncrona.
+
+\textbf{CI14 — Capacidad para diseñar sistemas de tiempo real y sistemas empotrados.} Esta es la competencia más directamente relacionada con el trabajo. El simulador Arduino opera en tiempo real con interrupciones hardware, temporización precisa de las tramas -TP y gestión concurrente de múltiples tareas (broadcast CAN, respuesta a peticiones OBD-II, generación de ruido). La Raspberry Pi implementa monitorización continua con periodos de muestreo de 500 ms.
+
+\textbf{CI16 — Capacidad para diseñar y desarrollar sistemas de comunicaciones.} El núcleo técnico del trabajo es precisamente la implementación de una pila de protocolos de comunicaciones: CAN (ISO 11898), ISO-TP (ISO 15765-2), OBD-II (SAE J1979) y BLE GATT.
+
+\textbf{CI17 — Capacidad para diseñar y desarrollar sistemas de seguridad informática.} Esta competencia se ha aplicado de forma parcial en el diseño del mecanismo de autenticación BLE y en la gestión segura de las respuestas negativas UDS, que permiten al sistema rechazar peticiones no autorizadas o fuera de contexto.
+
+\textbf{CI18 — Capacidad para diseñar e implementar sistemas de tiempo real y sistemas empotrados.} En complemento con CI14, esta competencia abarca el diseño del flujo de control del simulador Arduino, la implementación del servidor BLE con asyncio en Python y la coordinación entre el hilo de monitorización continua y el hilo de atención a comandos BLE.
+
+
+\section{Relación con los Objetivos de Desarrollo Sostenible}
+
+Los Objetivos de Desarrollo Sostenible (ODS) de la Agenda 2030 de Naciones Unidas establecen un marco global de referencia para orientar el desarrollo tecnológico hacia un impacto positivo en la sociedad y el medio ambiente. La tabla~\ref{tab:ODS} recoge el grado de relación de este trabajo con cada uno de los 17 ODS.
+
+\begin{table}[!htbp]
+\caption{Grado de relación de este trabajo con los 17 Objetivos de Desarrollo Sostenible (ODS) de la Agenda 2030.}
+\label{tab:ODS}
+\input{figuras/fig_ods_table.tex}
+\end{table}
+
+A continuación se justifica el grado de relación asignado a los ODS con mayor vinculación con el trabajo.
+
+\textbf{ODS 4 — Educación de Calidad (Medio).} El trabajo tiene un carácter formativo puesto que aborda el estudio e implementación desde cero de protocolos de comunicación industrial (CAN, ISO-TP, OBD-II y UDS) sobre hardware de bajo coste y accesible. El banco de pruebas basado en Arduino, junto con la documentación del proceso de desarrollo, constituyen un recurso didáctico reutilizable para la enseñanza de sistemas empotrados, protocolos de comunicación y arquitectura software en capas en titulaciones de ingeniería informática y electrónica.
+
+\textbf{ODS 9 — Industria, Innovación e Infraestructuras (Medio).} La implementación directa de la pila de protocolos OBD-II y UDS sobre hardware de propósito general, sin depender de firmware propietario como el ELM327, representa una aproximación innovadora al diagnóstico del vehículo de bajo coste. Este tipo de soluciones puede favorecer el acceso a capacidades de diagnóstico en entornos donde las herramientas profesionales resultan económicamente inaccesibles.
+
+\textbf{ODS 8 — Trabajo Decente y Crecimiento Económico (Bajo).} En la medida en que el sistema desarrollado reduce la barrera de entrada al diagnóstico del vehículo, puede contribuir marginalmente a facilitar el trabajo de pequeños talleres o profesionales independientes que carecen de acceso a herramientas de diagnóstico de coste elevado.
+
+\textbf{ODS 12 — Producción y Consumo Responsables (Bajo).} El acceso a diagnóstico del vehiculo de bajo coste facilita la detección temprana de averías, lo que puede contribuir a prolongar la vida útil del vehículo y a reducir sustituciones prematuras de componentes. La relación con este ODS es indirecta y su alcance limitado al contexto de uso del sistema.
