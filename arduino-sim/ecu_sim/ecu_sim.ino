@@ -16,14 +16,21 @@ bool engineRunning = false;
 uint8_t udsSession = 1;  // 1=default, 3=extended
 
 volatile bool ignitionPressed = false;
-unsigned long lastDebounceTime = 0;
+unsigned long lastIgnDebounce = 0;
 bool keyOn = false;
+
+volatile bool dtcFaultPressed = false;
+unsigned long lastDtcDebounce = 0;
+
+static const uint16_t DTC_FAULT_SET[] = { DTC_P0300, DTC_P0171, DTC_P0420 };
+static const uint8_t  DTC_FAULT_SET_SIZE = 3;
 
 uint8_t responseBuffer[7];
 uint8_t responseLength = 0;
 
 // ---------- PROTOTYPES ----------
 void handleIgnitionButton();
+void handleDTCButton();
 void broadcastVehicleState();
 void sendResponse();
 void sendNegativeResponse(uint8_t mode, uint8_t errorCode);
@@ -34,10 +41,9 @@ bool handleMode10(uint8_t subFunc);
 bool handleMode22(uint16_t did);
 
 // ---------- ISR ----------
-// Minimal ISR — only sets flag, no Serial/delay/CAN.
-void onIgnitionButton() {
-  ignitionPressed = true;
-}
+// Minimal ISRs — only set flags, no Serial/delay/CAN.
+void onIgnitionButton() { ignitionPressed  = true; }
+void onDTCFaultButton()  { dtcFaultPressed = true; }
 
 // ---------- IGNITION BUTTON ----------
 // Debounces ISR flag, toggles keyOn, sets idle RPM on start.
@@ -46,8 +52,8 @@ void handleIgnitionButton() {
   ignitionPressed = false;
 
   unsigned long now = millis();
-  if (now - lastDebounceTime < IGNITION_DEBOUNCE_MS) return;
-  lastDebounceTime = now;
+  if (now - lastIgnDebounce < IGNITION_DEBOUNCE_MS) return;
+  lastIgnDebounce = now;
 
   keyOn = !keyOn;
 
@@ -57,6 +63,34 @@ void handleIgnitionButton() {
   } else {
     vehicle.rpm = 0;
     Serial.println(F("[IGN] Key OFF — engine stopped"));
+  }
+}
+
+// ---------- DTC FAULT BUTTON ----------
+// Each press injects next DTC from DTC_FAULT_SET.
+// After all injected, next press clears all DTCs.
+void handleDTCButton() {
+  if (!dtcFaultPressed) return;
+  dtcFaultPressed = false;
+
+  unsigned long now = millis();
+  if (now - lastDtcDebounce < DTC_DEBOUNCE_MS) return;
+  lastDtcDebounce = now;
+
+  if (numStoredDTCs >= DTC_FAULT_SET_SIZE) {
+    for (uint8_t i = 0; i < 8; i++) { dtcList[i].code = DTC_P0000; dtcList[i].active = false; }
+    numStoredDTCs       = 0;
+    vehicle.numDTCs     = 0;
+    vehicle.checkEngine = false;
+    Serial.println(F("[DTC] All faults cleared"));
+  } else {
+    dtcList[numStoredDTCs].code   = DTC_FAULT_SET[numStoredDTCs];
+    dtcList[numStoredDTCs].active = true;
+    numStoredDTCs++;
+    vehicle.numDTCs     = numStoredDTCs;
+    vehicle.checkEngine = true;
+    Serial.print(F("[DTC] Fault injected — active DTCs: "));
+    Serial.println(numStoredDTCs);
   }
 }
 
@@ -86,6 +120,11 @@ void setup() {
   Serial.print(F("[OK] Ignition button on pin D"));
   Serial.println(ENGINE_START_PIN);
 
+  pinMode(DTC_FAULT_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(DTC_FAULT_PIN), onDTCFaultButton, FALLING);
+  Serial.print(F("[OK] DTC fault button on pin D"));
+  Serial.println(DTC_FAULT_PIN);
+
   Serial.print(F("[INFO] VIN: "));
   Serial.println(vehicle.vin);
   Serial.print(F("[INFO] Listen: 0x"));
@@ -98,6 +137,7 @@ void setup() {
 // ---------- LOOP ----------
 void loop() {
   handleIgnitionButton();
+  handleDTCButton();
   updateVehicleSimulation();
 #if BROADCAST_ENABLE
   broadcastVehicleState();
