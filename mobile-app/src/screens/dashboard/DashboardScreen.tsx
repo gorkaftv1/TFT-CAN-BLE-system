@@ -27,20 +27,13 @@ function isStale(timestamp: number, intervalMs: number): boolean {
   return Date.now() - timestamp > Math.max(intervalMs * 3, 2000);
 }
 
-function valueColor(widget: Widget, value: number): string {
-  const def = PID_MAP.get(widget.pid);
+function valueColor(pid: number, value: number): string {
+  const def = PID_MAP.get(pid);
   if (!def?.colorThresholds) return colors.text;
-  const { warn, danger, direction } = def.colorThresholds;
-  if (direction === 'up') {
-    if (value >= danger) return colors.error;
-    if (value >= warn)   return colors.warning;
-    return colors.success;
-  } else {
-    if (value <= danger) return colors.error;
-    if (value <= warn)   return colors.warning;
-    return colors.success;
-  }
+  const { goodMin, goodMax } = def.colorThresholds;
+  return (value >= goodMin && value <= goodMax) ? colors.success : colors.warning;
 }
+
 
 function formatObdValue(pid: number, value: number): string {
   if (pid === 0x0C) return Math.round(value).toLocaleString();
@@ -67,14 +60,14 @@ function ObdCard({ widget, intervalMs }: { widget: Widget; intervalMs: number })
 
   if (sample.error) {
     return (
-      <View style={[styles.card, styles.cardErr]}>
-        <View style={[styles.dot, { backgroundColor: colors.error }]} />
+      <View style={[styles.card, styles.cardWarn]}>
+        <View style={[styles.dot, { backgroundColor: colors.warning }]} />
         <Text style={styles.cardName} numberOfLines={1}>{widget.label}</Text>
         <Text style={styles.cardPid}>{pidLabel}</Text>
         <View style={styles.cardRight}>
           <Text style={styles.cardTs}>{fmtTime(sample.timestamp)}</Text>
-          <Text style={[styles.cardValue, { color: colors.error }]} numberOfLines={1}>
-            ERROR: LÍMITE DE TIEMPO
+          <Text style={[styles.cardValue, { color: colors.warning }]} numberOfLines={1}>
+            LÍMITE DE TIEMPO
           </Text>
         </View>
       </View>
@@ -82,7 +75,7 @@ function ObdCard({ widget, intervalMs }: { widget: Widget; intervalMs: number })
   }
 
   const stale = isStale(sample.timestamp, intervalMs);
-  const color = stale ? colors.textMuted : valueColor(widget, sample.value);
+  const color = stale ? colors.textMuted : valueColor(widget.pid, sample.value);
 
   return (
     <View style={[styles.card, stale && styles.cardStale]}>
@@ -130,11 +123,11 @@ function UdsCard({ def }: { def: UdsDidConfig }) {
 
   if (didValue === null) {
     return (
-      <View style={[styles.card, styles.cardErr]}>
-        <View style={[styles.dot, { backgroundColor: colors.error }]} />
+      <View style={[styles.card, styles.cardWarn]}>
+        <View style={[styles.dot, { backgroundColor: colors.warning }]} />
         <Text style={styles.cardName} numberOfLines={1}>{def.name}</Text>
         <Text style={styles.cardPid}>{def.hexStr}</Text>
-        <Text style={[styles.cardValue, { color: colors.error }]}>Error al leer</Text>
+        <Text style={[styles.cardValue, { color: colors.warning }]}>Error al leer</Text>
       </View>
     );
   }
@@ -145,13 +138,57 @@ function UdsCard({ def }: { def: UdsDidConfig }) {
 
   return (
     <View style={styles.card}>
-      <View style={[styles.dot, { backgroundColor: colors.success }]} />
+      <View style={[styles.dot, { backgroundColor: colors.border }]} />
       <Text style={styles.cardName} numberOfLines={1}>{def.name}</Text>
       <Text style={styles.cardPid}>{def.hexStr}</Text>
       <View style={styles.cardRight}>
         <Text style={styles.cardTs}>{fmtTime(didValue.timestamp)}</Text>
         <Text style={[styles.cardValue, { color: colors.text }]} numberOfLines={1}>{valStr}</Text>
       </View>
+    </View>
+  );
+}
+
+// ── Column header ─────────────────────────────────────────────────
+
+function CardHeader() {
+  return (
+    <View style={styles.cardHeaderRow}>
+      <View style={styles.dot} />
+      <Text style={styles.colName}>Nombre</Text>
+      <Text style={styles.colPid}>ID Hex</Text>
+      <Text style={styles.colValue}>Valor</Text>
+    </View>
+  );
+}
+
+// ── Color legend ──────────────────────────────────────────────────
+
+const LEGEND_OBD = [
+  { color: colors.success,   label: 'Rango normal' },
+  { color: colors.warning,   label: 'Fuera de rango' },
+  { color: colors.text,      label: 'Sin umbral' },
+  { color: colors.warning,   label: 'Timeout' },
+  { color: colors.textMuted, label: 'Sin datos' },
+];
+
+const LEGEND_UDS = [
+  { color: colors.text,      label: 'Leído' },
+  { color: colors.primary,   label: 'Leyendo' },
+  { color: colors.warning,   label: 'Error' },
+  { color: colors.textMuted, label: 'Sin datos' },
+];
+
+function ColorLegend({ protocol }: { protocol: Protocol }) {
+  const items = protocol === 'obd' ? LEGEND_OBD : LEGEND_UDS;
+  return (
+    <View style={styles.legend}>
+      {items.map((item) => (
+        <View key={item.label} style={styles.legendItem}>
+          <View style={[styles.dot, { backgroundColor: item.color }]} />
+          <Text style={styles.legendLabel}>{item.label}</Text>
+        </View>
+      ))}
     </View>
   );
 }
@@ -334,16 +371,25 @@ export function DashboardScreen() {
               <Text style={styles.emptyHint}>Ve a Ajustes para activar los sensores que quieres ver.</Text>
             </View>
           ) : (
-            visibleWidgets.map((w) => (
-              <ObdCard key={w.id} widget={w} intervalMs={intervalMs} />
-            ))
+            <>
+              <CardHeader />
+              {visibleWidgets.map((w) => (
+                <ObdCard key={w.id} widget={w} intervalMs={intervalMs} />
+              ))}
+            </>
           )
         ) : (
-          udsItems.map((def) => (
-            <UdsCard key={def.hexStr} def={def} />
-          ))
+          <>
+            <CardHeader />
+            {udsItems.map((def) => (
+              <UdsCard key={def.hexStr} def={def} />
+            ))}
+          </>
         )}
       </ScrollView>
+
+      {/* ── Color legend ── */}
+      <ColorLegend protocol={protocol} />
     </View>
   );
 }
@@ -411,6 +457,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   cardErr:   { backgroundColor: colors.error + '08' },
+  cardWarn:  { backgroundColor: colors.warning + '12' },
   cardStale: { opacity: 0.6 },
 
   dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
@@ -435,6 +482,26 @@ const styles = StyleSheet.create({
   probeScanBtn:         { paddingHorizontal: spacing.md, paddingVertical: spacing.xs, borderRadius: 8, backgroundColor: colors.primary },
   probeScanBtnDisabled: { opacity: 0.5 },
   probeScanBtnLabel:    { fontSize: fontSize.sm, fontWeight: '700', color: colors.background },
+
+  cardHeaderRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs + 2,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1, borderBottomColor: colors.border,
+    gap: spacing.sm,
+  },
+  colName:  { flex: 2, fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  colPid:   { flex: 1, fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center' },
+  colValue: { flex: 1.5, fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'right' },
+
+  legend: {
+    flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center',
+    gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  legendItem:  { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  legendLabel: { fontSize: fontSize.xs, color: colors.textMuted },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   emptyTitle: { fontSize: fontSize.lg, color: colors.textSecondary, marginBottom: spacing.sm, fontWeight: '600' },

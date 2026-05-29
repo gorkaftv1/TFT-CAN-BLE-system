@@ -77,9 +77,9 @@ export class MockAdapter implements IVehicleAdapter {
 
   async getSessions(): Promise<any[]> {
     return [
-      { session_id: 3, label: 'BLE real session', started_at: '2026-05-20T09:10:00.000Z', ended_at: '2026-05-20T09:45:12.000Z', sample_count: 128 },
-      { session_id: 2, label: 'BLE real session', started_at: '2026-05-18T17:30:00.000Z', ended_at: '2026-05-18T17:52:44.000Z', sample_count: 87  },
-      { session_id: 1, label: 'CLI IsoTpTransport (can0)', started_at: '2026-05-15T08:00:00.000Z', ended_at: null, sample_count: 34  },
+      { session_id: 3, label: 'BLE real session',         started_at: '2026-05-20T09:10:00.000Z', ended_at: '2026-05-20T09:45:12.000Z', sample_count: 128, dtc_count: 2 },
+      { session_id: 2, label: 'BLE real session',         started_at: '2026-05-18T17:30:00.000Z', ended_at: '2026-05-18T17:52:44.000Z', sample_count: 87,  dtc_count: 0 },
+      { session_id: 1, label: 'CLI IsoTpTransport (can0)', started_at: '2026-05-15T08:00:00.000Z', ended_at: null,                       sample_count: 34,  dtc_count: 0 },
     ];
   }
   async getSessionDtcs(sessionId: number): Promise<Array<{ code: string; description: string; raw: string }>> {
@@ -89,18 +89,19 @@ export class MockAdapter implements IVehicleAdapter {
     ];
     return [];
   }
-  async getSessionSamples(sessionId: number): Promise<any[]> {
+  async getSessionSamples(sessionId: number, pid?: number, limit = 1000, offset = 0): Promise<any[]> {
     if (sessionId !== 3) return [];
     const base = new Date('2026-05-20T09:10:00.000Z').getTime();
-    const samples: any[] = [];
+    const all: any[] = [];
     for (let i = 0; i < 30; i++) {
       const ts = new Date(base + i * 5000).toISOString();
-      samples.push({ pid: 0x0C, name: 'RPM',               value: Math.round(820 + Math.sin(i * 0.3) * 300), unit: 'rpm',  ts });
-      samples.push({ pid: 0x05, name: 'Temp. refrigerante', value: parseFloat((86 + Math.sin(i * 0.05) * 3).toFixed(1)),   unit: '°C',  ts });
-      samples.push({ pid: 0x0D, name: 'Velocidad',          value: Math.max(0, Math.round(55 + Math.sin(i * 0.12) * 30)), unit: 'km/h', ts });
-      samples.push({ pid: 0x04, name: 'Carga del motor',    value: parseFloat((28 + Math.sin(i * 0.2) * 15).toFixed(1)),  unit: '%',   ts });
+      all.push({ pid: 0x0C, name: 'RPM',               value: Math.round(820 + Math.sin(i * 0.3) * 300), unit: 'rpm',  ts });
+      all.push({ pid: 0x05, name: 'Temp. refrigerante', value: parseFloat((86 + Math.sin(i * 0.05) * 3).toFixed(1)),   unit: '°C',  ts });
+      all.push({ pid: 0x0D, name: 'Velocidad',          value: Math.max(0, Math.round(55 + Math.sin(i * 0.12) * 30)), unit: 'km/h', ts });
+      all.push({ pid: 0x04, name: 'Carga del motor',    value: parseFloat((28 + Math.sin(i * 0.2) * 15).toFixed(1)),  unit: '%',   ts });
     }
-    return samples;
+    const filtered = pid !== undefined ? all.filter((s) => s.pid === pid) : all;
+    return filtered.slice(offset, offset + limit);
   }
 
   async getSessionCommands(sessionId: number): Promise<any[]> {

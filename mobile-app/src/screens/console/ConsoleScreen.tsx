@@ -109,17 +109,24 @@ export function ConsoleScreen() {
     );
   }, [clearAll]);
 
+  const runExport = useCallback((section?: TabKey) => {
+    const label = section ?? 'completo';
+    exportLogsToCsv(entries, label, section).catch((e: unknown) => {
+      Alert.alert('Error al exportar', e instanceof Error ? e.message : String(e));
+    });
+  }, [entries]);
+
   const handleExport = useCallback(() => {
     Alert.alert(
       'Exportar CSV',
       '¿Exportar solo la pestaña actual o todos los registros?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Esta pestaña', onPress: () => void exportLogsToCsv(entries, activeTab.key, activeTab.key) },
-        { text: 'Todo', onPress: () => void exportLogsToCsv(entries, 'completo') },
+        { text: 'Esta pestaña', onPress: () => runExport(activeTab.key) },
+        { text: 'Todo',         onPress: () => runExport() },
       ],
     );
-  }, [entries, activeTab]);
+  }, [activeTab, runExport]);
 
   const renderItem: ListRenderItem<LogEntry> = useCallback(
     ({ item }) => <EntryRow entry={item} />,

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
@@ -7,20 +7,30 @@ import { getAdapter } from '../../infrastructure/adapterFactory';
 import { Session } from '../../domain/models/Session';
 import { colors, fontSize, monoFont, spacing } from '../../shared/theme';
 
+const SAMPLES_DISCOVERY_LIMIT = 50;
+const SAMPLES_PER_PID_LIMIT   = 400;   // max samples per PID — keeps BLE payload small
+const SAMPLES_BATCH_SIZE      = 1;     // one PID at a time — avoids BLE congestion
+const SAMPLES_BATCH_DELAY_MS  = 300;   // pause between PIDs — gives Pi time to recover
+
 type Tab = 'dtcs' | 'samples' | 'commands';
 
 interface SessionDtc  { code: string; description: string; raw: string; }
 interface SessionSample { pid: number; name: string; value: number; unit: string; ts: string; }
 interface SessionCommand { ts: string; direction: 'tx' | 'rx'; raw: string; }
 
-interface PidStats {
-  pid: number; name: string; unit: string;
-  count: number; min: number; max: number; avg: number;
+interface PidEntry {
+  pid:     number;
+  name:    string;
+  unit:    string;
+  samples: SessionSample[];
+  loading: boolean;
 }
 
 function pad(n: number, z = 2) { return n.toString().padStart(z, '0'); }
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
+
+function fmtTs(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 function fmtDate(iso: string): string {
@@ -34,20 +44,15 @@ function fmtDuration(start: string, end: string | null): string {
   return `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-function aggregateSamples(samples: SessionSample[]): PidStats[] {
-  const map = new Map<number, PidStats>();
+function computeStats(samples: SessionSample[]) {
+  if (samples.length === 0) return { count: 0, min: 0, max: 0, avg: 0 };
+  let min = samples[0].value, max = samples[0].value, sum = 0;
   for (const s of samples) {
-    const entry = map.get(s.pid);
-    if (!entry) {
-      map.set(s.pid, { pid: s.pid, name: s.name, unit: s.unit, count: 1, min: s.value, max: s.value, avg: s.value });
-    } else {
-      entry.count++;
-      if (s.value < entry.min) entry.min = s.value;
-      if (s.value > entry.max) entry.max = s.value;
-      entry.avg = entry.avg + (s.value - entry.avg) / entry.count;
-    }
+    if (s.value < min) min = s.value;
+    if (s.value > max) max = s.value;
+    sum += s.value;
   }
-  return Array.from(map.values());
+  return { count: samples.length, min, max, avg: sum / samples.length };
 }
 
 // ── Sub-views ─────────────────────────────────────────────────────
@@ -68,30 +73,136 @@ function DtcsTab({ dtcs, loading }: { dtcs: SessionDtc[]; loading: boolean }) {
   );
 }
 
-function SamplesTab({ samples, loading }: { samples: SessionSample[]; loading: boolean }) {
-  if (loading) return <Loader />;
-  if (samples.length === 0) return <Empty text="Sin muestras en esta sesión" />;
-  const stats = aggregateSamples(samples);
+// ── PID expandable card ───────────────────────────────────────────
+
+function PidStatCard({ entry, expanded, onToggle }: {
+  entry: PidEntry;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const st = computeStats(entry.samples);
+  return (
+    <View style={styles.pidCard}>
+      <TouchableOpacity style={styles.pidHeader} onPress={onToggle} activeOpacity={0.75}>
+        <View style={styles.pidHeaderLeft}>
+          <Text style={styles.statsSensorName}>{entry.name}</Text>
+          {!!entry.unit && <Text style={styles.statsSensorUnit}>{entry.unit}</Text>}
+        </View>
+        {entry.loading ? (
+          <ActivityIndicator size="small" color={colors.primary} style={styles.pidLoader} />
+        ) : (
+          <>
+            <Text style={styles.statsCell}>{st.count}</Text>
+            <Text style={styles.statsCell}>{st.min.toFixed(1)}</Text>
+            <Text style={styles.statsCell}>{st.avg.toFixed(1)}</Text>
+            <Text style={styles.statsCell}>{st.max.toFixed(1)}</Text>
+            <Text style={styles.expandChevron}>{expanded ? '▲' : '▼'}</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {expanded && !entry.loading && (
+        <View style={styles.sampleList}>
+          <View style={styles.sampleListHeader}>
+            <Text style={styles.sampleHdrTs}>Hora</Text>
+            <Text style={styles.sampleHdrVal}>Valor</Text>
+          </View>
+          {entry.samples.map((s, i) => (
+            <View key={i} style={[styles.sampleRow, i % 2 === 0 && styles.sampleRowAlt]}>
+              <Text style={styles.sampleTs}>{fmtTs(s.ts)}</Text>
+              <Text style={styles.sampleVal}>{s.value} {entry.unit}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ── Samples tab ───────────────────────────────────────────────────
+
+function SamplesTab({ sessionId }: { sessionId: number }) {
+  const [pidEntries, setPidEntries] = useState<PidEntry[]>([]);
+  const [phase, setPhase]           = useState<'idle' | 'discovering' | 'loading' | 'done'>('idle');
+  const [expandedPids, setExpandedPids] = useState<Set<number>>(new Set());
+  const loadedRef = useRef(false);
+
+  useEffect(() => {
+    if (loadedRef.current) return;
+    loadedRef.current = true;
+    setPhase('discovering');
+
+    const load = async () => {
+      // Discover PIDs with small initial batch
+      const discovery = await getAdapter().getSessionSamples(sessionId, undefined, SAMPLES_DISCOVERY_LIMIT);
+      if (discovery.length === 0) { setPhase('done'); return; }
+
+      const pidOrder: number[] = [];
+      const metaMap: Record<number, { name: string; unit: string }> = {};
+      for (const s of discovery) {
+        if (!metaMap[s.pid]) { pidOrder.push(s.pid); metaMap[s.pid] = { name: s.name, unit: s.unit }; }
+      }
+
+      const initial: PidEntry[] = pidOrder.map((pid) => ({
+        pid, name: metaMap[pid].name, unit: metaMap[pid].unit,
+        samples: [], loading: true,
+      }));
+      setPidEntries(initial);
+      setPhase('loading');
+
+      // Fetch full sample list per PID in batches
+      for (let i = 0; i < pidOrder.length; i += SAMPLES_BATCH_SIZE) {
+        const batch = pidOrder.slice(i, i + SAMPLES_BATCH_SIZE);
+        for (const pid of batch) {
+          try {
+            const pidSamples = await getAdapter().getSessionSamples(sessionId, pid, SAMPLES_PER_PID_LIMIT);
+            setPidEntries((prev) =>
+              prev.map((e) => e.pid === pid ? { ...e, samples: pidSamples, loading: false } : e)
+            );
+          } catch {
+            setPidEntries((prev) =>
+              prev.map((e) => e.pid === pid ? { ...e, loading: false } : e)
+            );
+          }
+        }
+        if (i + SAMPLES_BATCH_SIZE < pidOrder.length) {
+          await new Promise<void>((r) => setTimeout(r, SAMPLES_BATCH_DELAY_MS));
+        }
+      }
+      setPhase('done');
+    };
+
+    load().catch(() => setPhase('done'));
+  }, [sessionId]);
+
+  const togglePid = (pid: number) => {
+    setExpandedPids((prev) => {
+      const next = new Set(prev);
+      next.has(pid) ? next.delete(pid) : next.add(pid);
+      return next;
+    });
+  };
+
+  if (phase === 'idle' || phase === 'discovering') return <Loader text="Descubriendo sensores..." />;
+  if (pidEntries.length === 0) return <Empty text="Sin muestras en esta sesión" />;
+
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
       <View style={styles.statsHeader}>
-        <Text style={[styles.statsCell, styles.statsCellName]}>Sensor</Text>
-        <Text style={styles.statsCell}>Muestras</Text>
-        <Text style={styles.statsCell}>Mín</Text>
-        <Text style={styles.statsCell}>Med</Text>
-        <Text style={styles.statsCell}>Máx</Text>
+        <Text style={[styles.statsCellName, styles.statsHeaderLabel]}>Sensor</Text>
+        <Text style={[styles.statsCell, styles.statsHeaderLabel]}>#</Text>
+        <Text style={[styles.statsCell, styles.statsHeaderLabel]}>Mín</Text>
+        <Text style={[styles.statsCell, styles.statsHeaderLabel]}>Med</Text>
+        <Text style={[styles.statsCell, styles.statsHeaderLabel]}>Máx</Text>
+        <View style={styles.chevronSpacer} />
       </View>
-      {stats.map((s) => (
-        <View key={s.pid} style={styles.statsRow}>
-          <View style={styles.statsCellName}>
-            <Text style={styles.statsSensorName}>{s.name}</Text>
-            <Text style={styles.statsSensorUnit}>{s.unit}</Text>
-          </View>
-          <Text style={styles.statsCell}>{s.count}</Text>
-          <Text style={styles.statsCell}>{s.min.toFixed(1)}</Text>
-          <Text style={styles.statsCell}>{s.avg.toFixed(1)}</Text>
-          <Text style={styles.statsCell}>{s.max.toFixed(1)}</Text>
-        </View>
+      {pidEntries.map((entry) => (
+        <PidStatCard
+          key={entry.pid}
+          entry={entry}
+          expanded={expandedPids.has(entry.pid)}
+          onToggle={() => togglePid(entry.pid)}
+        />
       ))}
     </ScrollView>
   );
@@ -115,10 +226,11 @@ function CommandsTab({ commands, loading }: { commands: SessionCommand[]; loadin
   );
 }
 
-function Loader() {
+function Loader({ text }: { text?: string } = {}) {
   return (
     <View style={styles.center}>
       <ActivityIndicator color={colors.primary} />
+      {!!text && <Text style={[styles.emptyText, { marginTop: spacing.sm }]}>{text}</Text>}
     </View>
   );
 }
@@ -141,10 +253,8 @@ interface Props {
 export function SessionDetailView({ session, onBack }: Props) {
   const [tab, setTab] = useState<Tab>('dtcs');
   const [dtcs,     setDtcs]     = useState<SessionDtc[]>([]);
-  const [samples,  setSamples]  = useState<SessionSample[]>([]);
   const [commands, setCommands] = useState<SessionCommand[]>([]);
   const [loadingDtcs,     setLoadingDtcs]     = useState(false);
-  const [loadingSamples,  setLoadingSamples]  = useState(false);
   const [loadingCommands, setLoadingCommands] = useState(false);
 
   useEffect(() => {
@@ -154,15 +264,6 @@ export function SessionDetailView({ session, onBack }: Props) {
       .catch(() => setDtcs([]))
       .finally(() => setLoadingDtcs(false));
   }, [session.session_id]);
-
-  useEffect(() => {
-    if (tab !== 'samples' || samples.length > 0) return;
-    setLoadingSamples(true);
-    getAdapter().getSessionSamples(session.session_id)
-      .then(setSamples)
-      .catch(() => setSamples([]))
-      .finally(() => setLoadingSamples(false));
-  }, [tab, session.session_id]);
 
   useEffect(() => {
     if (tab !== 'commands' || commands.length > 0) return;
@@ -203,8 +304,8 @@ export function SessionDetailView({ session, onBack }: Props) {
       </View>
 
       {/* Content */}
-      {tab === 'dtcs'     && <DtcsTab     dtcs={dtcs}         loading={loadingDtcs} />}
-      {tab === 'samples'  && <SamplesTab  samples={samples}   loading={loadingSamples} />}
+      {tab === 'dtcs'     && <DtcsTab     dtcs={dtcs}     loading={loadingDtcs} />}
+      {tab === 'samples'  && <SamplesTab  sessionId={session.session_id} />}
       {tab === 'commands' && <CommandsTab commands={commands} loading={loadingCommands} />}
     </View>
   );
@@ -261,16 +362,43 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: colors.border,
     marginBottom: spacing.xs,
   },
-  statsRow: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: colors.surface, borderRadius: 8,
-    paddingHorizontal: spacing.sm, paddingVertical: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
-  },
+  statsHeaderLabel: { fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase' },
   statsCell:     { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, textAlign: 'center' },
   statsCellName: { flex: 2, textAlign: 'left' },
   statsSensorName: { fontSize: fontSize.sm, color: colors.text, fontWeight: '500' },
   statsSensorUnit: { fontSize: fontSize.xs, color: colors.textMuted },
+
+  // PID expandable cards
+  pidCard: {
+    backgroundColor: colors.surface, borderRadius: 8,
+    borderWidth: 1, borderColor: colors.border, overflow: 'hidden',
+  },
+  pidHeader: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.sm,
+    gap: 2,
+  },
+  pidHeaderLeft: { flex: 2 },
+  pidLoader:     { flex: 4.5, alignItems: 'flex-end', paddingRight: spacing.sm },
+  expandChevron: { fontSize: 9, color: colors.textMuted, width: 14, textAlign: 'right' },
+  chevronSpacer: { width: 14 },
+
+  // Per-PID sample list (expanded)
+  sampleList: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+  sampleListHeader: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs,
+    backgroundColor: colors.surfaceElevated,
+  },
+  sampleHdrTs:  { flex: 1, fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600' },
+  sampleHdrVal: { flex: 1, fontSize: fontSize.xs, color: colors.textMuted, fontWeight: '600', textAlign: 'right' },
+  sampleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.xs + 1,
+  },
+  sampleRowAlt: { backgroundColor: colors.surfaceElevated + '60' },
+  sampleTs:  { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, fontFamily: monoFont },
+  sampleVal: { flex: 1, fontSize: fontSize.xs, color: colors.text, textAlign: 'right', fontFamily: monoFont },
 
   // Commands log
   logContent: { padding: spacing.sm, gap: 2 },

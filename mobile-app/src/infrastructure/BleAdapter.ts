@@ -8,7 +8,7 @@ const NUS_SERVICE = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 const RX_CHAR     = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 const TX_CHAR     = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
 
-const MTU                = 240;
+const MTU                = 128;
 const WRITE_CHUNK_BYTES  = 240;
 const SCAN_TIMEOUT_MS    = 20_000;
 const REQUEST_TIMEOUT_MS = 15_000;
@@ -60,6 +60,7 @@ export class BleAdapter implements IVehicleAdapter {
   private queue: Pending[] = [];
   private sampleCbs: Set<(s: MonitorSample) => void> = new Set();
   private lastActivityTime = 0;
+  private lastSampleAckMs = 0;
   private activityMonitorInterval: ReturnType<typeof setInterval> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   onUnexpectedDisconnect: (() => void) | null = null;
@@ -191,8 +192,8 @@ export class BleAdapter implements IVehicleAdapter {
     return await this.request({ cmd: 'session_dtcs', session_id: sessionId }) ?? [];
   }
 
-  async getSessionSamples(sessionId: number, pid?: number, limit = 1000): Promise<any[]> {
-    return await this.request({ cmd: 'session_samples', session_id: sessionId, pid, limit });
+  async getSessionSamples(sessionId: number, pid?: number, limit = 1000, offset = 0): Promise<any[]> {
+    return await this.request({ cmd: 'session_samples', session_id: sessionId, pid, limit, offset });
   }
 
   async getSessionCommands(sessionId: number): Promise<any[]> {
@@ -250,6 +251,11 @@ export class BleAdapter implements IVehicleAdapter {
     if (msg.type === 'samples') {
       const batch = msg.samples as MonitorSample[];
       batch.forEach((s) => this.sampleCbs.forEach((cb) => cb(s)));
+      const now = Date.now();
+      if (now - this.lastSampleAckMs > 5_000) {
+        this.lastSampleAckMs = now;
+        this.writeRx(JSON.stringify({ type: 'heartbeat_ack' }) + '\n', false).catch(() => {});
+      }
       return;
     }
     if (msg.type === 'sample' || msg.type === 'error') {
@@ -280,14 +286,30 @@ export class BleAdapter implements IVehicleAdapter {
   private request<T = unknown>(cmd: object): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       const json = JSON.stringify(cmd) + '\n';
+
+      // Keep Pi session alive while waiting for potentially large responses
+      const keepalive = setInterval(() => {
+        if (this.device) {
+          this.writeRx(JSON.stringify({ type: 'heartbeat_ack' }) + '\n', false).catch(() => {});
+        }
+      }, 5_000);
+
+      const finish = () => clearInterval(keepalive);
+
       const timer = setTimeout(() => {
+        finish();
         const idx = this.queue.findIndex((p) => p.timer === timer);
         if (idx !== -1) this.queue.splice(idx, 1);
         reject(new Error(`Tiempo de espera agotado: ${JSON.stringify(cmd)}`));
       }, REQUEST_TIMEOUT_MS);
 
-      this.queue.push({ resolve: resolve as (d: unknown) => void, reject, timer });
+      this.queue.push({
+        resolve: (d) => { finish(); (resolve as (d: unknown) => void)(d); },
+        reject:  (e) => { finish(); reject(e); },
+        timer,
+      });
       this.writeRx(json).catch((e) => {
+        finish();
         const idx = this.queue.findIndex((p) => p.timer === timer);
         if (idx !== -1) { clearTimeout(timer); this.queue.splice(idx, 1); }
         reject(e);

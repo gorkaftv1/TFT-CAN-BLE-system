@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system/next';
 import * as Sharing from 'expo-sharing';
 import { LogEntry, LogSection } from '../models/LogEntry';
 
@@ -27,11 +27,11 @@ export async function exportLogsToCsv(
 
   const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
   const filename = `diag_${label}_${ts}.csv`;
-  const path = `${FileSystem.cacheDirectory}${filename}`;
 
-  await FileSystem.writeAsStringAsync(path, header + body, { encoding: FileSystem.EncodingType.UTF8 });
+  const file = new File(Paths.cache, filename);
+  await file.write(header + body);
 
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) throw new Error('Compartir no está disponible en este dispositivo.');
-  await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: `Exportar ${filename}` });
+  await Sharing.shareAsync(file.uri, { mimeType: 'text/csv', dialogTitle: `Exportar ${filename}` });
 }

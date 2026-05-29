@@ -39,7 +39,7 @@ function SessionCard({ item, onPress }: { item: Session; onPress: () => void }) 
         <Stat label="Inicio"    value={formatTime(item.started_at)} />
         <Stat label="Duración"  value={formatDuration(item.started_at, item.ended_at)} />
         <Stat label="Muestras"  value={String(item.sample_count)} />
-        <Stat label="Averías"   value={item.dtc_count === null ? '…' : String(item.dtc_count)}
+        <Stat label="Averías"   value={String(item.dtc_count)}
               valueColor={item.dtc_count ? colors.warning : undefined} />
       </View>
 
