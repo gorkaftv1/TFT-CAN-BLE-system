@@ -110,11 +110,18 @@
 #define MAX_CAN_DATA_LEN             8
 #define SIM_UPDATE_INTERVAL_DEFAULT  200
 
+// ---------- THROTTLE RAMP SIMULATION ----------
+// Auto cycle: idle → ramp up → cruise → ramp down → repeat
+#define RAMP_IDLE_TICKS    15   // ticks at idle before ramping up   (15 × 200ms = 3s)
+#define RAMP_CRUISE_TICKS  15   // ticks at max throttle             (15 × 200ms = 3s)
+#define RAMP_MAX_THROTTLE  65   // peak throttle %
+#define RAMP_STEP           5   // throttle change per tick (%)
+
 // ---------- HARDWARE ----------
-#define ENGINE_START_PIN     7
-#define IGNITION_DEBOUNCE_MS 800
-#define DTC_FAULT_PIN        6
-#define DTC_DEBOUNCE_MS      800
+#define ENGINE_START_PIN        5
+#define IGNITION_HYSTERESIS_MS  300
+#define DTC_FAULT_PIN           4
+#define DTC_HYSTERESIS_MS       300
 
 // ---------- NOISE & BROADCAST ----------
 // Master switches — set both to 0 for a silent, deterministic bus

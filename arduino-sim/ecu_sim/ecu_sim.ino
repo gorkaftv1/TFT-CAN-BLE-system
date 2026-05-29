@@ -15,14 +15,14 @@ unsigned long engineStartTime = 0;
 bool engineRunning = false;
 uint8_t udsSession = 1;  // 1=default, 3=extended
 
-volatile bool ignitionPressed = false;
-unsigned long lastIgnDebounce = 0;
 bool keyOn = false;
 
-volatile bool dtcFaultPressed = false;
-unsigned long lastDtcDebounce = 0;
+volatile uint16_t ignitionFlag      = 0;
+volatile uint32_t lastIgnitionISR   = 0;
+volatile uint16_t dtcFlag           = 0;
+volatile uint32_t lastDtcISR        = 0;
 
-static const uint16_t DTC_FAULT_SET[] = { DTC_P0300, DTC_P0171, DTC_P0420 };
+static const uint16_t DTC_FAULT_SET[]   = { DTC_P0300, DTC_P0171, DTC_P0420 };
 static const uint8_t  DTC_FAULT_SET_SIZE = 3;
 
 uint8_t responseBuffer[7];
@@ -40,26 +40,25 @@ bool waitForFlowControl();
 bool handleMode10(uint8_t subFunc);
 bool handleMode22(uint16_t did);
 
-// ---------- ISR ----------
-// Minimal ISRs — only set flags, no Serial/delay/CAN.
-void onIgnitionButton() { ignitionPressed  = true; }
-void onDTCFaultButton()  { dtcFaultPressed = true; }
+// ---------- ISRs — FALLING edge + millis() hysteresis ----------
+void onIgnitionPress() {
+  uint32_t now = millis();
+  if ((uint32_t)(now - lastIgnitionISR) < IGNITION_HYSTERESIS_MS) return;
+  lastIgnitionISR = now;
+  ignitionFlag++;
+}
+void onDTCPress() {
+  uint32_t now = millis();
+  if ((uint32_t)(now - lastDtcISR) < DTC_HYSTERESIS_MS) return;
+  lastDtcISR = now;
+  dtcFlag++;
+}
 
 // ---------- IGNITION BUTTON ----------
-// Debounces ISR flag, toggles keyOn, sets idle RPM on start.
 void handleIgnitionButton() {
-  if (!ignitionPressed) return;
-  ignitionPressed = false;
-
-  // Reject release-bounce: ISR fires on FALLING; if pin is already HIGH, it's chatter from release
-  if (digitalRead(ENGINE_START_PIN) != LOW) return;
-
-  unsigned long now = millis();
-  if (now - lastIgnDebounce < IGNITION_DEBOUNCE_MS) return;
-  lastIgnDebounce = now;
-
+  if (!ignitionFlag) return;
+  ignitionFlag--;
   keyOn = !keyOn;
-
   if (keyOn) {
     vehicle.rpm = 850;
     Serial.println(F("[IGN] Key ON — engine starting (850 RPM)"));
@@ -70,18 +69,9 @@ void handleIgnitionButton() {
 }
 
 // ---------- DTC FAULT BUTTON ----------
-// Each press injects next DTC from DTC_FAULT_SET.
-// After all injected, next press clears all DTCs.
 void handleDTCButton() {
-  if (!dtcFaultPressed) return;
-  dtcFaultPressed = false;
-
-  if (digitalRead(DTC_FAULT_PIN) != LOW) return;
-
-  unsigned long now = millis();
-  if (now - lastDtcDebounce < DTC_DEBOUNCE_MS) return;
-  lastDtcDebounce = now;
-
+  if (!dtcFlag) return;
+  dtcFlag--;
   if (numStoredDTCs >= DTC_FAULT_SET_SIZE) {
     for (uint8_t i = 0; i < 8; i++) { dtcList[i].code = DTC_P0000; dtcList[i].active = false; }
     numStoredDTCs       = 0;
@@ -121,12 +111,12 @@ void setup() {
   initDTCs();
 
   pinMode(ENGINE_START_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(ENGINE_START_PIN), onIgnitionButton, FALLING);
+  attachInterrupt(digitalPinToInterrupt(ENGINE_START_PIN), onIgnitionPress, FALLING);
   Serial.print(F("[OK] Ignition button on pin D"));
   Serial.println(ENGINE_START_PIN);
 
   pinMode(DTC_FAULT_PIN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(DTC_FAULT_PIN), onDTCFaultButton, FALLING);
+  attachInterrupt(digitalPinToInterrupt(DTC_FAULT_PIN), onDTCPress, FALLING);
   Serial.print(F("[OK] DTC fault button on pin D"));
   Serial.println(DTC_FAULT_PIN);
 
@@ -214,10 +204,33 @@ void updateVehicleSimulation() {
     engineRunning   = true;
     engineStartTime = currentTime;
   } else if (vehicle.rpm == 0 && engineRunning) {
-    engineRunning = false;
+    engineRunning       = false;
+    vehicle.throttlePos = 0;
   }
 
   if (engineRunning) {
+    // --- Throttle ramp state machine ---
+    static uint8_t rampState = 0;  // 0=idle, 1=rampup, 2=cruise, 3=rampdown
+    static uint16_t rampTick = 0;
+    switch (rampState) {
+      case 0:  // idle — throttle at 0
+        vehicle.throttlePos = 0;
+        if (++rampTick >= RAMP_IDLE_TICKS)   { rampTick = 0; rampState = 1; }
+        break;
+      case 1:  // ramp up
+        vehicle.throttlePos = (uint8_t)min((int)vehicle.throttlePos + RAMP_STEP, (int)RAMP_MAX_THROTTLE);
+        if (vehicle.throttlePos >= RAMP_MAX_THROTTLE) { rampState = 2; rampTick = 0; }
+        break;
+      case 2:  // cruise
+        if (++rampTick >= RAMP_CRUISE_TICKS) { rampTick = 0; rampState = 3; }
+        break;
+      case 3:  // ramp down
+        vehicle.throttlePos = (vehicle.throttlePos > RAMP_STEP) ?
+                              vehicle.throttlePos - RAMP_STEP : 0;
+        if (vehicle.throttlePos == 0)        { rampState = 0; rampTick = 0; }
+        break;
+    }
+
     int16_t targetRpm = (int16_t)map(vehicle.throttlePos, 0, 100, 850, 5500);
     float alpha = 0.3f * ((float)dtMs / 200.0f);
     if (alpha > 1.0f) alpha = 1.0f;
