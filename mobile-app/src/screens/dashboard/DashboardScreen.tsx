@@ -27,20 +27,13 @@ function isStale(timestamp: number, intervalMs: number): boolean {
   return Date.now() - timestamp > Math.max(intervalMs * 3, 2000);
 }
 
-function valueColor(widget: Widget, value: number): string {
-  const def = PID_MAP.get(widget.pid);
+function valueColor(pid: number, value: number): string {
+  const def = PID_MAP.get(pid);
   if (!def?.colorThresholds) return colors.text;
-  const { warn, danger, direction } = def.colorThresholds;
-  if (direction === 'up') {
-    if (value >= danger) return colors.error;
-    if (value >= warn)   return colors.warning;
-    return colors.success;
-  } else {
-    if (value <= danger) return colors.error;
-    if (value <= warn)   return colors.warning;
-    return colors.success;
-  }
+  const { goodMin, goodMax } = def.colorThresholds;
+  return (value >= goodMin && value <= goodMax) ? colors.success : colors.warning;
 }
+
 
 function formatObdValue(pid: number, value: number): string {
   if (pid === 0x0C) return Math.round(value).toLocaleString();
@@ -82,7 +75,7 @@ function ObdCard({ widget, intervalMs }: { widget: Widget; intervalMs: number })
   }
 
   const stale = isStale(sample.timestamp, intervalMs);
-  const color = stale ? colors.textMuted : valueColor(widget, sample.value);
+  const color = stale ? colors.textMuted : valueColor(widget.pid, sample.value);
 
   return (
     <View style={[styles.card, stale && styles.cardStale]}>
@@ -145,7 +138,7 @@ function UdsCard({ def }: { def: UdsDidConfig }) {
 
   return (
     <View style={styles.card}>
-      <View style={[styles.dot, { backgroundColor: colors.success }]} />
+      <View style={[styles.dot, { backgroundColor: colors.border }]} />
       <Text style={styles.cardName} numberOfLines={1}>{def.name}</Text>
       <Text style={styles.cardPid}>{def.hexStr}</Text>
       <View style={styles.cardRight}>
@@ -172,15 +165,15 @@ function CardHeader() {
 // ── Color legend ──────────────────────────────────────────────────
 
 const LEGEND_OBD = [
-  { color: colors.success, label: 'Normal' },
-  { color: colors.warning, label: 'Atención' },
-  { color: colors.error,   label: 'Crítico' },
-  { color: colors.warning, label: 'Timeout' },
+  { color: colors.success,   label: 'Rango normal' },
+  { color: colors.warning,   label: 'Fuera de rango' },
+  { color: colors.text,      label: 'Sin umbral' },
+  { color: colors.warning,   label: 'Timeout' },
   { color: colors.textMuted, label: 'Sin datos' },
 ];
 
 const LEGEND_UDS = [
-  { color: colors.success,   label: 'OK' },
+  { color: colors.text,      label: 'Leído' },
   { color: colors.primary,   label: 'Leyendo' },
   { color: colors.warning,   label: 'Error' },
   { color: colors.textMuted, label: 'Sin datos' },

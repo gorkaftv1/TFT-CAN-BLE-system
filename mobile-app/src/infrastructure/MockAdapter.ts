@@ -89,7 +89,7 @@ export class MockAdapter implements IVehicleAdapter {
     ];
     return [];
   }
-  async getSessionSamples(sessionId: number, pid?: number, limit = 1000): Promise<any[]> {
+  async getSessionSamples(sessionId: number, pid?: number, limit = 1000, offset = 0): Promise<any[]> {
     if (sessionId !== 3) return [];
     const base = new Date('2026-05-20T09:10:00.000Z').getTime();
     const all: any[] = [];
@@ -101,7 +101,7 @@ export class MockAdapter implements IVehicleAdapter {
       all.push({ pid: 0x04, name: 'Carga del motor',    value: parseFloat((28 + Math.sin(i * 0.2) * 15).toFixed(1)),  unit: '%',   ts });
     }
     const filtered = pid !== undefined ? all.filter((s) => s.pid === pid) : all;
-    return filtered.slice(0, limit);
+    return filtered.slice(offset, offset + limit);
   }
 
   async getSessionCommands(sessionId: number): Promise<any[]> {

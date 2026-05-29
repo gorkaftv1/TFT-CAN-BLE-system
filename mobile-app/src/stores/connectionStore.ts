@@ -33,6 +33,8 @@ export const useConnectionStore = create<ConnectionState>((set, get) => ({
 
   startScan: () => {
     get().stopScanFn?.();
+    // Clean up any stale GATT connection before scanning
+    getAdapter().disconnect().catch(() => {});
     set({ status: 'scanning', scannedDevices: [], error: null });
     const ble = BleAdapter.getInstance();
     const stop = ble.startScan((device) => {

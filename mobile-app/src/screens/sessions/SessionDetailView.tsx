@@ -8,8 +8,9 @@ import { Session } from '../../domain/models/Session';
 import { colors, fontSize, monoFont, spacing } from '../../shared/theme';
 
 const SAMPLES_DISCOVERY_LIMIT = 50;
-const SAMPLES_BATCH_SIZE      = 3;
-const SAMPLES_BATCH_DELAY_MS  = 75;
+const SAMPLES_PER_PID_LIMIT   = 400;   // max samples per PID — keeps BLE payload small
+const SAMPLES_BATCH_SIZE      = 1;     // one PID at a time — avoids BLE congestion
+const SAMPLES_BATCH_DELAY_MS  = 300;   // pause between PIDs — gives Pi time to recover
 
 type Tab = 'dtcs' | 'samples' | 'commands';
 
@@ -26,8 +27,10 @@ interface PidEntry {
 }
 
 function pad(n: number, z = 2) { return n.toString().padStart(z, '0'); }
-function fmtTs(iso: string): string {
-  const d = new Date(iso);
+
+function fmtTs(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 function fmtDate(iso: string): string {
@@ -152,7 +155,7 @@ function SamplesTab({ sessionId }: { sessionId: number }) {
         const batch = pidOrder.slice(i, i + SAMPLES_BATCH_SIZE);
         for (const pid of batch) {
           try {
-            const pidSamples = await getAdapter().getSessionSamples(sessionId, pid);
+            const pidSamples = await getAdapter().getSessionSamples(sessionId, pid, SAMPLES_PER_PID_LIMIT);
             setPidEntries((prev) =>
               prev.map((e) => e.pid === pid ? { ...e, samples: pidSamples, loading: false } : e)
             );

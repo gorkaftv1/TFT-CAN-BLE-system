@@ -82,6 +82,12 @@ export function ScanModal({ visible, onClose }: { visible: boolean; onClose: () 
   const hasList      = scannedDevices.length > 0;
   const showHint     = !isScanning && !isConnecting && !hasList;
 
+  const sortedDevices = [...scannedDevices].sort((a, b) => {
+    const aTarget = (a.name ?? '') === targetName ? 0 : 1;
+    const bTarget = (b.name ?? '') === targetName ? 0 : 1;
+    return aTarget - bTarget;
+  });
+
   const handleCancel = () => {
     if (isScanning) stopScan();
     onClose();
@@ -114,10 +120,10 @@ export function ScanModal({ visible, onClose }: { visible: boolean; onClose: () 
               {(isScanning || isConnecting) && (
                 <Animated.Text style={[s.spinner, { transform: [{ rotate }] }]}>o</Animated.Text>
               )}
-              <Text style={s.scanStatus}>
+              <Text style={[s.scanStatus, isScanning && s.scanStatusActive]}>
                 {isConnecting ? 'Conectando...' :
-                 isScanning   ? 'Buscando...' :
-                 hasList      ? `${scannedDevices.length} encontrados` :
+                 isScanning   ? 'Buscando dispositivos cercanos...' :
+                 hasList      ? `${scannedDevices.length} dispositivos encontrados` :
                  'Listo para buscar'}
               </Text>
             </View>
@@ -150,7 +156,7 @@ export function ScanModal({ visible, onClose }: { visible: boolean; onClose: () 
             </View>
           ) : hasList ? (
             <FlatList
-              data={scannedDevices}
+              data={sortedDevices}
               keyExtractor={(d) => d.id}
               renderItem={renderDevice}
               style={s.deviceList}
@@ -260,7 +266,8 @@ const s = StyleSheet.create({
   },
   scanBarLeft:  { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
   spinner:      { fontSize: 16, color: colors.primary },
-  scanStatus:   { fontSize: fontSize.sm, color: colors.textSecondary },
+  scanStatus:       { fontSize: fontSize.sm, color: colors.textSecondary },
+  scanStatusActive: { fontWeight: '700', color: colors.primary },
   actionBtn: {
     paddingHorizontal: spacing.md, paddingVertical: spacing.xs,
     borderRadius: 8, borderWidth: 1, borderColor: colors.border,
