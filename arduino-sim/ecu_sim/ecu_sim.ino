@@ -51,6 +51,9 @@ void handleIgnitionButton() {
   if (!ignitionPressed) return;
   ignitionPressed = false;
 
+  // Reject release-bounce: ISR fires on FALLING; if pin is already HIGH, it's chatter from release
+  if (digitalRead(ENGINE_START_PIN) != LOW) return;
+
   unsigned long now = millis();
   if (now - lastIgnDebounce < IGNITION_DEBOUNCE_MS) return;
   lastIgnDebounce = now;
@@ -72,6 +75,8 @@ void handleIgnitionButton() {
 void handleDTCButton() {
   if (!dtcFaultPressed) return;
   dtcFaultPressed = false;
+
+  if (digitalRead(DTC_FAULT_PIN) != LOW) return;
 
   unsigned long now = millis();
   if (now - lastDtcDebounce < DTC_DEBOUNCE_MS) return;

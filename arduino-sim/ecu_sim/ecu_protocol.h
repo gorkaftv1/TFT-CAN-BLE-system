@@ -112,9 +112,9 @@
 
 // ---------- HARDWARE ----------
 #define ENGINE_START_PIN     7
-#define IGNITION_DEBOUNCE_MS 500
+#define IGNITION_DEBOUNCE_MS 800
 #define DTC_FAULT_PIN        6
-#define DTC_DEBOUNCE_MS      500
+#define DTC_DEBOUNCE_MS      800
 
 // ---------- NOISE & BROADCAST ----------
 // Master switches — set both to 0 for a silent, deterministic bus
