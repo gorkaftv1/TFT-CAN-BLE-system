@@ -79,6 +79,7 @@ class LoggedDiagnosticSession(IDiagnosticSession):
     def get_dtcs(self) -> list[Dtc]:
         result = self._inner.get_dtcs()
         self._log("get_dtcs")
+        self._logger.log_dtcs(self._session_id, result)
         return result
 
     def clear_dtcs(self) -> None:

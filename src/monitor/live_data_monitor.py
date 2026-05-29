@@ -66,6 +66,7 @@ class LiveDataMonitor(IDataMonitor):
             lock if lock is not None else contextlib.nullcontext()
         )
 
+        self._nrc_pids: set[int] = set()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
 
@@ -112,6 +113,8 @@ class LiveDataMonitor(IDataMonitor):
             self._stop_event.wait(timeout=self._interval_s)
 
     def _poll_single(self, pid_def: PidDefinition) -> None:
+        if pid_def.pid in self._nrc_pids:
+            return
         try:
             with self._lock:
                 self._transport.send(pid_def.request)
@@ -120,9 +123,12 @@ class LiveDataMonitor(IDataMonitor):
                 # Each receive() here returns instantly if a frame is already
                 # buffered; only blocks up to timeout if the queue is empty.
                 for _ in range(self._MAX_DRAIN):
-                    if len(raw) < 2 or raw[1] == pid_def.pid:
+                    if len(raw) < 2 or raw[0] == 0x7F or raw[1] == pid_def.pid:
                         break
                     raw = self._transport.receive()
+            if len(raw) >= 1 and raw[0] == 0x7F:
+                self._nrc_pids.add(pid_def.pid)
+                return
             ts = time.monotonic()
             self._decoder.validate_response(raw, expected_mode=0x01)
             if len(raw) >= 2 and raw[1] != pid_def.pid:
