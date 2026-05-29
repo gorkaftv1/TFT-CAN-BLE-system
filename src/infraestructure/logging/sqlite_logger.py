@@ -154,23 +154,24 @@ class SqliteDataLogger(IDataLogger):
         session_id: int,
         pid: int | None = None,
         limit: int = 1000,
+        offset: int = 0,
     ) -> list[MonitorSample]:
         if pid is None:
             cur = self._conn.execute(
-                "SELECT pid, name, value, unit, monotonic_ts"
+                "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ?"
-                " ORDER BY monotonic_ts LIMIT ?",
-                (session_id, limit),
+                " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
+                (session_id, limit, offset),
             )
         else:
             cur = self._conn.execute(
-                "SELECT pid, name, value, unit, monotonic_ts"
+                "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ? AND pid = ?"
-                " ORDER BY monotonic_ts LIMIT ?",
-                (session_id, pid, limit),
+                " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
+                (session_id, pid, limit, offset),
             )
         return [
-            MonitorSample(pid=r[0], name=r[1], value=r[2], unit=r[3], timestamp=r[4])
+            MonitorSample(pid=r[0], name=r[1], value=r[2], unit=r[3], timestamp=r[4], wall_ts=r[5])
             for r in cur.fetchall()
         ]
 

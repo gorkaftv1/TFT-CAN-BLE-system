@@ -261,18 +261,24 @@ class BtCommandHandler:
         }
 
     def _session_samples(self, cmd: dict) -> dict:
-        sid = int(cmd.get("session_id", 0))
-        pid = cmd.get("pid")
-        limit = int(cmd.get("limit", 1000))
+        sid    = int(cmd.get("session_id", 0))
+        pid    = cmd.get("pid")
+        limit  = int(cmd.get("limit", 1000))
+        offset = int(cmd.get("offset", 0))
         samples = self._logger.get_samples(
             session_id=sid,
             pid=int(pid) if pid is not None else None,
             limit=limit,
+            offset=offset,
         )
         return {
             "status": "ok",
             "data": [
-                {"pid": s.pid, "name": s.name, "value": s.value, "unit": s.unit, "ts": s.timestamp}
+                {
+                    "pid": s.pid, "name": s.name,
+                    "value": s.value, "unit": s.unit,
+                    "ts": s.wall_ts or str(s.timestamp),
+                }
                 for s in samples
             ],
         }
@@ -374,3 +380,9 @@ class BtCommandHandler:
         self.stop_monitor()
         self._authenticated = self._auth_token is None
         self._uds_session_type = 1
+
+    def close_session(self) -> None:
+        """Flush DB buffer and end session cleanly before process restart."""
+        self.stop_monitor()
+        self._logger.end_session(self._session_id)
+        self._logger.close()

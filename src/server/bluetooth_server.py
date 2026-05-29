@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 import time
 
 try:
@@ -139,8 +141,19 @@ class BLEDiagServer:
         self._last_rx_time = time.time()
         if not self._client_connected:
             self._client_connected = True
-            print("[BLE] Client connected — first write received")
-            logger.info("[BLE] Client connected")
+            # Log negotiated MTU: the first write size reveals the MTU the client is using
+            negotiated_mtu = len(value)
+            mtu_info = f"first write size={negotiated_mtu}b (server TX MTU={_MTU}b)"
+            print(f"[BLE] Client connected — {mtu_info}")
+            logger.info(f"[BLE] Client connected — {mtu_info}")
+            # Try to read MTU from bless server if available
+            try:
+                if hasattr(self._server, "get_mtu"):
+                    blz_mtu = self._server.get_mtu()
+                    print(f"[BLE] BlueZ reported MTU: {blz_mtu}")
+                    logger.info(f"[BLE] BlueZ reported MTU: {blz_mtu}")
+            except Exception as e:
+                logger.debug(f"[BLE] Could not read BlueZ MTU: {e}")
 
         chunk = bytes(value).decode("utf-8", errors="replace")
 
@@ -194,7 +207,6 @@ class BLEDiagServer:
                         logger.warning(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         print(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         await self._handle_disconnect()
-                        return  # restart created a new watchdog; this one exits
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -205,35 +217,16 @@ class BLEDiagServer:
         self._client_connected = False
         self._recv_buf = ""
         self._handler.on_disconnect()
-        logger.info("[BLE] Client disconnected — state reset")
-        print("[BLE] Client disconnected — state reset")
-        await self._restart_server()
-
-    async def _restart_server(self) -> None:
-        """Stop and restart the BLE server so advertising resumes for new connections."""
-        logger.info("[BLE] Restarting server to re-enable advertising...")
-        print("[BLE] Restarting server to re-enable advertising...")
-        self._server_running = False
-
-        current_task = asyncio.current_task()
-        if self._watchdog_task and not self._watchdog_task.done() and self._watchdog_task is not current_task:
-            self._watchdog_task.cancel()
-            try:
-                await self._watchdog_task
-            except asyncio.CancelledError:
-                pass
-        self._watchdog_task = None
-
-        if self._server:
-            try:
-                await self._server.stop()
-            except Exception as e:
-                logger.warning(f"[BLE] Error stopping server during restart: {e}")
-            self._server = None
-
-        await asyncio.sleep(1)
-        await self._start_server()
-        print("[BLE] Server restarted — advertising again")
+        logger.info("[BLE] Client disconnected — closing session and restarting process")
+        print("[BLE] Client disconnected — closing session and restarting process")
+        # Flush DB and end session cleanly before restart
+        try:
+            self._handler.close_session()
+            print("[BLE] Session closed and DB flushed")
+        except Exception as e:
+            logger.warning(f"[BLE] Error closing session: {e}")
+        # Replace process — BlueZ cleans up when D-Bus socket closes
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ── Dispatch and notify ────────────────────────────────────────────
 
