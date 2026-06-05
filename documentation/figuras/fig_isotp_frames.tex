@@ -26,11 +26,3 @@ D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7
 \end{tabular}%
 }
 \vspace{0.5em}
-
-\begin{tabular}{@{}ll@{}}
-\textbf{N}    & longitud \textit{payload} (SF, 1--7) o número de secuencia módulo 16 (CF, 0x1--0xF\,$\rightarrow$\,0x0) \\
-\textbf{H:LL} & longitud total del mensaje en 12 bits (FF, máx.\ 4\,095 bytes) \\
-\textbf{FS}   & \textit{Flow Status}: 0 = \textit{ContinueSending}, 1 = \textit{Wait}, 2 = \textit{Overflow} \\
-\textbf{BS}   & \textit{Block Size}: CFs antes del siguiente FC (0 = sin límite) \\
-\textbf{STmin}& separación mínima entre CFs: 0x00--0x7F\,=\,0--127\,ms;\enspace 0xF1--0xF9\,=\,100--900\,\textmu s \\
-\end{tabular}

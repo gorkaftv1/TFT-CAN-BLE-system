@@ -16,7 +16,7 @@
 
 // ---------- LOGGING ----------
 // 0 = quiet (only errors + key events), 1 = all RX/TX frames, 2 = + broadcasts
-#define LOG_LEVEL 0
+#define LOG_LEVEL 2
 
 // ---------- CAN BUS ----------
 #define CAN_SPEED          500E3
@@ -128,12 +128,12 @@
 //
 // BROADCAST_ENABLE: 1 = emit 0x280/0x320/0x3D0 frames every BROADCAST_INTERVAL_MS
 //                   0 = no unsolicited frames (bus silent except OBD responses)
-#define BROADCAST_ENABLE       0
-#define BROADCAST_INTERVAL_MS  100
+#define BROADCAST_ENABLE       1
+#define BROADCAST_INTERVAL_MS  10000
 
 // ADD_NOISE: 1 = add random jitter to sensor values each update cycle
 //            0 = clean deterministic values
-#define ADD_NOISE              0
+#define ADD_NOISE              1
 
 // Per-sensor noise amplitude (only active when ADD_NOISE 1)
 #define NOISE_RPM_MAX        25

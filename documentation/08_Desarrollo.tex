@@ -10,9 +10,9 @@ El sistema desarrollado se articula en torno a tres nodos de procesamiento indep
 \label{fig:arch_general}
 \end{figure}
 
-El \textbf{simulador de ECU} (Arduino MKR con shield CAN) reproduce el comportamiento de una unidad de control electrónico vehicular sobre el bus CAN a 500\,kbps. Responde a peticiones OBD-II en los cuatro modos implementados, genera datos de telemetría mediante un modelo físico simplificado del motor, e introduce ruido controlado en el bus para validar la robustez del sistema.
+El \textbf{simulador de ECU} (Arduino MKR con shield CAN) reproduce el comportamiento de una unidad de control electrónico vehicular sobre el bus CAN a 500\,kbps. Responde a peticiones OBD-II en los cuatro modos implementados (\texttt{0x01}, \texttt{0x03}, \texttt{0x04} y \texttt{0x09}) y a dos servicios UDS (\texttt{0x10} DiagnosticSessionControl y \texttt{0x22} ReadDataByIdentifier), genera datos de telemetría mediante un modelo físico simplificado del motor, y permite inyectar averías (DTCs) mediante un pulsador hardware. Opcionalmente puede activarse ruido en los valores de los sensores y la emisión de tramas de difusión periódicas, ambos desactivados por defecto.
 
-La \textbf{herramienta de diagnóstico} (Raspberry Pi con controlador MCP2515) actúa como nodo central del sistema: implementa la pila de protocolos completa (ISO-TP + OBD-II), persiste los datos en SQLite y expone el servicio BLE GATT hacia la aplicación móvil. Internamente opera con dos hilos de ejecución concurrentes: el hilo de monitorización continua y el hilo de atención a comandos BLE.
+La \textbf{herramienta de diagnóstico} (Raspberry Pi con controlador MCP2515) actúa como nodo central del sistema: implementa la pila de protocolos completa (ISO-TP + OBD-II + UDS), persiste los datos en SQLite y expone el servicio BLE GATT hacia la aplicación móvil. Internamente opera con dos hilos de ejecución concurrentes: el hilo de monitorización continua y el hilo de atención a comandos BLE.
 
 La \textbf{aplicación móvil} (React Native) se conecta a la Raspberry Pi vía BLE e interactúa con el sistema a través de comandos JSON sobre el servicio Nordic UART Service. Ofrece una interfaz de usuario estructurada en cinco pantallas funcionales.
 
@@ -20,8 +20,47 @@ La separación de responsabilidades entre los tres componentes permite que cada 
 
 
 % ======================================================================
-% TODO - revisar y redactar todo el capítulo de desarrollo
-% TODO - este capítulo usa \subsubsection{} extensamente, pero el documento solo permite \chapter \section \subsection — convertir todos los \subsubsection a \medskip\noindent\textbf{} o reorganizar como \subsection
+\section{Dependencias y entorno de desarrollo}
+\label{sec:dependencias}
+
+Cada uno de los tres componentes se apoya en un conjunto reducido de dependencias de terceros, seleccionadas por implementar estándares abiertos. A continuación se describe el entorno y las librerías de cada nodo, así como el uso concreto que se hace de cada una.
+
+\medskip
+\noindent\textbf{Simulador de ECU (Arduino)}
+
+El firmware se desarrolla en C++ sobre el \textit{core} de Arduino y se compila con el Arduino IDE. Su única dependencia externa es:
+
+\begin{itemize}
+    \item \textbf{\texttt{arduino-CAN}} de Sandeep Mistry~\cite{ArduinoCAN_lib}: abstrae el controlador CAN MCP2515~\cite{Microchip_MCP2515} a través del bus SPI. Se utiliza para inicializar el bus a 500\,kbps (\texttt{CAN.begin}) y para enviar y recibir las tramas crudas de 8 bytes (\texttt{beginPacket}/\texttt{write}/\texttt{endPacket}, \texttt{parsePacket}/\texttt{read}). Toda la lógica ISO-TP, OBD-II y UDS se implementa manualmente sobre estas primitivas.
+\end{itemize}
+
+\medskip
+\noindent\textbf{Herramienta de diagnóstico (Raspberry Pi, Python 3)}
+
+La herramienta se ejecuta sobre Python 3 en Raspberry Pi OS, apoyándose en el subsistema SocketCAN del kernel Linux~\cite{LinuxKernel_ISOTP} para el acceso al bus a través del CAN HAT~\cite{Waveshare_RS485CANHAT}. Sus dependencias (recogidas en \texttt{requirements.txt}) son:
+
+\begin{itemize}
+    \item \textbf{\texttt{python-can}}~\cite{Twiss23-pythoncan}: proporciona la abstracción de alto nivel sobre la interfaz SocketCAN (\texttt{can.Bus}). Se usa como capa de acceso al bus por debajo de ISO-TP.
+    \item \textbf{\texttt{can-isotp}}~\cite{Menager23-isotp}: implementa el protocolo de transporte ISO 15765-2. Se usa (\texttt{isotp.CanStack}) para segmentar y reensamblar de forma transparente los mensajes que superan los 8 bytes de una trama CAN, gestionando \textit{First/Consecutive Frames} y \textit{Flow Control}.
+    \item \textbf{\texttt{bless}}~\cite{Bless_lib}: servidor GATT BLE multiplataforma sobre \texttt{asyncio} y BlueZ. Se usa para publicar el servicio Nordic UART Service y atender las escrituras y notificaciones del cliente móvil.
+\end{itemize}
+
+La persistencia (\texttt{sqlite3}), la concurrencia (\texttt{threading}, \texttt{asyncio}) y el registro (\texttt{logging}) se resuelven con la biblioteca estándar de Python, sin dependencias adicionales.
+
+\medskip
+\noindent\textbf{Aplicación móvil (React Native)}
+
+La aplicación se construye con React Native sobre el \textit{framework} Expo~\cite{Expo_docs}, lo que permite una única base de código para Android e iOS. Sus dependencias principales son:
+
+\begin{itemize}
+    \item \textbf{\texttt{react-native-ble-plx}}~\cite{ReactNativeBLEPLX}: cliente BLE nativo. Se usa para el escaneo, la conexión, la negociación de MTU, la escritura en la característica RX y la suscripción a notificaciones de la característica TX del servicio NUS.
+    \item \textbf{\texttt{zustand}}~\cite{Zustand_lib}: gestión de estado global ligera. Se usa para los almacenes que mantienen el estado de conexión, la telemetría, los DTCs, las sesiones y la configuración.
+    \item \textbf{@\texttt{react-navigation}} (\texttt{bottom-tabs}): navegación por pestañas de la interfaz.
+    \item \textbf{@\texttt{react-native-async-storage}}: persistencia local de preferencias; \textbf{\texttt{expo-file-system}} y \textbf{\texttt{expo-sharing}}: exportación del registro de la aplicación.
+\end{itemize}
+
+
+% ======================================================================
 \section{Proceso de desarrollo iterativo}
 \label{sec:desarrollo_iterativo}
 
@@ -33,9 +72,17 @@ El sistema se construyó de forma incremental en cuatro fases, cada una verifica
 
 El primer paso fue verificar que los dos nodos hardware —Arduino MKR y Raspberry Pi con CAN HAT RS485— podían intercambiar tramas CAN correctamente antes de introducir ninguna lógica de protocolo.
 
-\subsubsection*{Arduino — transmisión básica CAN}
+\medskip
+\noindent\textbf{Arduino — transmisión básica CAN}
 
-El sketch inicial se apoyó en la librería \texttt{arduino-CAN} de Sandeep Mistry, que abstrae el controlador MCP2515 vía SPI. La inicialización del bus se reduce a una sola llamada, como se muestra en el Listado~A del Anexo~A:
+\begin{figure}[!htbp]
+\centering
+\includegraphics[width=\textwidth]{Ilustraciones/iter_1_ard.png}
+\caption{Arduino IDE — monitor serie durante la fase de validación CAN. Se aprecia la confirmación de inicialización del bus (\texttt{[OK] CAN Bus at 500 kbps}) y el log de cada trama enviada.}
+\label{fig:fase1_arduino_serial}
+\end{figure}
+
+El sketch inicial se apoyó en la librería \texttt{arduino-CAN} de Sandeep Mistry, que abstrae el controlador MCP2515 vía SPI. La inicialización del bus se reduce a una sola llamada, como se resume a continuación:
 
 \begin{itemize}
     \item \texttt{CAN.begin(CAN\_SPEED)} inicializa el controlador a 500\,kbps según la constante definida en \texttt{ecu\_protocol.h} (\texttt{\#define CAN\_SPEED 500E3}).
@@ -43,14 +90,15 @@ El sketch inicial se apoyó en la librería \texttt{arduino-CAN} de Sandeep Mist
     \item El Serial a 115200\,baud reporta el resultado de cada operación, lo que permite supervisar el comportamiento desde el IDE de Arduino.
 \end{itemize}
 
+\medskip
+\noindent\textbf{Raspberry Pi — recepción y herramientas SocketCAN}
+
 \begin{figure}[!htbp]
 \centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase1_arduino_serial.png}
-\caption{Arduino IDE — monitor serie durante la fase de validación CAN. Se aprecia la confirmación de inicialización del bus (\texttt{[OK] CAN Bus at 500 kbps}) y el log de cada trama enviada.}
-\label{fig:fase1_arduino_serial}
+\includegraphics[width=\textwidth]{Ilustraciones/iter_1_pi.png}
+\caption{Sesión SSH en la Raspberry Pi mostrando la salida de \texttt{candump can0} y una petición manual con \texttt{cansend} durante la validación del enlace CAN.}
+\label{fig:fase1_pi_candump}
 \end{figure}
-
-\subsubsection*{Raspberry Pi — recepción y herramientas SocketCAN}
 
 En la Raspberry Pi, la interfaz CAN se levanta mediante el subsistema SocketCAN de Linux:
 
@@ -62,114 +110,129 @@ Las utilidades \texttt{candump} y \texttt{cansend} del paquete \texttt{can-utils
 
 \begin{verbatim}
 candump can0
-cansend can0 7DF#0201050000000000
+cansend can0 7E0#0201050000000000
 \end{verbatim}
 
-La salida de \texttt{candump} confirma el identificador, la longitud y los bytes de datos de cada trama recibida, lo que permitió verificar que el filtro de aceptación del controlador MCP2515 estaba correctamente configurado.
+La salida de \texttt{candump} confirma el identificador, la longitud y los bytes de datos de cada trama recibida, lo que permitió verificar que la recepción sobre el controlador MCP2515 estaba correctamente configurada.
 
-\begin{figure}[!htbp]
-\centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase1_pi_candump.png}
-\caption{Sesión SSH en la Raspberry Pi mostrando la salida de \texttt{candump can0} y una petición manual con \texttt{cansend} durante la validación del enlace CAN.}
-\label{fig:fase1_pi_candump}
-\end{figure}
-
-
-% ----------------------------------------------------------------------
 \subsection{Fase 2: Primer prototipo — simulador ECU y CLI de diagnóstico}
 \label{sec:fase2}
 
-Con el enlace CAN validado se desarrolló el primer prototipo funcional: el Arduino comenzó a responder a peticiones OBD-II reales, y la Raspberry Pi pasó de \texttt{candump} a ejecutar una herramienta Python estructurada.
+Ya validado el enlace CAN se desarolla el primer prototipo funcional: el Arduino responde a peticiones OBD-II reales, y la Raspberry Pi script de python interactivo.
 
-\subsubsection*{Arduino — respuesta a peticiones OBD-II}
-
-El simulador incorporó la función \texttt{processCANMessage()} que analiza el modo de servicio (primer byte de datos) y el PID solicitado (segundo byte) para construir la respuesta en el formato ISO-TP Single Frame. Los modos implementados en esta fase fueron \texttt{0x01} (datos en vivo, PIDs básicos) y \texttt{0x03} (lectura de DTCs preconfigurados).
-
-La constante \texttt{ECU\_CAN\_ID = 0x7E0} define el identificador de petición escuchado, y \texttt{ECU\_RESPONSE\_ID = 0x7E8} el identificador de respuesta emitido, ambos definidos en \texttt{ecu\_protocol.h} en concordancia con el estándar SAE J1979.
+\medskip
+\noindent\textbf{Arduino — respuesta a peticiones OBD-II}
 
 \begin{figure}[!htbp]
 \centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase2_arduino_serial.png}
-\caption{Monitor serie del Arduino durante la Fase 2: cada petición recibida (\texttt{[RX]}) y su respuesta (\texttt{[TX]}) se registran indicando modo, PID y bytes de datos.}
+\includegraphics[width=0.35\textwidth]{Ilustraciones/iter_2_ard.png}
+\caption{Monitor serie del Arduino durante la Fase 2: cada petición recibida (\texttt{[RX]}) y su respuesta (\texttt{[TX SF]}) se registran indicando modo, PID y bytes de datos.}
 \label{fig:fase2_arduino_serial}
 \end{figure}
 
-\subsubsection*{Raspberry Pi — pila ISO-TP y CLI}
+Se incropora la función \texttt{processCANMessages()} que analiza el modo de servicio (segundo byte de datos, tras el byte PCI de ISO-TP) y el PID solicitado para construir la respuesta en el formato ISO-TP Single Frame. Los modos implementados en esta fase fueron \texttt{0x01} (datos en vivo, PIDs básicos) y \texttt{0x03} (lectura de DTCs preconfigurados).
 
-En la Raspberry Pi se introdujeron las librerías \texttt{python-can}~\cite{Twiss23-pythoncan} y \texttt{can-isotp}~\cite{Menager23-isotp}, que gestionan respectivamente el acceso al bus SocketCAN y la segmentación/reensamblado ISO-TP. La clase \texttt{IsoTpTransport} encapsula ambas en la interfaz \texttt{ITransport} del sistema:
+Además se añadió el modo \texttt{0x09} (información del vehículo), cuyo PID \texttt{0x02} devuelve el VIN de 17 caracteres. Al superar la respuesta los 7 bytes útiles de un Single Frame, la función \texttt{sendVINMultiFrame()} implementa la transmisión ISO-TP multi-frame del lado emisor: envía primero un First Frame (\texttt{FF}, PCI \texttt{0x1X}) con la longitud total de la carga, espera el Flow Control del escáner mediante \texttt{waitForFlowControl()} y a continuación emite los Consecutive Frames (\texttt{CF}, PCI \texttt{0x2X}) con número de secuencia incremental y una separación temporal entre tramas. Es la primera segmentación manual del protocolo en el Arduino, ya que las librerías ISO-TP residen solo en el lado de la Raspberry Pi.
 
-\begin{itemize}
-    \item \texttt{isotp.Address} configura los identificadores de tester (\texttt{0x7E0}) y ECU (\texttt{0x7E8}) en modo Normal 11 bits.
-    \item \texttt{isotp.CanStack} gestiona de forma automática los Flow Control frames y el reensamblado de respuestas multi-frame.
-    \item El timeout de recepción (\texttt{timeout=5.0\,s}) absorbe la latencia de la fase de ruido sin generar falsos errores.
-\end{itemize}
+La constante \texttt{ECU\_CAN\_ID = 0x7E0} define el identificador de petición escuchado, y \texttt{ECU\_RESPONSE\_ID = 0x7E8} el identificador de respuesta emitido, ambos definidos en \texttt{ecu\_protocol.h} en concordancia con el direccionamiento físico OBD-II sobre CAN.
 
-Sobre este transporte se desarrolló \texttt{cli.py}, un menú interactivo que permitió ejecutar consultas OBD-II desde la línea de comandos sin necesidad de la aplicación móvil. El menú inicial ofrecía dos operaciones principales:
 
-\begin{itemize}
-    \item \textbf{Opción 1 — Live data}: consulta instantánea de los cinco PIDs más relevantes (RPM, temperatura, velocidad, posición del acelerador, carga del motor).
-    \item \textbf{Opción 3 — Read DTCs}: lectura de la lista de códigos de avería almacenados en la ECU simulada.
-\end{itemize}
+\noindent\textbf{Raspberry Pi — pila ISO-TP y CLI}
 
 \begin{figure}[!htbp]
 \centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase2_cli_basic.png}
+\includegraphics[width=0.5\textwidth]{Ilustraciones/iter_2_pi.png}
 \caption{CLI de diagnóstico (\texttt{cli.py}) en la Fase 2: menú interactivo con opciones de live data y lectura de DTCs, ejecutado en la Raspberry Pi vía SSH.}
 \label{fig:fase2_cli}
 \end{figure}
+
+En la Raspberry Pi se introdujeron las librerías \texttt{python-can}~\cite{Twiss23-pythoncan} y \texttt{can-isotp}~\cite{Menager23-isotp}, que gestionan respectivamente el acceso al bus SocketCAN y la segmentación/reensamblado ISO-TP. La clase \texttt{IsoTpTransport} encapsula ambas en la interfaz \texttt{ITransport} del sistema:
+
+\begin{lstlisting}[language=Python, caption={Configuración de la pila ISO-TP en \texttt{IsoTpTransport}}]
+# Identificadores escáner (0x7E0) y ECU (0x7E8) en modo Normal 11 bits
+self._address = isotp.Address(
+    addressing_mode=isotp.AddressingMode.Normal_11bits,
+    txid=tx_id,   # 0x7E0 — peticiones del escáner
+    rxid=rx_id,   # 0x7E8 — respuestas de la ECU
+)
+
+# CanStack gestiona de forma automática los Flow Control frames
+# y el reensamblado de las respuestas multi-frame
+self._stack = isotp.CanStack(self._bus, address=self._address,
+                             params=self._params)
+
+# El timeout de recepción absorbe la latencia de la transmisión
+# multi-frame sin generar falsos errores de comunicación
+deadline = time.monotonic() + self._timeout   # timeout = 5.0 s
+while time.monotonic() < deadline:
+    self._stack.process()
+    if self._stack.available():
+        return self._stack.recv()
+\end{lstlisting}
+
+Sobre este transporte se desarrolló \texttt{cli.py}, un menú interactivo que permitió ejecutar consultas OBD-II desde la línea de comandos sin necesidad de la aplicación móvil. El menú inicial ofrecía operaciones como:
+
+\begin{itemize}
+    \item \textbf{Opción 1 — Live data}: consulta instantánea de los cinco PIDs más relevantes (temperatura del refrigerante, carga, RPM, velocidad y posición del acelerador).
+    \item \textbf{Opción 3 — Read DTCs}: lectura de la lista de códigos de avería almacenados en la ECU simulada.
+\end{itemize}
+
+
 
 
 % ----------------------------------------------------------------------
 \subsection{Fase 3: Simulación avanzada, monitorización y persistencia}
 \label{sec:fase3}
 
-La tercera fase añadió tres mejoras simultáneas: el simulador Arduino incorporó mecanismos de ruido controlado e interrupciones hardware, y la herramienta Python extendió el CLI con monitorización continua y logging en SQLite.
+La tercera fase añadió varias mejoras simultáneas: el simulador Arduino incorporó interrupciones hardware y los servicios UDS (ISO 14229-1), y la herramienta Python extendió el CLI con monitorización continua, logging en SQLite y un cliente UDS.
 
-\subsubsection*{Arduino — ruido CAN e interrupciones}
-
-Los parámetros de ruido se centralizaron en \texttt{ecu\_protocol.h} como constantes compiladas:
-
-\begin{itemize}
-    \item \texttt{CAN\_NOISE\_DROP\_PCT = 2}: probabilidad de descarte de petición (simulación de colisión o degradación de señal).
-    \item \texttt{CAN\_NOISE\_NRC\_PCT = 1}: probabilidad de respuesta negativa UDS con NRC \texttt{0x22} (\textit{conditionsNotCorrect}).
-    \item \texttt{CAN\_NOISE\_LATENCY\_MIN\_MS = 1}, \texttt{CAN\_NOISE\_LATENCY\_MAX\_MS = 15}: retardo aleatorio antes de procesar cada petición.
-    \item \texttt{CAN\_NOISE\_BG\_TRAFFIC\_PCT = 30}: probabilidad por ciclo de emitir una trama de tráfico de fondo con identificadores \texttt{0x280}, \texttt{0x480}, \texttt{0x320} o \texttt{0x520}.
-\end{itemize}
-
-Adicionalmente, se implementaron dos interrupciones hardware para simular eventos espontáneos del vehículo:
-
-\begin{itemize}
-    \item \textbf{Pin D7 (ignición)}: la ISR \texttt{onIgnitionButton()} activa el flag \texttt{ignitionPressed}; la función \texttt{handleIgnitionButton()} en el bucle principal conmuta el estado del motor y ajusta las RPM al ralentí (850\,rpm) o a cero.
-    \item \textbf{Pin D6 (fallo DTC)}: la ISR \texttt{onDtcFaultButton()} activa \texttt{dtcFaultPressed}; \texttt{handleDtcFaultButton()} selecciona aleatoriamente uno de los 12 DTCs del pool, comprueba duplicados e inserta el código en \texttt{dtcList[]}.
-\end{itemize}
-
-El patrón ISR mínima + debounce en bucle principal garantiza que no se ejecuten operaciones bloqueantes (\texttt{Serial}, \texttt{delay}, acceso al bus CAN) dentro de la rutina de interrupción.
+\medskip
+\noindent\textbf{Arduino — interrupciones hardware, servicios UDS y ruido opcional}
 
 \begin{figure}[!htbp]
 \centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase3_arduino_noise.png}
-\caption{Monitor serie del Arduino en la Fase 3: se aprecian los logs de ruido (\texttt{[DROP]}, \texttt{[NRC]}), los eventos de ignición (\texttt{[IGN] Key ON}) y la inyección de DTCs por interrupción hardware (\texttt{[DTC] Injected P0300}).}
+\includegraphics[width=0.5\textwidth]{Ilustraciones/iter_3_ard.png}
+\caption{Monitor serie del Arduino en la Fase 3: se aprecian los eventos de ignición (\texttt{[IGN] Key ON — engine starting}) y la inyección de DTCs por interrupción hardware (\texttt{[DTC] Fault injected}).}
 \label{fig:fase3_arduino_noise}
 \end{figure}
 
-\subsubsection*{Raspberry Pi — monitorización continua y SQLite}
+Se implementaron dos interrupciones hardware para simular eventos espontáneos del vehículo. Ambas siguen el patrón de ISR mínima con histéresis temporal por \texttt{millis()} (300\,ms) para el antirrebote, y la lógica de efecto se ejecuta fuera de la ISR, en el bucle principal, donde es seguro realizar operaciones bloqueantes (\texttt{Serial}, acceso al bus CAN):
 
-La herramienta Python extendió el CLI con dos nuevas capacidades:
+\begin{itemize}
+    \item \textbf{Pin D5 (ignición, \texttt{ENGINE\_START\_PIN})}: la ISR \texttt{onIgnitionPress()} incrementa el contador \texttt{ignitionFlag}; \texttt{handleIgnitionButton()} conmuta el estado del motor y fija las RPM al ralentí (850\,rpm) o a cero.
+    \item \textbf{Pin D4 (fallo DTC, \texttt{DTC\_FAULT\_PIN})}: la ISR \texttt{onDTCPress()} incrementa \texttt{dtcFlag}; \texttt{handleDTCButton()} inyecta secuencialmente uno de los tres códigos del conjunto \texttt{DTC\_FAULT\_SET} (\texttt{P0300}, \texttt{P0171}, \texttt{P0420}) en \texttt{dtcList[]} y activa el testigo \texttt{checkEngine}. Una cuarta pulsación, cuando ya hay tres averías activas, borra todas.
+\end{itemize}
 
-\textbf{Monitorización continua} (\texttt{live\_data\_monitor.py}): la clase \texttt{LiveDataMonitor} ejecuta un hilo \textit{daemon} que itera sobre el conjunto de PIDs configurado, envía cada petición ISO-TP, decodifica la respuesta e invoca un callback \texttt{on\_sample} con el valor y unidades. El periodo de muestreo por defecto es 500\,ms. El hilo se inicia y detiene a través de los métodos \texttt{start()} y \texttt{stop()}, o mediante el protocolo de contexto \texttt{with}:
+Adicionalmente, el simulador admite dos mecanismos opcionales de variabilidad, controlados por sendas macros en \texttt{ecu\_protocol.h} y \textbf{desactivados por defecto} para obtener un bus determinista durante la depuración:
+
+\begin{itemize}
+    \item \texttt{ADD\_NOISE} (por defecto \texttt{0}): cuando se activa, añade \textit{jitter} pseudoaleatorio a los valores de los sensores en cada ciclo de actualización (RPM, temperaturas, MAF, tensión de batería y \textit{fuel trim}), con amplitudes por sensor parametrizadas (\texttt{NOISE\_RPM\_MAX}, etc.).
+    \item \texttt{BROADCAST\_ENABLE} (por defecto \texttt{0}): cuando se activa, el simulador emite cada \texttt{BROADCAST\_INTERVAL\_MS} (100\,ms) tres tramas CAN no solicitadas con identificadores \texttt{0x280} (RPM/carga), \texttt{0x320} (velocidad) y \texttt{0x3D0} (refrigerante/acelerador/batería), imitando el tráfico periódico de una ECU real.
+\end{itemize}
+
+El simulador incorporó además dos servicios UDS (ISO 14229-1) sobre la misma pila ISO-TP: \textit{DiagnosticSessionControl} (\texttt{0x10}), que conmuta entre la sesión por defecto y la extendida, y \textit{ReadDataByIdentifier} (\texttt{0x22}), que expone DID estándar (VIN, número de serie y versión de software) y DID propietarios de telemetría accesibles solo en sesión extendida. Su implementación se detalla en el apartado~\ref{sec:obd_uds_sim}.
+
+\medskip
+\noindent\textbf{Raspberry Pi — monitorización continua, SQLite y cliente UDS}
+
+La herramienta Python extendió el CLI con tres nuevas capacidades:
+
+\textbf{Monitorización continua} (\texttt{live\_data\_monitor.py}): la clase \texttt{LiveDataMonitor} ejecuta un hilo \textit{daemon} que itera sobre el conjunto de PIDs configurado, envía cada petición ISO-TP, decodifica la respuesta e invoca un callback \texttt{on\_sample} con un objeto \texttt{MonitorSample} (PID, nombre, valor, unidad y \textit{timestamp} monotónico) por cada PID decodificado con éxito. Los errores se notifican por separado mediante el callback opcional \texttt{on\_error(pid, exc)}. El periodo de muestreo por defecto es 500\,ms. El hilo se inicia y detiene a través de los métodos \texttt{start()} y \texttt{stop()}, o mediante el protocolo de contexto \texttt{with}:
 
 \begin{verbatim}
 with monitor:
     input("Press Enter to stop")
 \end{verbatim}
 
-\textbf{Logging SQLite} (\texttt{sqlite\_logger.py}): \texttt{SqliteDataLogger} persiste cada muestra en la tabla \texttt{samples} (timestamp, PID, valor, unidad y trama hexadecimal) dentro de una base de datos SQLite en modo WAL, que permite escrituras concurrentes desde el hilo de monitorización sin bloqueos.
+\textbf{Logging SQLite} (\texttt{sqlite\_logger.py}): \texttt{SqliteDataLogger} almacena cada muestra en la tabla \texttt{samples} (PID, nombre, valor, unidad, timestamp monotónico y timestamp de pared ISO-8601) dentro de una base de datos SQLite en modo WAL, que permite escrituras concurrentes desde el hilo de monitorización sin bloqueos. Las tramas CAN en hexadecimal de cada comando se registran por separado en la tabla \texttt{commands}.
 
-El CLI incorporó la opción 6 (\textit{Live monitor}) que arranca el monitor y actualiza la pantalla en tiempo real, y la opción 2 (\textit{Extended live data}) que interroga todos los PIDs disponibles en una sola pasada.
+\textbf{Cliente UDS} (\texttt{uds\_session.py}): la clase \texttt{UdsSession} envuelve el \texttt{ITransport} con \texttt{UdsProtocolBuilder} y \texttt{UdsDataDecoder} para exponer dos operaciones de alto nivel del estándar ISO 14229-1: \texttt{set\_session()}, que emite \textit{DiagnosticSessionControl} (servicio \texttt{0x10}) y registra la sesión activa, y \texttt{read\_did()}, que emite \textit{ReadDataByIdentifier} (servicio \texttt{0x22}) y decodifica el valor según el registro de DIDs (\texttt{uds\_dids.py}). Este registro contiene tres DID estándar (\texttt{0xF190} VIN, \texttt{0xF18C} número de serie, \texttt{0xF189} versión de software) y ocho DID propietarios de datos en vivo (\texttt{0x2001}--\texttt{0x2008}, marcados \texttt{extended\_only}). El cliente verifica la sesión antes de enviar: si se solicita un DID propietario fuera de la sesión extendida, rechaza la petición localmente con NRC \texttt{0x7E} sin acceder al bus.
 
-\begin{figure}[!htbp]
+El CLI añade la opción 6 (\textit{Live monitor}) que arranca el monitor y actualiza la pantalla en tiempo real, la opción 2 (\textit{Extended live data}) que interroga todos los PIDs disponibles en una sola pasada, y las opciones 7--9 para UDS: cambio de sesión (\textit{change session}), lectura de los DID estándar y lectura de los DID extendidos.
+
+\begin{figure}[H]
 \centering
-% \includegraphics[width=0.90\textwidth]{Ilustraciones/fase3_cli_monitor.png}
+\includegraphics[width=0.5\textwidth]{Ilustraciones/iter_3_pi.png}
 \caption{CLI en modo de monitorización continua (opción 6): actualización periódica de los cinco PIDs principales con timestamp, valores decodificados y unidades, ejecutado vía SSH en la Raspberry Pi.}
 \label{fig:fase3_cli_monitor}
 \end{figure}
@@ -179,81 +242,94 @@ El CLI incorporó la opción 6 (\textit{Live monitor}) que arranca el monitor y 
 \subsection{Fase 4: Integración BLE y validación en vehículo real}
 \label{sec:fase4}
 
-La fase final añadió el canal de comunicación inalámbrico entre la Raspberry Pi y el teléfono móvil, y trasladó el sistema del banco de pruebas a un vehículo real mediante un cable OBD-II.
+La fase final añadió el canal de comunicación inalámbrico entre la Raspberry Pi y el teléfono móvil, y se comenzó con las pruebas en vehiculos reales.
 
-\subsubsection*{Raspberry Pi — servidor BLE GATT}
+\medskip
+\noindent\textbf{Raspberry Pi — servidor BLE GATT}
 
-El servidor BLE se implementó en \texttt{bluetooth\_server.py} mediante la librería \texttt{bless}, que expone una interfaz asíncrona (\texttt{asyncio}) sobre el stack BlueZ de Linux. El servidor anuncia el \textbf{Nordic UART Service (NUS)} con sus dos características estándar:
+El servidor BLE se implementó en \texttt{bluetooth\_server.py} mediante la librería \texttt{bless}, que expone una interfaz asíncrona (\texttt{asyncio}) sobre el stack BlueZ de Linux. El servidor anuncia el \textbf{Nordic UART Service (NUS)} con el nombre \texttt{diag\_tool} y sus dos características estándar:
 
 \begin{itemize}
-    \item \textbf{RX} (\texttt{0x6E400002-...}): característica de escritura. Recibe los comandos JSON del cliente móvil.
-    \item \textbf{TX} (\texttt{0x6E400003-...}): característica de notificación. Envía las respuestas JSON al cliente.
+    \item \textbf{RX} (\texttt{6E400002-...}): característica de escritura. Recibe los comandos JSON del cliente móvil.
+    \item \textbf{TX} (\texttt{6E400003-...}): característica de notificación. Envía las respuestas JSON al cliente.
 \end{itemize}
 
-El manejador \texttt{\_on\_write()} acumula los chunks recibidos en un buffer hasta encontrar el delimitador \texttt{\textbackslash n}, deserializa el JSON y despacha el comando al \texttt{BtCommandHandler}, que orquesta la sesión de diagnóstico y devuelve el resultado como objeto JSON serializado. Las respuestas que superan el MTU negociado (240 bytes) se fragmentan automáticamente en múltiples notificaciones.
+El manejador \texttt{\_on\_write()} acumula los \textit{chunks} recibidos en un buffer hasta encontrar el delimitador \texttt{\textbackslash n}, deserializa el JSON y despacha el comando al \texttt{BtCommandHandler}, que orquesta la sesión de diagnóstico y devuelve el resultado como objeto JSON serializado. Las respuestas que superan el MTU del servidor (240 bytes) se fragmentan automáticamente en múltiples notificaciones.
 
 El servidor implementa un mecanismo de \textit{watchdog} que detecta la desconexión del cliente (inactividad superior a 15\,s en RX o 20\,s en TX) y reinicia el estado de sesión, y un \textit{heartbeat} periódico cada 8\,s para mantener el enlace activo durante sesiones de monitorización prolongadas.
 
-\subsubsection*{Protocolo de comunicación JSON}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.5\textwidth]{Ilustraciones/iter_4_pi.png}
+\caption{Consola de la Raspberry Pi ejecutando el servidor BLE: anuncio del servicio \texttt{diag\_tool} y registro de los comandos JSON recibidos (RX) y respuestas enviadas (TX).}
+\label{fig:fase4_pi_server}
+\end{figure}
 
-Los comandos intercambiados entre la aplicación y la Raspberry Pi siguen un protocolo JSON sobre NUS. Los comandos principales son:
+\medskip
+\noindent\textbf{Protocolo de comunicación JSON}
+
+Los comandos intercambiados entre la aplicación y la Raspberry Pi siguen un protocolo JSON delimitado por saltos de línea (NDJSON) sobre NUS. Los comandos principales son:
 
 \begin{itemize}
     \item \verb|{"cmd": "auth", "token": "..."}|: autenticación de sesión (primer comando obligatorio).
-    \item \verb|{"cmd": "query", "pid": "0C"}|: consulta puntual de un PID del modo 0x01.
-    \item \verb|{"cmd": "read_dtcs"}| / \verb|{"cmd": "clear_dtcs"}|: gestión de averías.
-    \item \verb|{"cmd": "monitor_start", "pids": ["0C","0D","05"]}|: inicio de monitorización continua con notificaciones periódicas.
-    \item \verb|{"cmd": "get_sessions"}| / \verb|{"cmd": "get_samples", "session_id": N}|: consulta del historial SQLite.
+    \item \verb|{"cmd": "snapshot"}|: lectura puntual de todos los PIDs soportados del modo 0x01.
+    \item \verb|{"cmd": "dtcs"}| / \verb|{"cmd": "clear_dtcs"}| / \verb|{"cmd": "vin"}|: gestión de averías y lectura del VIN.
+    \item \verb|{"cmd": "monitor_start", "pids": [12,13,5]}| / \verb|{"cmd": "monitor_stop"}|: inicio y parada de monitorización continua con notificaciones periódicas.
+    \item \verb|{"cmd": "sessions"}| / \verb|{"cmd": "session_samples", "session_id": N}|: consulta del historial SQLite.
+    \item \verb|{"cmd": "uds_session", "session_type": 3}| / \verb|{"cmd": "uds_read_did", "did": "0xF190"}|: control de sesión UDS y lectura de DIDs.
+    \item \verb|{"cmd": "probe_pids"}|: descubrimiento automático de los PIDs soportados por la ECU.
 \end{itemize}
 
-\subsubsection*{Aplicación móvil — React Native + react-native-ble-plx}
+\medskip
+\noindent\textbf{Aplicación móvil — React Native + react-native-ble-plx}
 
 La aplicación móvil implementa la comunicación BLE mediante la librería \texttt{react-native-ble-plx}, que proporciona acceso al stack BLE nativo de Android e iOS. Las operaciones clave son:
 
 \begin{itemize}
-    \item \textbf{Escaneo y conexión}: \texttt{manager.startDeviceScan()} filtra por el nombre del dispositivo (\texttt{SEAT\_DIAG}) y \texttt{device.connect()} establece el enlace físico. Tras la conexión se negocia el MTU, se descubren servicios y se activa la suscripción a notificaciones TX.
+    \item \textbf{Escaneo y conexión}: \texttt{manager.startDeviceScan(null, ...)} enumera todos los dispositivos BLE cercanos (sin filtro de UUID) y el usuario selecciona el adaptador, que la Raspberry Pi anuncia con el nombre \texttt{diag\_tool}. \texttt{connectToDevice()} establece el enlace físico, a continuación se negocia el MTU, se descubren servicios y se activa la suscripción a notificaciones TX.
     \item \textbf{Envío de comandos}: \texttt{writeCharacteristicWithResponse()} garantiza la entrega del JSON de comando antes de esperar la respuesta.
-    \item \textbf{Recepción de notificaciones}: \texttt{monitorCharacteristicForDevice()} invoca un callback con cada fragmento recibido; el adaptador los reasambla antes de procesar el JSON.
+    \item \textbf{Recepción de notificaciones}: \texttt{monitorCharacteristicForService()} invoca un callback con cada fragmento recibido, el adaptador los reasambla por líneas (NDJSON) antes de procesar el JSON.
 \end{itemize}
 
-Las cinco pantallas de la aplicación se describen en detalle en la Sección~\ref{sec:app_movil}.
+La Figura~\ref{fig:fase4_app_screens} muestra las pantallas principales de la aplicación durante las pruebas de integración BLE.
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-% \includegraphics[width=0.45\textwidth]{Ilustraciones/fase4_app_connection.png}
-% \hfill
-% \includegraphics[width=0.45\textwidth]{Ilustraciones/fase4_app_dashboard.png}
-\caption{Pantallas \textit{Connection} (izquierda) y \textit{Dashboard} (derecha) de la aplicación móvil durante las pruebas de integración BLE.}
-\label{fig:fase4_app_dash}
+\includegraphics[height=0.35\textheight]{Ilustraciones/conexion.png}%
+\hspace{0.04\textwidth}%
+\includegraphics[height=0.35\textheight]{Ilustraciones/panel.jpeg}
+\caption{\textit{Conexión} (izquierda) y \textit{Panel} (derecha)}
+\label{fig:fase4_app_screens}
 \end{figure}
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
-% \includegraphics[width=0.45\textwidth]{Ilustraciones/fase4_app_dtcs.png}
-% \hfill
-% \includegraphics[width=0.45\textwidth]{Ilustraciones/fase4_app_logs.png}
-\caption{Pantallas \textit{DTCs} (izquierda) y \textit{Logs} (derecha) de la aplicación móvil. La pantalla de DTCs muestra un código inyectado por interrupción hardware; la pantalla de Logs muestra el historial de sesiones almacenado en SQLite.}
-\label{fig:fase4_app_dtc_logs}
+\includegraphics[height=0.35\textheight]{Ilustraciones/dtcs.jpeg}%
+\hspace{0.04\textwidth}%
+\includegraphics[height=0.35\textheight]{Ilustraciones/sesiones.jpeg}
+\caption{\textit{Averías} (izquierda) y \textit{Sesiones} (derecha)}
+\label{fig:fase4_app_screens2}
 \end{figure}
 
-% TODO - revisar y redactar
+% ======================================================================
 \section{Simulador de ECU — Arduino MKR}
 \label{sec:arduino}
 
-El simulador de ECU es el componente que permite validar la herramienta de diagnóstico de forma independiente de un vehículo real. Se implementa sobre un Arduino MKR con shield CAN basado en el controlador MCP2515, conectado al bus CAN a 500\,kbps. El código fuente completo del simulador se recoge en el Anexo~A.
+El simulador de ECU es el componente que permite validar la herramienta de diagnóstico de forma independiente de un vehículo real. Se implementa sobre un Arduino MKR con shield CAN basado en el controlador MCP2515, conectado al bus CAN a 500\,kbps. El código fuente completo del simulador está disponible en el repositorio del proyecto.
 
 
 \subsection{Hardware y configuración del bus CAN}
 
-El Arduino MKR opera a 3,3\,V y dispone de comunicación SPI para el controlador MCP2515. La librería CAN utilizada inicializa el controlador a 500\,kbps y configura un filtro de aceptación para recibir únicamente los identificadores relevantes: \texttt{0x7DF} (broadcast funcional OBD-II) y \texttt{0x7E0} (dirección física de la ECU simulada).
+El Arduino MKR opera a 3,3\,V y dispone de comunicación SPI para el controlador MCP2515. La librería \texttt{arduino-CAN} inicializa el controlador a 500\,kbps. El simulador acepta únicamente las tramas dirigidas a la dirección física de la ECU (\texttt{0x7E0}), descartando en software cualquier otro identificador recibido.
 
 Las constantes de configuración del protocolo se concentran en el fichero \texttt{ecu\_protocol.h}, separando la parametrización del código de lógica. Entre los identificadores definidos destacan:
 
 \begin{itemize}
-    \item \texttt{ECU\_CAN\_ID} = \texttt{0x7E0}: identificador del tester (peticiones)
+    \item \texttt{ECU\_CAN\_ID} = \texttt{0x7E0}: identificador escuchado (peticiones del escáner)
     \item \texttt{ECU\_RESPONSE\_ID} = \texttt{0x7E8}: identificador de respuesta de la ECU
-    \item \texttt{FC\_BLOCK\_SIZE} = 0: bloqueo de control de flujo (sin límite de bloque)
-    \item \texttt{FC\_ST\_MIN} = 10\,ms: tiempo mínimo entre Consecutive Frames
+    \item \texttt{ISOTP\_CF\_SEP\_MS} = 25\,ms: separación temporal entre \textit{Consecutive Frames} consecutivos
+    \item \texttt{ISOTP\_FC\_TIMEOUT\_MS} = 1000\,ms: tiempo máximo de espera del \textit{Flow Control} del escáner
+    \item \texttt{ISOTP\_PADDING\_BYTE} = \texttt{0xAA}: byte de relleno hasta los 8 bytes de la trama CAN
 \end{itemize}
 
 
@@ -264,29 +340,31 @@ Para que los datos de telemetría devueltos por el simulador presenten un compor
 Las variables del modelo físico son:
 
 \begin{itemize}
-    \item \textbf{RPM}: se modela con una rampa de aceleración/deceleración limitada por la tasa máxima de cambio (\texttt{RPM\_ACCEL\_RATE}). El valor oscila entre el ralentí (\textasciitilde{}800\,rpm) y el máximo configurado, siguiendo una curva pseudoaleatoria que simula el uso normal del vehículo.
+    \item \textbf{Posición del acelerador}: actúa como entrada del modelo y evoluciona mediante una máquina de estados de rampa automática (ralentí → subida → crucero → bajada → repetir), con incrementos de \texttt{RAMP\_STEP} (5\,\%) por ciclo hasta un máximo de \texttt{RAMP\_MAX\_THROTTLE} (65\,\%) y permanencias configurables en cada extremo (\textasciitilde{}3\,s).
 
-    \item \textbf{Velocidad}: calculada a partir de las RPM mediante la relación de transmisión simulada, con un componente inercial que introduce retardo en la respuesta.
+    \item \textbf{RPM}: sigue un retardo de primer orden (filtro exponencial con factor $\alpha$) hacia un objetivo proporcional al acelerador, calculado como \texttt{map(throttle, 0--100, 850--5500)}, y se acota finalmente al rango 750--6500\,rpm.
 
-    \item \textbf{Temperatura del refrigerante}: sigue una curva de calentamiento exponencial desde la temperatura ambiente hasta la temperatura de operación normal (\textasciitilde{}90\,°C), con variaciones pequeñas en estado estacionario.
+    \item \textbf{Velocidad}: integra un modelo longitudinal simplificado en el que una fuerza de tracción (proporcional a RPM\,$\times$\,carga) compite con una resistencia cuadrática (proporcional a la velocidad al cuadrado), acotada a 0--180\,km/h.
 
-    \item \textbf{Temperatura del aceite}: similar a la del refrigerante pero con una constante de tiempo más lenta.
+    \item \textbf{Carga del motor}: derivada del acelerador mediante \texttt{map(throttle, 0--100, 15--85)}\,\%. A partir de ella se calculan el caudal MAF, el avance de encendido y las presiones de combustible y admisión.
 
-    \item \textbf{Posición del acelerador}: valor pseudoaleatorio que actúa como entrada del modelo de RPM.
+    \item \textbf{Temperaturas de refrigerante y aceite}: siguen una curva de calentamiento incremental desde la temperatura ambiente hasta su régimen de operación (\textasciitilde{}90\,°C y \textasciitilde{}95\,°C), y se enfrían progresivamente con el motor apagado.
 
-    \item \textbf{Presión de combustible}, \textbf{tensión de batería}, \textbf{consumo de combustible}: valores derivados de las RPM y la posición del acelerador mediante relaciones lineales con ruido añadido.
+    \item \textbf{Tensión de batería} y \textbf{nivel de combustible}: la tensión sube con el motor en marcha (alternador) y cae en reposo; el combustible se consume a un ritmo dependiente de la carga.
 \end{itemize}
 
-El modelo se actualiza con una frecuencia de 100\,ms en el bucle principal, y los valores calculados se codifican directamente en los bytes de respuesta OBD-II según las fórmulas del estándar SAE J1979 para cada PID.
+El modelo se actualiza cada \texttt{SIM\_UPDATE\_INTERVAL\_DEFAULT} (200\,ms) en el bucle principal, y los valores calculados se codifican directamente en los bytes de respuesta OBD-II según las fórmulas del estándar SAE J1979 para cada PID.
 
 
-\subsection{Implementación de los modos OBD-II}
+\subsection{Implementación de los modos OBD-II y servicios UDS}
+\label{sec:obd_uds_sim}
 
-La función central de decodificación de peticiones \texttt{processCANMessage()} analiza el primer byte de datos de cada trama recibida para determinar el modo de servicio, y el segundo byte para el PID específico en el modo 0x01 y 0x09.
+La función central \texttt{processCANMessages()} analiza el byte de modo de servicio de cada trama recibida y despacha al manejador correspondiente; en los modos 0x01 y 0x09 utiliza además el byte de PID.
 
-\subsubsection{Modo 0x01 — Datos en vivo}
+\medskip
+\noindent\textbf{Modo 0x01 — Datos en vivo}
 
-Se implementan 23 PIDs. La respuesta se construye en un buffer de 8 bytes con el formato OBD-II estándar: byte de longitud ISO-TP (tipo SF + longitud), byte de modo de respuesta (\texttt{0x41}), byte de PID y bytes de datos codificados.
+Se implementan 25 PIDs de datos. La respuesta se construye en un buffer de 8 bytes con el formato OBD-II estándar: byte de longitud ISO-TP (tipo SF + longitud), byte de modo de respuesta (\texttt{0x41}), byte de PID y bytes de datos codificados.
 
 La decodificación inversa sigue las fórmulas del estándar para cada PID. Como ejemplo, el PID \texttt{0x0C} (RPM) codifica el valor en dos bytes según:
 
@@ -296,234 +374,360 @@ La decodificación inversa sigue las fórmulas del estándar para cada PID. Como
     \text{byte\_B} = \text{valor raw} \bmod 256
 \]
 
-El PID \texttt{0x00} (soporte de PIDs 0x01--0x20) devuelve una máscara de bits de 32 bits que indica qué PIDs están disponibles, permitiendo a la herramienta de diagnóstico realizar una enumeración automática de capacidades.
+Los PIDs de soporte \texttt{0x00}, \texttt{0x20} y \texttt{0x40} devuelven cada uno una máscara de bits de 32 bits que indica qué PIDs del rango siguiente están disponibles (el bit menos significativo señala la existencia del siguiente bloque), permitiendo a la herramienta de diagnóstico realizar una enumeración automática de capacidades a lo largo de los tres rangos.
 
-\subsubsection{Modo 0x03 — Lectura de DTCs}
+\medskip
+\noindent\textbf{Modo 0x03 — Lectura de DTCs}
 
-El simulador mantiene una lista de DTCs activos (\texttt{dtcList[]}) con un contador \texttt{numStoredDTCs}. La respuesta del modo 0x03 incluye la cuenta de DTCs seguida de los pares de bytes correspondientes a cada código, codificados según el formato J2012: los dos bits más significativos del primer byte indican la categoría (00=P, 01=C, 10=B, 11=U) y los 12 bits restantes el código numérico en BCD.
+El simulador mantiene una lista de DTCs activos (\texttt{dtcList[]}) con un contador \texttt{numStoredDTCs}. La respuesta del modo 0x03 incluye la cuenta de DTCs seguida de los pares de bytes correspondientes a cada código, codificados según el formato J2012: los dos bits más significativos del primer byte indican la categoría (00=Powertrain, 01=Chassis, 10=Body, 11=User (Network)) y los 14 bits restantes el código numérico.
 
-\subsubsection{Modo 0x04 — Borrado de DTCs}
+\medskip
+\noindent\textbf{Modo 0x04 — Borrado de DTCs}
 
-Al recibir una petición de modo 0x04, el simulador reinicia \texttt{numStoredDTCs} a cero, desactiva el flag \texttt{checkEngineLight} y responde con el byte de confirmación \texttt{0x44}.
+Al recibir una petición de modo 0x04, el simulador reinicia \texttt{numStoredDTCs} a cero, desactiva el flag \texttt{checkEngine} y responde con el byte de confirmación \texttt{0x44}.
 
-\subsubsection{Modo 0x09 — Información del vehículo (VIN)}
+\medskip
+\noindent\textbf{Modo 0x09 — Información del vehículo (VIN)}
 
-El PID \texttt{0x02} del modo 0x09 devuelve el VIN del vehículo, una cadena ASCII de 17 caracteres. Dado que la respuesta completa ocupa 20 bytes (3 de cabecera ISO-TP más 17 del VIN), supera la capacidad de una Single Frame y requiere transmisión multi-frame.
+El PID \texttt{0x02} del modo 0x09 devuelve el VIN del vehículo, una cadena ASCII de 17 caracteres. Dado que la respuesta completa ocupa 20 bytes (3 de cabecera más 17 del VIN), supera la capacidad de una Single Frame y requiere transmisión multi-frame.
 
 La secuencia de transmisión es:
 \begin{enumerate}
-    \item \textbf{First Frame}: PCI \texttt{0x10 0x14} (longitud = 20 bytes), modo
-    \texttt{0x49}, PID \texttt{0x02}, contador \texttt{0x01} y primeros 3 bytes del VIN.
-    \item Espera del \textbf{Flow Control} del tester.
+    \item \textbf{First Frame}: PCI \texttt{0x10 0x14} (longitud = 20 bytes), modo \texttt{0x49}, PID \texttt{0x02}, contador \texttt{0x01} y primeros 3 bytes del VIN.
+    \item Espera del \textbf{Flow Control} del escáner.
     \item \textbf{Consecutive Frame 1}: SN \texttt{0x21}, bytes 4--10 del VIN.
-    \item \textbf{Consecutive Frame 2}: SN \texttt{0x22}, bytes 11--17 del VIN
-    (con padding).
+    \item \textbf{Consecutive Frame 2}: SN \texttt{0x22}, bytes 11--17 del VIN (con padding).
 \end{enumerate}
 
-Esta implementación manual de la secuencia multi-frame en el simulador fue uno de los puntos más críticos del desarrollo, ya que cualquier error en el contador de secuencia o en el timing entre tramas provocaba el rechazo de la sesión por parte de la librería \texttt{can-isotp} en la Raspberry Pi.
+El Algoritmo~\ref{alg:vin_multiframe} detalla la generación de esta secuencia en el simulador.
+
+\begin{algorithm}[!htbp]
+\caption{Transmisión ISO-TP multi-frame del VIN en el simulador}
+\label{alg:vin_multiframe}
+\begin{algorithmic}[1]
+\State $payload \gets [\texttt{0x49}, \texttt{0x02}, \texttt{0x01}] \mathbin\Vert VIN$ \Comment{20 bytes}
+\State $len \gets |payload|$
+\State $FF[0] \gets \texttt{0x10} \lor (len \gg 8)$;\quad $FF[1] \gets len \land \texttt{0xFF}$
+\State copiar $payload[0..5]$ en $FF[2..7]$;\quad \Call{enviarCAN}{\texttt{0x7E8}, $FF$}
+\If{\textbf{not} \Call{esperarFlowControl}{}} \Comment{timeout 1\,s}
+    \State registrar aviso y continuar
+\EndIf
+\State $enviados \gets 6$;\quad $SN \gets 1$
+\While{$enviados < len$}
+    \State $CF[0] \gets \texttt{0x20} \lor (SN \land \texttt{0x0F})$
+    \State copiar los siguientes 7 bytes (rellenando con \texttt{0xAA}) en $CF[1..7]$
+    \State \Call{enviarCAN}{\texttt{0x7E8}, $CF$}
+    \State $enviados \gets enviados + 7$;\quad $SN \gets (SN + 1) \land \texttt{0x0F}$
+    \State \Call{esperar}{\texttt{ISOTP\_CF\_SEP\_MS}} \Comment{25\,ms entre Consecutive Frames}
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
+
+Esta implementación manual de la secuencia multi-frame en el simulador fue clave, dado que cualquier error en el contador de secuencia o en el timing entre tramas provocaba el rechazo de la sesión por parte de la librería \texttt{can-isotp} en la Raspberry Pi.
+
+\medskip
+\noindent\textbf{Servicios UDS (ISO 14229-1)}
+
+Además de los cuatro modos OBD-II, el simulador implementa dos servicios UDS que permiten un diagnóstico más rico que el conjunto de PIDs estándar:
+
+\begin{itemize}
+    \item \textbf{Servicio \texttt{0x10} — DiagnosticSessionControl}: \texttt{handleMode10()} admite las subfunciones \texttt{0x01} (sesión por defecto) y \texttt{0x03} (sesión extendida). La respuesta positiva (\texttt{0x50}) incluye los tiempos de servidor \texttt{P2} (25\,ms) y \texttt{P2*} (500\,ms). Cualquier otra subfunción se rechaza con NRC \texttt{0x12}.
+
+    \item \textbf{Servicio \texttt{0x22} — ReadDataByIdentifier}: \texttt{handleMode22()} responde a los DID estándar \texttt{0xF190} (VIN), \texttt{0xF18C} (número de serie de la ECU) y \texttt{0xF189} (versión de software), accesibles en cualquier sesión, y a los DID propietarios de telemetría \texttt{0x2001}--\texttt{0x2008} (carga, refrigerante, RPM, velocidad, acelerador, combustible, aceite y batería), accesibles \textbf{solo en sesión extendida}. Una petición de un DID propietario fuera de la sesión extendida se rechaza con NRC \texttt{0x22} (\textit{conditionsNotCorrect}), y un DID desconocido con NRC \texttt{0x31} (\textit{requestOutOfRange}). Las respuestas que superan 7 bytes (como el VIN) se transmiten mediante la secuencia ISO-TP multi-frame genérica \texttt{sendMultiFrame()}.
+\end{itemize}
 
 
-\subsection{Mecanismos de simulación de ruido CAN}
+\subsection{Mecanismos opcionales de variabilidad del bus}
 \label{sec:ruido_can}
 
-Una de las aportaciones más relevantes del simulador es la capacidad de reproducir condiciones adversas del bus CAN de forma controlada y reproducible. Los mecanismos de ruido se activan mediante el flag \texttt{canNoiseEnabled} y se aplican durante el procesamiento de cada petición recibida.
+Para poder validar la herramienta de diagnóstico tanto en condiciones ideales como realistas, el simulador puede operar de forma \textbf{determinista} (configuración por defecto, bus silencioso salvo las respuestas a peticiones) o activar dos mecanismos opcionales de variabilidad mediante macros de compilación en \texttt{ecu\_protocol.h}.
 
-\subsubsection{Latencia variable}
+\medskip
+\noindent\textbf{Ruido en los sensores (\texttt{ADD\_NOISE})}
 
-Antes de procesar la petición, el simulador introduce un retardo aleatorio entre \texttt{CAN\_LATENCY\_MIN\_MS} (1\,ms) y \texttt{CAN\_LATENCY\_MAX\_MS} (15\,ms) mediante \texttt{delay(random(...))}. Este retardo simula la variabilidad de la carga del bus en un entorno vehicular real, donde múltiples ECUs compiten por el acceso al medio de forma simultánea.
+Cuando \texttt{ADD\_NOISE} se compila a \texttt{1} (por defecto \texttt{0}), el simulador añade \textit{jitter} pseudoaleatorio a los valores de los sensores en cada ciclo de actualización. La amplitud máxima de cada sensor se parametriza de forma independiente mediante constantes (\texttt{NOISE\_RPM\_MAX} = 25\,rpm, \texttt{NOISE\_VOLTAGE\_MAX} = 30\,mV, \texttt{NOISE\_MAF\_MAX} = 8, etc.). Tras añadir el ruido, cada variable se acota a su rango físico válido, de modo que la telemetría conserva un comportamiento creíble pero no perfectamente estable, reproduciendo la lectura real de sensores analógicos.
 
-\subsubsection{Descarte de paquetes}
+\medskip
+\noindent\textbf{Tramas de difusión (\texttt{BROADCAST\_ENABLE})}
 
-Con una probabilidad configurable (\texttt{CAN\_DROP\_PCT} = 2\%), el simulador descarta la petición sin emitir respuesta alguna, simplemente retornando de la función de procesamiento. Este comportamiento simula la pérdida de tramas por colisión o por degradación de la señal en el bus.
-
-\subsubsection{Respuestas negativas esporádicas}
-
-Con una probabilidad independiente (\texttt{CAN\_NRC\_PCT} = 1\%), el simulador responde con una respuesta negativa UDS con NRC \texttt{0x22} (\textit{conditionsNotCorrect}), que indica que la ECU no puede atender la petición en ese momento. Esta simulación reproduce el comportamiento real de las ECUs cuando reciben peticiones fuera de su ventana de ejecución.
-
-\subsubsection{Tráfico de fondo}
-
-La función \texttt{generateBackgroundTraffic()} se invoca en cada iteración del bucle principal y, con una probabilidad del 30\% por ciclo, envía una trama CAN con un identificador aleatorio de entre cuatro seleccionados (\texttt{0x280, 0x480, 0x320, 0x520}) y 8 bytes de datos aleatorios. Este tráfico imita las transmisiones periódicas de otras ECUs del vehículo (módulo de carrocería, ABS, dirección asistida) y permite verificar que el filtro de aceptación de la Raspberry Pi funciona correctamente bajo carga.
+Cuando \texttt{BROADCAST\_ENABLE} se compila a \texttt{1} (por defecto \texttt{0}), el simulador emite cada \texttt{BROADCAST\_INTERVAL\_MS} (100\,ms) tres tramas CAN no solicitadas que imitan el tráfico periódico de una ECU real: \texttt{0x280} (RPM y carga del motor), \texttt{0x320} (velocidad) y \texttt{0x3D0} (temperatura de refrigerante, acelerador y tensión de batería). Este tráfico de fondo permite verificar que el filtro de la herramienta de diagnóstico descarta correctamente los identificadores ajenos a la dirección de respuesta de la ECU (\texttt{0x7E8}) y no los interpreta como respuestas válidas.
 
 
 \subsection{Inyección de DTCs por interrupción hardware}
 
-Para simular la aparición espontánea de averías durante una sesión de diagnóstico, el simulador implementa un mecanismo de inyección de DTCs activado por la señal en el pin digital D6 (\texttt{DTC\_FAULT\_PIN}).
+Para simular la aparición espontánea de averías durante una sesión de diagnóstico, el simulador implementa un mecanismo de inyección de DTCs activado por la señal en el pin digital D4 (\texttt{DTC\_FAULT\_PIN}).
 
 El patrón de implementación sigue la práctica estándar para ISR en Arduino:
 
 \begin{enumerate}
-    \item La ISR \texttt{onDtcFaultButton()} es minimalista: únicamente activa un flag \texttt{volatile bool dtcFaultPressed = true}.
-    \item La lógica de debounce (300\,ms) y la inyección propiamente dicha se realizan en la función \texttt{handleDtcFaultButton()}, llamada desde el bucle principal, donde es seguro ejecutar operaciones con efectos de bloqueo.
-    \item Se selecciona aleatoriamente uno de los 12 DTCs disponibles en la tabla del simulador: P0300, P0301, P0302, P0303, P0113, P0118, P0340, P0341, P0500, P0501, P0171, P0172.
-    \item Se comprueba que el código seleccionado no esté ya presente en \texttt{dtcList[]} antes de insertarlo (deduplicación), y se activa el flag \texttt{checkEngineLight}.
+    \item La ISR \texttt{onDTCPress()} es minimalista: aplica una histéresis temporal de 300 ms (\texttt{DTC\_HYSTERESIS\_MS}) mediante \texttt{millis()} para el prevenir el rebote e incrementa el contador \texttt{volatile uint16\_t dtcFlag}.
+    \item La inyección propiamente dicha se realiza en \texttt{handleDTCButton()}, llamada desde el bucle principal, donde es seguro ejecutar operaciones con efectos de bloqueo (\texttt{Serial}).
+    \item Cada pulsación inserta secuencialmente el siguiente código del conjunto \texttt{DTC\_FAULT\_SET} (\texttt{P0300} (fallo de encendido), \texttt{P0171} (mezcla pobre) y \texttt{P0420} (eficiencia del catalizador)) en \texttt{dtcList[]} y activa el testigo \texttt{checkEngine}.
+    \item Cuando ya hay tres averías activas, una pulsación adicional borra todas, permitiendo reiniciar el ciclo de prueba.
 \end{enumerate}
 
 Esta funcionalidad permite al operador del banco de pruebas introducir averías de forma controlada durante una sesión de diagnóstico activa y verificar que la herramienta Python las detecta correctamente en la siguiente consulta del modo 0x03.
 
 % ======================================================================
-% TODO - revisar y redactar
 \section{Herramienta de diagnóstico — Raspberry Pi}
 \label{sec:raspberry}
 
-La herramienta de diagnóstico es el componente central del sistema: recibe peticiones desde la aplicación móvil vía BLE, las traduce a secuencias ISO-TP sobre el bus CAN, interpreta las respuestas de la ECU, persiste los datos en SQLite y devuelve los resultados al cliente móvil. Se implementa en Python 3 sobre Raspberry Pi con controlador CAN MCP2515. El código fuente se recoge en el Anexo~B.
+La herramienta de diagnóstico es el componente central del sistema: recibe peticiones desde la aplicación móvil vía BLE, las traduce a secuencias ISO-TP sobre el bus CAN, interpreta las respuestas de la ECU, almacena los datos en SQLite y devuelve los resultados al cliente móvil. Se implementa en Python 3 sobre Raspberry Pi con controlador CAN MCP2515. El código fuente está disponible en el repositorio del proyecto.
 
 
 \subsection{Arquitectura software}
 \label{sec:python_arch}
 
-La herramienta sigue un diseño basado en interfaces y capas desacopladas mediante inyección de dependencias. Esta decisión arquitectónica, que supuso una inversión inicial de tiempo mayor a la contemplada en el diseño rápido, resultó rentable en las fases posteriores al facilitar las pruebas sin hardware y la extensión progresiva del sistema.
+La herramienta sigue un diseño basado en interfaces y capas desacopladas mediante inyección de dependencias. Esta decisión, supuso una inversión inicial de tiempo mayor a la contemplada en el diseño rápido pero resultó acertada pues en las fases posteriores facilitó las pruebas sin hardware y la extensión progresiva del sistema.
 
 Las interfaces abstractas principales son:
 
 \begin{itemize}
-    \item \textbf{\texttt{ITransport}}: define las operaciones de envío y recepción de mensajes ISO-TP (\texttt{send}, \texttt{recv}). Las implementaciones concretas son \texttt{CanTransport} (bus CAN real mediante \texttt{can-isotp}) y \texttt{MockTransport} (respuestas predefinidas para pruebas sin hardware).
+    \item \textbf{\texttt{ITransport}}: define las operaciones de conexión y de envío/recepción de mensajes ISO-TP (\texttt{connect}, \texttt{disconnect}, \texttt{send}, \texttt{receive}). Las implementaciones concretas son \texttt{IsoTpTransport} (bus CAN real mediante \texttt{python-can} + \texttt{can-isotp} sobre SocketCAN) y \texttt{MockTransport} (respuestas predefinidas para pruebas sin hardware).
 
-    \item \textbf{\texttt{IProtocolBuilder}}: define la construcción de mensajes OBD-II (\texttt{build\_request}). La implementación \texttt{OBD2ProtocolBuilder} genera las tramas de petición según el estándar SAE J1979.
+    \item \textbf{\texttt{IProtocolBuilder}}: define la construcción de las tramas de petición OBD-II mediante métodos específicos por operación (\texttt{build\_read\_rpm\_request}, \texttt{build\_read\_dtcs\_request}, \texttt{build\_read\_vin\_request}, etc.). La implementación \texttt{Obd2ProtocolBuilder} las genera según el estándar SAE J1979.
 
-    \item \textbf{\texttt{IDataDecoder}}: define la decodificación de respuestas OBD-II (\texttt{decode\_response}). La implementación \texttt{OBD2DataDecoder} aplica las fórmulas del estándar para cada PID y devuelve valores con unidades.
+    \item \textbf{\texttt{IDataDecoder}}: valida la trama de respuesta (\texttt{validate\_response}, que detecta respuestas negativas NRC) y la decodifica por parámetro (\texttt{decode\_rpm}, \texttt{decode\_coolant\_temp}, \texttt{decode\_dtcs}, \texttt{decode\_vin}, etc.). La implementación \texttt{Obd2DataDecoder} aplica las fórmulas del estándar para cada PID y devuelve valores con unidades.
 
-    \item \textbf{\texttt{IDiagnosticSession}}: define la interfaz de sesión de diagnóstico (\texttt{query\_pid}, \texttt{read\_dtcs}, \texttt{clear\_dtcs}, \texttt{get\_vin}). La implementación \texttt{DiagnosticSession} orquesta las demás interfaces.
+    \item \textbf{\texttt{IDiagnosticSession}}: define la interfaz de sesión de diagnóstico (\texttt{get\_engine\_rpm}, \texttt{get\_dtcs}, \texttt{clear\_dtcs}, \texttt{get\_vin}, \texttt{get\_snapshot}, etc.). La implementación \texttt{DiagnosticSession} orquesta las demás interfaces ejecutando la secuencia enviar\,→\,recibir\,→\,validar\,→\,decodificar.
 \end{itemize}
 
-Sobre esta estructura base se aplica el patrón decorador mediante \textbf{\texttt{LoggingTransport}}, que envuelve cualquier \texttt{ITransport} e intercepta todas las operaciones de envío y recepción para registrarlas en la base de datos SQLite, sin modificar el comportamiento del transporte subyacente. La composición resultante es:
+Sobre esta estructura base se aplica el patrón decorador en dos niveles. \textbf{\texttt{LoggingTransport}} envuelve cualquier \texttt{ITransport} e intercepta todas las operaciones de envío y recepción para volcarlas al registro textual de comunicaciones (\texttt{ble\_comms.log}) y mostrar la última trama enviada/recibida. A su vez, \textbf{\texttt{LoggedDiagnosticSession}} envuelve la \texttt{DiagnosticSession} y, tras cada operación, almacena en la base de datos SQLite el comando ejecutado junto con sus tramas de petición y respuesta (y los DTCs leídos). La composición resultante es:
 
 \[
-    \texttt{LoggedDiagnosticSession}(
-    \texttt{LoggingTransport}(\texttt{CanTransport}),\ \texttt{OBD2ProtocolBuilder},\
-    \texttt{OBD2DataDecoder},\ \texttt{SQLiteLogger}
-    )
+    \texttt{LoggedDiagnosticSession}\big(
+    \texttt{DiagnosticSession}(\texttt{LoggingTransport}(\texttt{IsoTpTransport}),
 \]
+\[
+    \texttt{Obd2ProtocolBuilder},\ \texttt{Obd2DataDecoder}),\ \texttt{SqliteDataLogger}\big)
+\]
+
+El núcleo funcional de la herramienta es el ciclo de consulta de un PID, que orquesta las cuatro interfaces en la secuencia construir\,→\,enviar\,→\,recibir\,→\,validar\,→\,decodificar. El Algoritmo~\ref{alg:consulta_pid} describe este flujo, común a todas las operaciones del modo 0x01.
+
+\begin{algorithm}[!htbp]
+\caption{Ciclo de consulta de un PID OBD-II (Modo 0x01)}
+\label{alg:consulta_pid}
+\begin{algorithmic}[1]
+\Require $pid$ (identificador de parámetro), $modo \gets \texttt{0x01}$
+\Ensure valor físico decodificado, con unidad
+\State $peticion \gets [\,modo,\ pid\,]$ \Comment{p.\,ej. \texttt{0x01 0x0C} para RPM}
+\State \Call{transporte.enviar}{$peticion$} \Comment{ISO-TP segmenta si $>7$ bytes}
+\State $resp \gets$ \Call{transporte.recibir}{} \Comment{reensambla ISO-TP; timeout 5\,s}
+\If{$resp[0] = \texttt{0x7F}$} \Comment{respuesta negativa (NRC)}
+    \State \textbf{lanzar} \textsc{NrcException}($resp[1]$, $resp[2]$)
+\ElsIf{$resp[0] \neq modo + \texttt{0x40}$}
+    \State \textbf{lanzar} \textsc{InvalidResponseError} \Comment{eco de modo inesperado}
+\EndIf
+\State $datos \gets resp[2{:}]$
+\State \Return \Call{decodificar}{$pid$, $datos$} \Comment{fórmula SAE J1979 del PID}
+\end{algorithmic}
+\end{algorithm}
 
 
 \subsection{Capa de transporte CAN e ISO-TP}
 
 La comunicación con el bus CAN se realiza a través de la interfaz \texttt{SocketCAN} de Linux, configurada mediante \texttt{ip link set can0 up type can bitrate 500000}. La librería \texttt{python-can} proporciona una abstracción de alto nivel sobre esta interfaz, mientras que \texttt{can-isotp} gestiona de forma automática la segmentación y reensamblado ISO-TP, el control de flujo y la temporización entre tramas.
 
-La configuración del socket ISO-TP define la dirección del tester (\texttt{0x7E0}) y la dirección de respuesta de la ECU (\texttt{0x7E8}), con \texttt{padding} activado para cumplir con el relleno a 8 bytes requerido por el estándar. El timeout de recepción se fija en 1\,segundo, valor suficiente para absorber la latencia máxima introducida por el simulador (15\,ms) con amplio margen.
+La configuración del socket ISO-TP (\texttt{isotp.Address} en modo \textit{Normal 11 bits}) define la dirección del escáner (\texttt{txid = 0x7E0}) y la dirección de respuesta de la ECU (\texttt{rxid = 0x7E8}), con \texttt{tx\_padding = 0xAA} para el relleno a 8 bytes, \texttt{blocksize = 0} (se aceptan todas las \textit{Consecutive Frames}) y \texttt{stmin = 25\,ms}. El timeout de recepción se fija en 5\,segundos, valor holgado para absorber la latencia de la transmisión multi-frame sin generar falsos errores.
 
 
 \subsection{Módulo de logging en SQLite}
 
-Toda la información de diagnóstico se persiste en una base de datos SQLite cuyo esquema se detalla en el Anexo~D. La base de datos opera en modo WAL (\textit{Write-Ahead Logging}), que permite escrituras concurrentes desde el hilo de monitorización y el hilo de atención a comandos BLE sin bloqueos mutuos.
+Toda la información de diagnóstico se almacena en una base de datos SQLite cuyo esquema se describe a continuación. La base de datos opera en modo WAL (\textit{Write-Ahead Logging}), que permite escrituras concurrentes desde el hilo de monitorización y el hilo de atención a comandos BLE sin bloqueos mutuos.
 
-Las tres tablas principales del esquema son:
+Las cuatro tablas del esquema son:
 
 \begin{itemize}
-    \item \textbf{\texttt{sessions}}: registra cada sesión de diagnóstico con su timestamp de inicio y fin, el identificador del dispositivo cliente BLE y el número de muestras recogidas.
+    \item \textbf{\texttt{sessions}}: registra cada sesión de diagnóstico con una etiqueta (\texttt{label}) y los \textit{timestamps} de inicio y fin (\texttt{started\_at}, \texttt{ended\_at}). El número de muestras de cada sesión no se almacena, sino que se calcula mediante una consulta agregada sobre la tabla \texttt{samples}.
 
-    \item \textbf{\texttt{samples}}: almacena cada muestra de telemetría con el timestamp, el PID consultado, el valor decodificado, la unidad y la trama CAN en hexadecimal (campo \texttt{raw\_hex}). Este último permite reconstruir la secuencia completa de comunicación ISO-TP para análisis forense.
+    \item \textbf{\texttt{samples}}: almacena cada muestra de telemetría con el PID, el nombre, el valor decodificado, la unidad, un \textit{timestamp} monotónico (\texttt{monotonic\_ts}) y un \textit{timestamp} de pared en formato ISO-8601 (\texttt{wall\_ts}).
 
-    \item \textbf{\texttt{commands}}: registra cada comando ejecutado desde la aplicación móvil con el timestamp, el tipo de comando, la dirección BLE del cliente y el resultado.
+    \item \textbf{\texttt{commands}}: registra cada comando ejecutado con su nombre (\texttt{command}), las tramas de petición y respuesta en hexadecimal (\texttt{request\_hex}, \texttt{response\_hex}) y el \textit{timestamp}. Estos campos permiten reconstruir la secuencia completa de comunicación ISO-TP para análisis forense.
+
+    \item \textbf{\texttt{dtcs}}: almacena los códigos de avería leídos en cada sesión (código en formato J2012, bytes en bruto, descripción y \textit{timestamp}).
 \end{itemize}
 
-El \texttt{LoggingTransport} acumula las muestras en un buffer en memoria y las vuelca a SQLite en lotes de 50, reduciendo la frecuencia de escritura a disco y mejorando el rendimiento general del sistema durante sesiones de monitorización prolongadas.
+El \texttt{SqliteDataLogger} acumula las muestras en un buffer en memoria y las vuelca a SQLite en lotes de 50 (\texttt{\_BUFFER\_SIZE}), reduciendo la frecuencia de escritura a disco y mejorando el rendimiento general del sistema durante sesiones de monitorización prolongadas.
 
 \subsection{Monitor de datos en tiempo real}
 
-El hilo de monitorización continua (\texttt{MonitorThread}) se ejecuta en segundo plano con un periodo de muestreo de 500\,ms. En cada ciclo consulta un conjunto configurable de PIDs del modo 0x01, decodifica los valores recibidos y los publica en una cola compartida (\texttt{queue.Queue}) que el hilo BLE lee para enviar notificaciones al cliente móvil.
+El monitor de datos (\texttt{LiveDataMonitor}) se ejecuta en un hilo \textit{daemon} en segundo plano con un periodo de muestreo de 500\,ms por defecto. En cada ciclo consulta un conjunto configurable de PIDs del modo 0x01, decodifica los valores recibidos e invoca un \textit{callback} \texttt{on\_sample} por cada muestra. El \texttt{BtCommandHandler} agrupa las muestras de cada ciclo y las reenvía al cliente móvil como una única notificación BLE, además de almacenarlas en SQLite. El acceso al bus CAN se serializa con el hilo de atención a comandos mediante un \textit{lock}(candado de mutua exclusión) compartido.
 
-El conjunto de PIDs monitorizados por defecto incluye RPM, velocidad, temperatura del refrigerante, posición del acelerador y carga calculada del motor. La lista es configurable en tiempo de ejecución a través del comando JSON correspondiente.
+El conjunto de PIDs monitorizados por defecto incluye temperatura del refrigerante, carga calculada del motor, RPM, velocidad y posición del acelerador. La lista es configurable en tiempo de ejecución a través del comando JSON correspondiente.
 
 \subsection{Servidor BLE GATT}
 
-El servidor BLE se implementa mediante la librería \texttt{bless}, que proporciona una interfaz asíncrona (\texttt{asyncio}) para la gestión del servicio GATT. El servidor expone el servicio NUS con sus dos características (TX y RX) y gestiona las conexiones de los clientes BLE de forma concurrente.
+El servidor BLE se implementa mediante la librería \texttt{bless}, que proporciona una interfaz asíncrona (\texttt{asyncio}) para la gestión del servicio GATT. El servidor expone el servicio NUS con sus dos características (TX y RX) y gestiona la conexión del cliente BLE.
 
-El manejador de comandos \texttt{BtCommandHandler} recibe los objetos JSON escritos por el cliente en la característica RX, los despacha al método correspondiente de la \texttt{LoggedDiagnosticSession} y envía la respuesta JSON como notificación en la característica TX.
+El manejador de comandos \texttt{BtCommandHandler} recibe los objetos JSON escritos por el cliente en la característica RX, los despacha al método correspondiente (sobre la \texttt{LoggedDiagnosticSession}, el logger o el transporte según el comando) y envía la respuesta JSON como notificación en la característica TX.
 
-Se implementa un mecanismo de autenticación por token: el primer comando de cada sesión BLE debe incluir el campo \texttt{token} con el valor configurado en el servidor. Las conexiones no autenticadas reciben una respuesta de error y se cierran tras un timeout de inactividad configurable.
+Se implementa un mecanismo de autenticación por token: el primer comando de cada sesión BLE debe incluir el campo \texttt{token} con el valor configurado en el servidor. Las conexiones no autenticadas reciben una respuesta de error y se cierran tras un timeout de inactividad.
 
 Los comandos JSON implementados son:
 
 \begin{itemize}
     \item \verb|{"cmd": "auth", "token": "..."}|: autenticación de sesión.
-    \item \verb|{"cmd": "query", "pid": "0C"}|: consulta un PID del modo 0x01.
-    \item \verb|{"cmd": "read_dtcs"}|: lectura de los DTCs almacenados.
-    \item \verb|{"cmd": "clear_dtcs"}|: borrado de DTCs.
-    \item \verb|{"cmd": "get_vin"}|: obtención del VIN del vehículo.
-    \item \verb|{"cmd": "monitor_start", "pids": ["0C","0D","05"]}|: inicio de monitorización continua.
-    \item \verb|{"cmd": "monitor_stop"}|: detención de la monitorización.
-    \item \verb|{"cmd": "get_sessions"}|: lista de sesiones históricas en SQLite.
-    \item \verb|{"cmd": "get_samples", "session_id": N}|: muestras de una sesión.
+    \item \verb|{"cmd": "ping"}|: comprobación de enlace (responde \texttt{pong}).
+    \item \verb|{"cmd": "snapshot"}|: lectura puntual de todos los PIDs soportados del modo 0x01.
+    \item \verb|{"cmd": "dtcs"}| / \verb|{"cmd": "clear_dtcs"}|: lectura y borrado de DTCs.
+    \item \verb|{"cmd": "vin"}|: obtención del VIN del vehículo.
+    \item \verb|{"cmd": "monitor_start", "pids": [12,13,5]}| / \verb|{"cmd": "monitor_stop"}|: inicio y detención de la monitorización continua.
+    \item \verb|{"cmd": "probe_pids"}|: descubrimiento automático de los PIDs soportados por la ECU.
+    \item \verb|{"cmd": "sessions"}|, \verb|{"cmd": "session_samples", "session_id": N}|, \verb|{"cmd": "session_commands", "session_id": N}|, \verb|{"cmd": "session_dtcs", "session_id": N}|: consulta del historial SQLite.
+    \item \verb|{"cmd": "uds_session", "session_type": 3}| / \verb|{"cmd": "uds_read_did", "did": "0xF190"}|: control de sesión UDS y lectura de DIDs.
+    \item \verb|{"cmd": "disconnect"}|: cierre ordenado de la sesión.
 \end{itemize}
 
+El comando \verb|probe_pids| merece una mención aparte por su lógica en dos etapas: primero declara los PIDs soportados leyendo las máscaras de bits estándar (\texttt{0x00}, \texttt{0x20}, \dots), y después confirma cada uno con una consulta real para descartar falsos positivos. El Algoritmo~\ref{alg:probe_pids} explica este procedimiento.
+
+\begin{algorithm}[H]
+\caption{Descubrimiento de PIDs soportados (\texttt{probe\_pids})}
+\label{alg:probe_pids}
+\begin{algorithmic}[1]
+\State $declarados \gets \emptyset$
+\For{cada PID de soporte $s \in \{\texttt{0x00}, \texttt{0x20}, \dots, \texttt{0xE0}\}$}
+    \State enviar $[\texttt{0x01}, s]$;\quad $resp \gets$ recibir()
+    \If{$resp$ es respuesta válida a $s$}
+        \State $mask \gets$ 32 bits de $resp[2..5]$
+        \For{$i \gets 0$ \textbf{to} $31$}
+            \If{bit $i$ de $mask$ está activo}
+                \State añadir $(s + i + 1)$ a $declarados$
+            \EndIf
+        \EndFor
+        \If{bit menos significativo de $mask$ $= 0$}
+            \State \textbf{break} \Comment{no se anuncia el siguiente rango}
+        \EndIf
+    \EndIf
+\EndFor
+\State $confirmados \gets \emptyset$
+\For{cada $pid \in declarados$ (ordenados)}
+    \State enviar $[\texttt{0x01}, pid]$;\quad $resp \gets$ recibir()
+    \If{$resp$ es positiva y hace eco de $pid$}
+        \State añadir $pid$ a $confirmados$
+    \EndIf
+\EndFor
+\State \Return $confirmados \cap \{$PIDs con decodificador$\}$
+\end{algorithmic}
+\end{algorithm}
+
 % ======================================================================
-% TODO - revisar y redactar
 \section{Aplicación móvil — React Native}
 \label{sec:app_movil}
 
-La aplicación móvil es la interfaz de usuario del sistema de diagnóstico. Se implementa con React Native y Expo, lo que permite compartir una única base de código entre Android e iOS. El código fuente se recoge en el Anexo~C.
+La aplicación móvil es la interfaz de usuario del sistema de diagnóstico. Se implementa con React Native y Expo, lo que permite compartir una única base de código entre Android e iOS. El código fuente está disponible en el repositorio del proyecto.
 
 \subsection{Arquitectura de la aplicación}
 
 La aplicación sigue una arquitectura basada en tres capas:
 
 \begin{enumerate}
-    \item \textbf{Capa de adaptadores}: abstrae el acceso al hardware BLE mediante la interfaz \texttt{IBleAdapter}. La implementación concreta \texttt{BleAdapter} utiliza la librería \texttt{react-native-ble-plx} para las operaciones de escaneo, conexión, escritura y suscripción a notificaciones. La implementación \texttt{MockAdapter} simula un dispositivo BLE para el desarrollo sin hardware, con respuestas predefinidas para todos los comandos.
+    \item \textbf{Capa de adaptadores}: abstrae el acceso al hardware BLE mediante la interfaz \texttt{IVehicleAdapter}. La implementación concreta \texttt{BleAdapter} utiliza la librería \texttt{react-native-ble-plx} para las operaciones de escaneo, conexión, escritura y suscripción a notificaciones. La implementación \texttt{MockAdapter} simula un dispositivo BLE para el desarrollo sin hardware, con respuestas predefinidas para todos los comandos. La fábrica \texttt{adapterFactory} selecciona una u otra según el modo de la aplicación.
 
-    \item \textbf{Capa de estado}: gestiona el estado global de la aplicación mediante almacenes Zustand. Los almacenes principales son \texttt{useConnectionStore} (estado de la conexión BLE y dispositivo activo), \texttt{useTelemetryStore} (últimos valores de los PIDs monitorizados), \texttt{useDtcStore} (lista de DTCs activos) y \texttt{useSessionStore} (historial de sesiones y muestras).
+    \item \textbf{Capa de estado}: gestiona el estado global de la aplicación mediante almacenes Zustand. Los almacenes principales son \texttt{useConnectionStore} (estado de la conexión BLE y dispositivo activo), \texttt{useDashboardStore} y \texttt{useVehicleStore} (últimos valores de los PIDs monitorizados), \texttt{useDtcStore} (lista de DTCs), \texttt{useSessionStore} (historial de sesiones y muestras), \texttt{useUdsStore} (sesión y DIDs UDS), \texttt{usePidSupportStore} (PIDs soportados tras el sondeo) y \texttt{useSettingsStore} (modo simulación y preferencias).
 
     \item \textbf{Capa de presentación}: las cinco pantallas de la aplicación consumen el estado de los almacenes Zustand y despachan comandos a través del adaptador BLE.
 \end{enumerate}
 
 \subsection{Pantallas y funcionalidades}
 
-\subsubsection{Pantalla Connection}
+La navegación principal se organiza en cinco pestañas (\textit{bottom tab navigator}): \textit{Panel}, \textit{Averías}, \textit{Sesiones}, \textit{Consola} y \textit{Ajustes}. El flujo de conexión (escaneo, selección de dispositivo y autenticación) se presenta mediante diálogos modales lanzados desde la pantalla de Ajustes.
 
-La pantalla de conexión permite al usuario escanear dispositivos BLE cercanos, filtrar por nombre (\texttt{PiDiag}) y establecer la conexión con la Raspberry Pi. Durante el proceso de conexión se muestra el progreso de las fases: escaneo, conexión física, negociación de MTU, descubrimiento de servicios, suscripción a notificaciones y autenticación por token.
+\noindent\textbf{Flujo de conexión}
 
-El adaptador BLE implementa reintentos automáticos con \textit{backoff} exponencialante fallos de conexión, con un máximo de tres intentos antes de notificar el erroral usuario. Un timeout configurable de inactividad BLE desconecta automáticamente lasesión si no hay actividad durante el periodo establecido.
+El usuario inicia el escaneo de dispositivos BLE cercanos desde la pantalla de Ajustes, la aplicación enumera todos los dispositivos y el usuario selecciona el adaptador (la Raspberry Pi se anuncia como \texttt{diag\_tool}). Durante el proceso se muestra el progreso de las fases: conexión física, negociación de MTU, descubrimiento de servicios, suscripción a notificaciones y autenticación por token. Una vez conectado exitosamente con la Pi le solicita el VIN del vehiculo y los PIDs soportados. El adaptador BLE implementa un \textit{watchdog} de inactividad que desconecta automáticamente la sesión si no hay actividad durante el periodo establecido.
 
-\subsubsection{Pantalla Dashboard}
+\noindent\textbf{Pantalla Panel}
 
-La pantalla principal del diagnóstico muestra en tiempo real los parámetros delvehículo recibidos por monitorización continua. Los indicadores se presentan en formade tarjetas con el valor actual, la unidad y una barra de progreso visual que reflejael rango normal de operación de cada parámetro.
+La pantalla principal del diagnóstico muestra las opciones de obtener una snapshot (captura de datos) en un momento determinado o de obtener en tiempo real los parámetros del vehículo recibidos por monitorización continua. Los indicadores se presentan en forma de tarjetas con el valor actual, la unidad y cuyo color refleja la calidad del dato (si representa valor crítico o dentro de los parámetros normales). Incluye además una pestaña dedicada a UDS, que permite cambiar la sesión de diagnóstico y leer los identificadores de datos (DID) estándar y extendidos.
 
-Al establecer la conexión, la aplicación inicia automáticamente la monitorización deun conjunto por defecto de PIDs: RPM, velocidad, temperatura del refrigerante yposición del acelerador. El usuario puede añadir o eliminar PIDs de la lista demonitorización activa.
+Al establecer la conexión, la aplicación inicia automáticamente una solicitud para obtener una máscara que refleja que PIDs soporta la ECU conectada y posteriormente realiza una prueba de cada uno de ellos verificando que no haya falsos positivos. 
 
-\subsubsection{Pantalla DTCs}
+\noindent\textbf{Pantalla Averías (DTCs)}
 
-La pantalla de códigos de avería muestra la lista de DTCs activos leída desde la ECU.Cada código se presenta con su identificador alfanumérico (formato J2012), sudescripción en texto y un indicador de categoría (P/C/B/U). La pantalla ofrece laacción de borrado de todos los DTCs, con un diálogo de confirmación antes de ejecutarel comando al ser una operación irreversible.
+La pantalla de códigos de avería da la opción de realizar un escaneo de la lista de DTCs activos leída desde la ECU. Cada código se presenta con su identificador alfanumérico (formato J2012), su descripción en texto y un indicador de categoría (P/C/B/U). La pantalla ofrece la acción de borrado de todos los DTCs, con un diálogo de confirmación previo por tratarse de una operación irreversible.
 
-\subsubsection{Pantalla Logs}
+\noindent\textbf{Pantalla Sesiones}
 
-La pantalla de historial muestra la lista de sesiones de diagnóstico almacenadas enla base de datos SQLite de la Raspberry Pi, ordenadas por fecha. Al seleccionar unasesión, se presenta la lista de muestras de telemetría con sus valores y timestamps.Cada muestra puede expandirse para mostrar la trama CAN en hexadecimal correspondiente,permitiendo la inspección detallada de la comunicación a nivel de protocolo.
+La pantalla de historial muestra la lista de sesiones de diagnóstico almacenadas en la base de datos SQLite de la Raspberry Pi, ordenadas de la más reciente a la más antigua. Al seleccionar una sesión, se entra en la pantalla de detalles de sesión donde se muestra lista de muestras de telemetría agrupadas por PID desplegable que nos muestra las distintas muestras obtenidas con su timestamp, así mismo también hay una pestaña para ver las DTCs registradas en esa sesión.
 
-\subsubsection{Pantalla Console}
+\noindent\textbf{Pantalla Consola}
 
-La consola de comandos directa permite al usuario enviar comandos JSON arbitrariosa la Raspberry Pi y visualizar la respuesta en formato JSON formateado. Estafuncionalidad está orientada al desarrollo y la depuración, y permite probar comandosfuera del flujo habitual de la interfaz gráfica.
+Esta es una pantalla añadida para poder monitorizar y depurar el estado de la aplicación y poder obtener más detalles de los distintos protocolos. En esta pantalla se muestran los logs de la comunicación BLE mostrando el registro de comunicación BLE (RX/TX), del protocolo OBD-II, UDS y de el estado de la App en distintas pestañas. Asímismo cuenta con un botón de exportación de logs a csv.
+
+\noindent\textbf{Pantalla Ajustes}
+
+La pantalla de ajustes gestiona la conexión con el adaptador (escaneo y selección de dispositivo), el modo de simulación (\textit{mock}) para usar la aplicación sin hardware, la frecuencia de sondeo para el modo de monitorización, reorganizar los PIDs mostrados en el panel y realizar nuevamente una prueba de PIDs.
 
 \subsection{Comunicación BLE}
 
-La librería \texttt{react-native-ble-plx} gestiona las operaciones BLE de bajo nivel.La característica RX del servicio NUS se escribe mediante operaciones\texttt{writeCharacteristicWithResponse}, que garantizan la entrega del comandoantes de esperar la respuesta. La característica TX se monitoriza mediante\texttt{monitorCharacteristicForDevice}, que invoca un callback cada vez que laRaspberry Pi envía una notificación.
+La librería \texttt{react-native-ble-plx} gestiona las operaciones BLE de bajo nivel. La característica RX del servicio NUS se escribe mediante operaciones \texttt{writeCharacteristicWithResponse}, que garantizan la entrega del comando antes de esperar la respuesta. La característica TX se monitoriza mediante \texttt{monitorCharacteristicForService}, que invoca un callback cada vez que la Raspberry Pi envía una notificación.
 
-Los objetos JSON de respuesta que superan el MTU negociado se fragmentan a nivel deaplicación: la Raspberry Pi los divide en fragmentos con un campo \texttt{chunk}y los reassambla la aplicación antes de procesarlos. En la práctica, con el MTU de240 bytes configurado, este caso solo se produce en las respuestas de historialde sesiones con un número elevado de muestras.
+El protocolo se basa en mensajes JSON delimitados por saltos de línea (NDJSON): tanto la Raspberry Pi como la aplicación fragmentan los mensajes que superan el tamaño de escritura BLE (240 bytes) y los reensamblan en el receptor acumulando los fragmentos hasta el delimitador \texttt{\textbackslash n}. La aplicación negocia un MTU de 128 bytes en la conexión. En la práctica, la fragmentación solo se produce en las respuestas de historial de sesiones con un número elevado de muestras.
+
+El receptor debe resolver dos problemas simultáneamente: reensamblar las notificaciones BLE (que pueden llegar fragmentadas o agrupar varios mensajes) y emparejar cada respuesta con su petición sin bloquear el flujo de muestras de la monitorización continua. El Algoritmo~\ref{alg:ndjson} describe la lógica del adaptador: un búfer de recepción acumula los fragmentos y los separa por el delimitador \texttt{\textbackslash n}, mientras que un despachador encamina cada mensaje según su tipo. Los mensajes asíncronos (muestras de telemetría y \textit{heartbeats}) se entregan a los \textit{callbacks} del monitor o se responden de inmediato; el resto se empareja con la petición pendiente más antigua de una cola FIFO, que resuelve o rechaza la promesa correspondiente. La implementación completa figura en los listados del Anexo~\ref{anexo:app}.
+
+\begin{algorithm}[H]
+\caption{Reensamblado NDJSON y emparejamiento petición-respuesta}
+\label{alg:ndjson}
+\begin{algorithmic}[1]
+\State \textbf{Estado:} $buffer \gets \text{``''}$;\quad $cola \gets$ FIFO vacía de peticiones pendientes
+\Statex
+\Function{alRecibirNotificación}{$fragmento$}
+    \State $buffer \gets buffer \mathbin{+} \textsc{decodificar}(fragmento)$
+    \State $lineas \gets \textsc{separar}(buffer, \texttt{\textbackslash n})$
+    \State $buffer \gets$ último elemento de $lineas$ \Comment{fragmento incompleto}
+    \For{cada $linea$ completa de $lineas$}
+        \If{$linea$ no está vacía}
+            \State $msg \gets \textsc{parsearJSON}(linea)$;\quad \Call{despachar}{$msg$}
+        \EndIf
+    \EndFor
+\EndFunction
+\Statex
+\Function{despachar}{$msg$}
+    \If{$msg.type \in \{samples, sample, error\}$}
+        \State entregar $msg$ a los \textit{callbacks} del monitor \Comment{flujo asíncrono}
+    \ElsIf{$msg.type = heartbeat$}
+        \State enviar \textit{heartbeat\_ack}
+    \Else
+        \State $pendiente \gets$ \Call{cola.extraer}{} \Comment{petición más antigua}
+        \If{$msg.status = ok$}
+            \State \textbf{resolver} $pendiente$ con $msg.data$
+        \Else
+            \State \textbf{rechazar} $pendiente$ con $msg.message$
+        \EndIf
+    \EndIf
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
 
 % ======================================================================
-% TODO - revisar y redactar
 \section{Integración y pruebas}
 \label{sec:integracion}
 
-La validación del sistema completo se realizó sobre el banco de ensayo formado por el Arduino MKR con shield CAN, la Raspberry Pi con controlador MCP2515 y un teléfono Android con la aplicación instalada. Los tres nodos se conectaron mediante un bus CAN de dos hilos de 30\,cm de longitud con terminación de 120\,$\Omega$ en cada extremo.
+La validación del sistema completo se realizó sobre el banco de ensayo formado por el Arduino MKR con shield CAN, la Raspberry Pi con controlador MCP2515 y una tableta Android con la aplicación instalada. Los tres nodos se conectaron mediante un bus CAN de dos hilos con terminación de 120\,$\Omega$ en cada extremo.
 
 \subsection{Escenarios de prueba}
 
 Se definieron los siguientes escenarios de prueba que cubren los flujos principales del sistema y los casos de error más relevantes:
 
-\textbf{Escenario 1 — Ciclo OBD-II básico.} Verificación del ciclo completo de consulta de un PID del modo 0x01 (RPM, \texttt{0x0C}): envío de la petición desde la aplicación móvil, transmisión CAN de la petición ISO-TP, respuesta del simulador con el valor codificado, decodificación en la Raspberry Pi y presentación en el Dashboard. Se verificó la coherencia del valor decodificado con el modelo físico del simulador y la correcta persistencia de la muestra en SQLite.
+\textbf{Escenario 1 — Ciclo OBD-II básico.} Verificación del ciclo completo de consulta de un PID del modo 0x01 (RPM, \texttt{0x0C}): envío de la petición desde la aplicación móvil, transmisión CAN de la petición ISO-TP, respuesta del simulador con el valor codificado, decodificación en la Raspberry Pi y presentación en el Panel.
 
-\textbf{Escenario 2 — Respuesta VIN multi-frame.} Verificación de la secuencia ISO-TP completa para la consulta del VIN (\texttt{0x09 0x02}): First Frame, Flow Control y dos Consecutive Frames. Se comprobó que el VIN reconstruido coincide exactamente con la cadena configurada en el simulador y que las tres tramas CAN correspondientes se registran individualmente en la base de datos.
+\textbf{Escenario 2 — Respuesta VIN multi-frame.} Verificación de la secuencia ISO-TP completa para la consulta del VIN (\texttt{0x09 0x02}): First Frame, Flow Control y dos Consecutive Frames. Se comprobó que el VIN reconstruido coincide exactamente con la cadena configurada en el simulador y que las tramas CAN correspondientes se registran en la base de datos.
 
-\textbf{Escenario 3 — Gestión de DTCs.} Verificación del ciclo completo de gestión de averías: lectura de DTCs inicial (lista vacía), inyección de un DTC mediante la interrupción hardware del pin D6, lectura de DTCs tras la inyección (DTC presente), borrado de DTCs mediante la aplicación y lectura final (lista vacía de nuevo).
+\textbf{Escenario 3 — Gestión de DTCs.} Verificación del ciclo completo de gestión de averías: lectura de DTCs inicial (lista vacía), inyección de DTCs mediante la interrupción hardware del pin D4, lectura tras la inyección (DTCs presentes), borrado de DTCs mediante la aplicación y lectura final (lista vacía de nuevo).
 
-\textbf{Escenario 4 — Monitorización continua prolongada.} Sesión de monitorización de 10 minutos con cuatro PIDs activos (RPM, velocidad, temperatura, acelerador) a 500\,ms de periodo. Se verificó la estabilidad de la conexión BLE, la ausencia de pérdidas de muestras y el correcto comportamiento del sistema bajo carga sostenida.
+\textbf{Escenario 4 — Monitorización continua prolongada.} Sesión de monitorización de 10 minutos con cinco PIDs activos (refrigerante, carga, RPM, velocidad y acelerador) a 500\,ms de periodo. Se verificó la estabilidad de la conexión BLE, la ausencia de pérdidas de muestras y el correcto comportamiento del sistema bajo carga sostenida.
 
-\textbf{Escenario 5 — Robustez ante ruido CAN.} Verificación del comportamiento de la herramienta Python ante los mecanismos de ruido del simulador activos. Se comprobó que el sistema recupera correctamente de los descartes de paquetes (retransmisión ISO-TP automática), que las respuestas negativas UDS se registran en el log y no bloquean el hilo de monitorización, y que el tráfico de fondo no es interpretado erróneamente como respuesta válida.
+\textbf{Escenario 5 — Sesión y DIDs UDS.} Verificación del cambio de sesión UDS (\texttt{0x10}) a sesión extendida y la lectura de los DID estándar y propietarios (\texttt{0x22}). Se comprobó que los DID propietarios solo responden en sesión extendida y que, en sesión por defecto, el simulador devuelve la respuesta negativa NRC \texttt{0x22}, que la herramienta registra sin bloquear la sesión.
 
-\textbf{Escenario 6 — Reconexión BLE.} Verificación del mecanismo de reconexión automática tras la pérdida de la conexión Bluetooth: el adaptador BLE detecta la desconexión, inicia el proceso de reintento con backoff exponencial y reanuda la sesión de monitorización sin pérdida de datos históricos.
+\textbf{Escenario 6 — Robustez ante variabilidad del bus.} Con los mecanismos opcionales del simulador activos (\texttt{ADD\_NOISE} y \texttt{BROADCAST\_ENABLE}), se comprobó que las tramas de difusión con identificadores ajenos (\texttt{0x280}, \texttt{0x320}, \texttt{0x3D0}) son descartadas por la pila ISO-TP sin interferir en la comunicación OBD-II, y que el ruido en los sensores no impide la correcta decodificación de los valores.
+
+\textbf{Escenario 7 — Reconexión BLE.} Verificación del comportamiento ante la pérdida de la conexión Bluetooth: el adaptador detecta la desconexión, libera los recursos y notifica al usuario, que puede reiniciar la conexión sin pérdida de los datos históricos persistidos en SQLite.
 
 \subsection{Resultados de las pruebas de integración}
 
-Todos los escenarios de prueba definidos se completaron con resultado satisfactorio en el banco de ensayo. Los aspectos más relevantes observados durante las pruebas se describen en detalle en el Capítulo~6.
+Todos los escenarios de prueba definidos se completaron con resultado satisfactorio en el banco de ensayo.
 
-La principal dificultad encontrada durante las pruebas de integración fue la sincronización de la secuencia ISO-TP multi-frame para el VIN. En las primeras iteraciones, el simulador Arduino enviaba el Flow Control con un valor de \texttt{STmin} incorrecto que provocaba que la librería \texttt{can-isotp} de la Raspberry Pi rechazara la sesión por timeout. La corrección consistió en reducir \texttt{FC\_ST\_MIN} a 10\,ms y añadir un delay explícito entre la recepción del Flow Control y el envío del primer Consecutive Frame en el simulador.
+La principal dificultad encontrada durante las pruebas de integración fue la reconexión BLE ante caídas inesperadas del enlace por parte de la Raspberry Pi. Cuando la Pi cerraba la conexión de forma abrupta, el sistema operativo Android conservaba un descriptor GATT obsoleto, de modo que el siguiente intento de conexión fallaba con un error de \textit{dispositivo ya conectado}. Además, las peticiones que quedaban a la espera de respuesta dejaban la interfaz bloqueada indefinidamente. La corrección consistió en tres medidas: registrar un \textit{callback} \texttt{onDisconnected} que libera todos los recursos (intervalos de \textit{ping}, suscripción a notificaciones, búfer de recepción) y rechaza las peticiones pendientes de la cola para desbloquear la interfaz, cancelar explícitamente cualquier conexión GATT residual con \texttt{cancelDeviceConnection()} antes de cada nuevo intento y un \textit{watchdog} de inactividad que fuerza la desconexión limpia si no se recibe actividad durante 20 s, evitando que la aplicación quede atrapada en un estado de conexión fantasma. Tras estos cambios, el usuario puede reiniciar la conexión sin reiniciar la aplicación.
 
-Las pruebas con ruido CAN confirmaron que el mecanismo de descarte aleatorio de paquetes (2\% de probabilidad) requería un timeout de recepción suficientemente generoso en la herramienta Python para no generar falsos errores en condiciones de baja carga del bus. Con el timeout de 1\,segundo finalmente establecido, la tasa de errores no recuperables se situó por debajo del 0,1\% en todas las sesiones de prueba.
+Las pruebas con los mecanismos opcionales de variabilidad activos confirmaron que el filtro de la pila ISO-TP descarta correctamente las tramas de difusión ajenas a la dirección de respuesta de la ECU, y que el timeout de recepción de 5 segundos absorbe con holgura la latencia de la transmisión multi-frame, manteniendo una tasa de errores no recuperables despreciable en todas las sesiones de prueba.

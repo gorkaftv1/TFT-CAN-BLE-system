@@ -1,9 +1,9 @@
-\chapter*{Anexo B — Código fuente de la herramienta Python}
-\addcontentsline{toc}{chapter}{Anexo B — Código fuente de la herramienta Python}
+\chapter{Código fuente de la herramienta Python}
 \label{anexo:python}
 
 Este anexo recoge los fragmentos más representativos del código fuente de la
-herramienta de diagnóstico implementada en Python sobre Raspberry Pi.
+herramienta de diagnóstico implementada en Python sobre Raspberry Pi. El código
+completo está disponible en el repositorio del proyecto (\texttt{src/}).
 
 \section*{B.1 — Interfaces abstractas del núcleo}
 
@@ -143,6 +143,15 @@ CREATE TABLE IF NOT EXISTS commands (
     response_hex TEXT    NOT NULL,
     wall_ts      TEXT    NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dtcs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    code         TEXT    NOT NULL,
+    raw_hex      TEXT    NOT NULL,
+    description  TEXT    NOT NULL DEFAULT '',
+    wall_ts      TEXT    NOT NULL
+);
 """
 
 _BUFFER_SIZE = 50
@@ -191,39 +200,108 @@ class SqliteDataLogger(IDataLogger):
         self._sample_buffer.clear()
 \end{lstlisting}
 
-\section*{B.4 — Decorador LoggingTransport}
+\section*{B.4 — Patrón decorador en dos niveles}
 
-\begin{lstlisting}[language=Python, caption={LoggingTransport — patron decorador sobre ITransport}]
+\texttt{LoggingTransport} envuelve el transporte y registra cada trama en el log
+textual, conservando la última trama enviada/recibida por hilo. \texttt{LoggedDiagnosticSession}
+envuelve la sesión y persiste en SQLite el comando ejecutado con sus tramas.
+
+\begin{lstlisting}[language=Python, caption={LoggingTransport — registro de tramas y estado thread-local}]
+import threading, logging
 from core.interfaces.i_transport import ITransport
-from core.interfaces.i_data_logger import IDataLogger
+from infraestructure.logging.frame_formatter import format_rx, format_tx
+
+_log = logging.getLogger("transport")
 
 
 class LoggingTransport(ITransport):
-    """Envuelve cualquier ITransport e intercepta send/receive para loggear
-    las tramas CAN en hexadecimal en SQLite sin modificar el transporte base."""
-
-    def __init__(self, inner: ITransport, logger: IDataLogger,
-                 session_id: int, command: str) -> None:
+    def __init__(self, inner: ITransport) -> None:
         self._inner = inner
-        self._logger = logger
-        self._session_id = session_id
-        self._command = command
-        self._last_sent: bytes = b""
+        self._local = threading.local()  # last_sent/received por hilo
 
-    def connect(self) -> None:    self._inner.connect()
-    def disconnect(self) -> None: self._inner.disconnect()
-    def __enter__(self):          self._inner.connect(); return self
-    def __exit__(self, *a):       self._inner.disconnect()
+    @property
+    def last_sent(self) -> bytes:     return getattr(self._local, "last_sent", b"")
+    @property
+    def last_received(self) -> bytes: return getattr(self._local, "last_received", b"")
 
     def send(self, payload: bytes) -> None:
-        self._last_sent = payload
+        self._local.last_sent = payload
+        _log.info(format_tx(payload))
         self._inner.send(payload)
 
     def receive(self) -> bytes:
-        response = self._inner.receive()
+        data = self._inner.receive()
+        self._local.last_received = data
+        _log.info(format_rx(data))
+        return data
+\end{lstlisting}
+
+\begin{lstlisting}[language=Python, caption={LoggedDiagnosticSession — persistencia del comando en SQLite}]
+class LoggedDiagnosticSession(IDiagnosticSession):
+    def __init__(self, inner, logger, session_id, transport) -> None:
+        self._inner = inner; self._logger = logger
+        self._session_id = session_id; self._transport = transport
+
+    def _log(self, command: str) -> None:
         self._logger.log_command(
-            self._session_id, self._command,
-            self._last_sent, response,
+            self._session_id, command,
+            self._transport.last_sent, self._transport.last_received,
         )
-        return response
+
+    def get_engine_rpm(self) -> float:
+        result = self._inner.get_engine_rpm()
+        self._log("get_engine_rpm")
+        return result
+
+    def get_dtcs(self):
+        result = self._inner.get_dtcs()
+        self._log("get_dtcs")
+        self._logger.log_dtcs(self._session_id, result)
+        return result
+    # ... resto de operaciones analogas ...
+\end{lstlisting}
+
+\section*{B.5 — Manejador de comandos BLE y descubrimiento de PIDs}
+
+\begin{lstlisting}[language=Python, caption={BtCommandHandler — autenticación, despacho y probe\_pids}]
+class BtCommandHandler:
+    def handle(self, cmd: dict) -> dict:
+        name = cmd.get("cmd", "")
+        if not self._authenticated:
+            if name != "auth": return {"status": "error", "message": "not authenticated"}
+            if cmd.get("token") == self._auth_token:
+                self._authenticated = True
+                return {"status": "ok", "data": "authenticated"}
+            return {"status": "error", "message": "invalid token"}
+
+        dispatch = {
+            "ping": self._ping, "snapshot": self._snapshot, "dtcs": self._dtcs,
+            "clear_dtcs": self._clear_dtcs, "vin": self._vin,
+            "monitor_start": self._monitor_start, "monitor_stop": self._monitor_stop,
+            "sessions": self._sessions, "session_samples": self._session_samples,
+            "session_commands": self._session_commands, "session_dtcs": self._session_dtcs,
+            "uds_session": self._uds_session, "uds_read_did": self._uds_read_did,
+            "probe_pids": self._probe_pids, "disconnect": self._cmd_disconnect,
+        }
+        fn = dispatch.get(name)
+        if fn is None: return {"status": "error", "message": f"Unknown command: {name!r}"}
+        try:    return fn(cmd)
+        except Exception as exc: return {"status": "error", "message": str(exc)}
+
+    def _probe_pids(self, _cmd: dict) -> dict:
+        # 1) PIDs declarados via mascaras de soporte 0x00/0x20/.../0xE0
+        declared: set[int] = set()
+        for s in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
+            with self._lock:
+                self._transport.send(bytes([0x01, s]))
+                raw = self._transport.receive()
+            if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == s:
+                mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
+                for i in range(32):
+                    if mask & (0x80000000 >> i): declared.add(s + i + 1)
+                if not (mask & 0x01): break
+        # 2) confirmar cada PID con una consulta real
+        confirmed = {p for p in declared if self._poll_ok(p)}
+        self._supported_pids = confirmed & set(PIDS.keys())
+        return {"status": "ok", "data": sorted(self._supported_pids)}
 \end{lstlisting}

@@ -4,18 +4,37 @@
 
 Este capítulo presenta los resultados de la validación del sistema en dos entornos complementarios: el banco de ensayo Arduino, que permitió reproducir condiciones adversas de forma controlada, y un vehículo real, en el que se verificó la interoperabilidad del sistema con una ECU de producción a través del conector OBD-II estándar. Los resultados se organizan en torno a cuatro dimensiones: funcionalidad del protocolo, rendimiento de la comunicación, comportamiento ante condiciones adversas y grado de consecución de los objetivos planteados en el Capítulo~2.
 
+Para verificar que los resultados obtenidos por la herramienta desarrollada son verídicos, previamente se realizó un escaneo de los DTCs y una lectura de PIDs con una herramienta comercial genérica KONWEII~\cite{KONWEII_scanner} junto con la aplicación móvil Car Scanner ELM OBD2~\cite{CarScanner_app}, tomada como referencia. La Figura~\ref{fig:ref_comercial} muestra el cuadro de instrumentos y la lista de DTCs obtenidos con la herramienta de referencia, que sirvieron de patrón de comparación para validar los valores leídos por la herramienta desarrollada.
 
-% TODO - CONTRADICCIÓN: este sección describe pruebas sobre vehículo real, pero 10_Conclusiones dice "ausencia de validación sobre vehículo real". Decidir si hubo prueba real o no y redactar consistentemente.
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.42\textwidth}
+\centering
+\includegraphics[width=\linewidth]{Ilustraciones/cuadro_konwei.png}
+\subcaption{Cuadro de instrumentos (lectura de PIDs).}
+\label{fig:ref_panel}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\centering
+\includegraphics[width=\linewidth]{Ilustraciones/dtc_konwei.PNG}
+\subcaption{Lista de DTCs.}
+\label{fig:ref_dtcs}
+\end{minipage}
+\caption{Herramienta comercial de referencia (Car Scanner ELM OBD2~\cite{CarScanner_app}) usada como patrón de comparación: cuadro de instrumentos (a) y lista de DTCs (b).}
+\label{fig:ref_comercial}
+\end{figure}
+
+
 \section{Validación sobre vehículo real}
 \label{sec:resultados_vehiculo_real}
 
-Tras completar la validación sobre el banco de ensayo, el sistema se probó sobre un vehículo real utilizando un cable OBD-II estándar conectado al puerto de diagnóstico del vehículo. La Raspberry Pi se sustituyó en este escenario como interfaz entre el bus CAN del vehículo y la aplicación móvil, manteniendo exactamente el mismo stack de software validado en el banco: \texttt{IsoTpTransport} sobre SocketCAN, servidor BLE GATT con NUS y aplicación React Native.
+Tras completar la validación sobre el banco de ensayo, el sistema se probó sobre un vehículo real. El vehículo objetivo inicial era un SEAT Ibiza 6J, pero debido a que la plataforma de ese modelo no implementa el protocolo OBD-II sobre el bus CAN en los pines 6 y 14 del puerto OBD, la validación final se realizó sobre un \textbf{Škoda Yeti de 2015}, perteneciente igualmente al grupo VAG y, por tanto, representativo de la misma arquitectura de diagnóstico. La conexión se efectuó mediante un cable OBD-II estándar que nos revela todos los pines del puerto de diagnóstico del vehículo: la Raspberry Pi actuó como interfaz entre el bus CAN del vehículo conectado a través de los pines 6 y 14 (\texttt{CAN\_L} y \texttt{CAN\_H} respectivamente) del puerto OBD-II y la aplicación móvil, manteniendo exactamente el mismo stack de software validado en el banco (\texttt{IsoTpTransport} sobre SocketCAN, servidor BLE GATT con NUS y aplicación React Native).
 
-La conexión al vehículo demostró que el protocolo OBD-II implementado es compatible con ECUs de producción: la herramienta fue capaz de consultar los PIDs del modo 0x01 soportados por el vehículo, leer el VIN real mediante la secuencia ISO-TP multi-frame y recibir datos de telemetría en tiempo real a través de la aplicación móvil. Las respuestas del vehículo presentaron tiempos de respuesta ligeramente superiores a los del simulador (10--30\,ms frente a 2--8\,ms), dentro del margen absorbido por el timeout configurado.
+La conexión al vehículo demostró que el protocolo OBD-II implementado es compatible con ECUs de producción: la herramienta fue capaz de consultar los PIDs del modo 0x01 soportados por el vehículo, leer el VIN real mediante la secuencia ISO-TP multi-frame y recibir datos de telemetría en tiempo real a través de la aplicación móvil. Las respuestas del vehículo presentaron tiempos de respuesta ligeramente superiores a los del simulador (10--30\,ms frente a 2--8\,ms).
 
 \begin{figure}[!htbp]
 \centering
-% \includegraphics[width=0.85\textwidth]{Ilustraciones/vehiculo_real_montaje.jpg}
+\includegraphics[width=0.45\textwidth]{Ilustraciones/foto_coche_pi.jpeg}
 \caption{Sistema montado en el vehículo real: cable OBD-II conectado al puerto de diagnóstico, Raspberry Pi con el servidor activo y teléfono móvil con la aplicación mostrando datos de telemetría en tiempo real.}
 \label{fig:vehiculo_real}
 \end{figure}
@@ -25,7 +44,7 @@ La conexión al vehículo demostró que el protocolo OBD-II implementado es comp
 \section{Validación funcional del protocolo OBD-II}
 \label{sec:resultados_protocolo}
 
-La herramienta de diagnóstico fue capaz de completar satisfactoriamente el ciclo completo de consulta para los 23 PIDs implementados en el modo 0x01, los cuatro servicios del modo 0x09 (incluyendo el VIN multi-frame) y los modos de gestión de DTCs 0x03 y 0x04.
+La herramienta de diagnóstico fue capaz de completar satisfactoriamente el ciclo completo de consulta para los 25 PIDs implementados en el modo 0x01, la lectura del VIN del modo 0x09 (mediante la secuencia multi-frame), los modos de gestión de DTCs 0x03 y 0x04, y los servicios UDS 0x10 (DiagnosticSessionControl) y 0x22 (ReadDataByIdentifier).
 
 La tabla~\ref{tab:pids_validados} resume los parámetros validados más representativos, indicando el PID, la fórmula de decodificación aplicada y el rango de valores observados durante las sesiones de prueba.
 
@@ -39,7 +58,7 @@ La tabla~\ref{tab:pids_validados} resume los parámetros validados más represen
 \textbf{PID} & \textbf{Parámetro} & \textbf{Fórmula (A, B = bytes de respuesta)} & \textbf{Rango observado} \\
 \hline
 \texttt{0x0C} & RPM del motor & $((A \times 256) + B) / 4$ & 800 -- 6000\,rpm \\
-\texttt{0x0D} & Velocidad & $A$ & 0 -- 220\,km/h \\
+\texttt{0x0D} & Velocidad & $A$ & 0 -- 255\,km/h \\
 \texttt{0x05} & Temp. refrigerante & $A - 40$ & 15 -- 95\,°C \\
 \texttt{0x0F} & Temp. aire admisión & $A - 40$ & 15 -- 45\,°C \\
 \texttt{0x0A} & Presión combustible & $A \times 3$ & 240 -- 360\,kPa \\
@@ -51,9 +70,9 @@ La tabla~\ref{tab:pids_validados} resume los parámetros validados más represen
 \end{tabular}
 \end{table}
 
-La respuesta VIN se validó con una cadena de 17 caracteres ASCII, verificando que la secuencia ISO-TP multi-frame (FF + FC + CF $\times$ 2) se completaba correctamente en el 100\% de los intentos realizados sin ruido CAN activo. El VIN reconstruido en la herramienta Python coincidió en todos los casos con la cadena configurada en el simulador Arduino.
+La respuesta VIN se validó con una cadena de 17 caracteres ASCII, verificando que la secuencia ISO-TP multi-frame (FF + FC + CF $\times$ 2) se completaba correctamente en el 100\% de los intentos realizados con el bus en modo determinista. El VIN reconstruido en la herramienta Python coincidió en todos los casos con la cadena configurada en el simulador Arduino.
 
-El ciclo de gestión de DTCs se validó íntegramente: lectura de lista vacía, inyección de tres DTCs distintos mediante la interrupción hardware del pin D6, lectura de la lista con los tres códigos presentes, borrado y confirmación de lista vacía. La codificación J2012 de los DTCs fue correcta en todos los casos.
+El ciclo de gestión de DTCs se validó íntegramente: lectura de lista vacía, inyección de los tres DTCs del conjunto (\texttt{P0300}, \texttt{P0171}, \texttt{P0420}) mediante la interrupción hardware del pin D4, lectura de la lista con los códigos presentes, borrado y confirmación de lista vacía. La codificación J2012 de los DTCs fue correcta en todos los casos.
 
 
 % TODO - verificar que los números de latencia son reales (medidos), no estimados
@@ -65,7 +84,7 @@ Se midió la latencia extremo a extremo de una consulta OBD-II completa, desde e
 Los resultados obtenidos se resumen en la tabla~\ref{tab:latencias}:
 
 \begin{table}[!htbp]
-\caption{Latencia extremo a extremo de una consulta OBD-II (100 muestras, sin ruido CAN).}
+\caption{Latencia extremo a extremo de una consulta OBD-II (100 muestras, bus en modo determinista).}
 \label{tab:latencias}
 \centering
 \renewcommand{\arraystretch}{1.2}
@@ -86,31 +105,85 @@ BLE Notify (Raspberry Pi → app) & 10 -- 20 \\
 
 La latencia dominante en el sistema es la introducida por la capa BLE, que suma las contribuciones del Write y la Notify. La latencia CAN+ISO-TP es despreciable frente a la BLE a las velocidades de bus utilizadas.
 
-En el modo de monitorización continua con cuatro PIDs a 500\,ms de periodo, el sistema fue capaz de mantener una tasa de actualización estable sin pérdidas de muestras durante sesiones de 10 minutos. La cola de datos entre el hilo de monitorización y el hilo BLE no presentó saturación en ninguno de los ensayos.
+En el modo de monitorización continua con cinco PIDs a 500\,ms de periodo, el sistema fue capaz de mantener una tasa de actualización estable sin pérdidas de muestras durante sesiones de 10 minutos. El reenvío de las muestras del hilo de monitorización al cliente BLE no presentó pérdidas ni saturación en ninguno de los ensayos.
 
-La base de datos SQLite acumuló aproximadamente 1.200 muestras por sesión de 10 minutos con cuatro PIDs, con un tamaño de fichero resultante de 480\,KB. La escritura en lotes de 50 muestras mantuvo la latencia de acceso a disco por debajo de 15\,ms en el 99\% de los casos.
-
-
-% TODO - revisar y redactar; verificar que los porcentajes de ruido son los reales configurados
-\section{Comportamiento ante condiciones adversas}
+\section{Comportamiento ante condiciones de bus realistas y errores}
 \label{sec:resultados_ruido}
 
-Se evaluó el comportamiento del sistema con los mecanismos de ruido CAN del simulador activos simultáneamente: latencia variable (1--15\,ms), descarte de paquetes (2\%), respuestas negativas UDS esporádicas (1\%) y tráfico de fondo (30\% por ciclo).
+Se evaluó el comportamiento del sistema con los mecanismos opcionales de variabilidad del simulador activos (\texttt{ADD\_NOISE} y \texttt{BROADCAST\_ENABLE}) y ante respuestas negativas (NRC) de la ECU.
 
-Los resultados más relevantes de las pruebas bajo ruido son:
+Los resultados más relevantes de estas pruebas son:
 
 \begin{itemize}
-    \item \textbf{Descarte de paquetes}: La librería \texttt{can-isotp} gestionó los descartes de forma transparente gracias al mecanismo de retransmisión por timeout. Con el timeout de 1\,segundo configurado, el 100\% de los mensajes descartados fueron recuperados en el primer o segundo reintento, sin que ningún descarte provocara un error fatal en la sesión.
+    \item \textbf{Tramas de difusión}: Con \texttt{BROADCAST\_ENABLE} activo, las tramas no solicitadas (identificadores \texttt{0x280}, \texttt{0x320} y \texttt{0x3D0}) fueron ignoradas por la pila \texttt{can-isotp}, que solo entrega los mensajes dirigidos a la dirección de respuesta de la ECU (\texttt{0x7E8}). En ningún caso una trama de difusión se interpretó como respuesta válida a una petición.
 
-    \item \textbf{Respuestas negativas UDS}: Las respuestas NRC \texttt{0x22} fueron detectadas y registradas correctamente en el log de comandos SQLite. El hilo de monitorización continuua omite la muestra correspondiente y prosigue con el siguiente PID del ciclo, sin bloquear la sesión.
+    \item \textbf{Ruido en los sensores}: Con \texttt{ADD\_NOISE} activo, los valores de telemetría presentaron el \textit{jitter} esperado dentro de sus rangos físicos, sin afectar a la correcta decodificación de las respuestas ni a la estabilidad de la monitorización continua.
 
-    \item \textbf{Tráfico de fondo}: Las tramas de tráfico de fondo (identificadores \texttt{0x280, 0x480, 0x320, 0x520}) fueron ignoradas por el filtro de aceptación configurado en el socket \texttt{can-isotp}, sin interferencia alguna en la comunicación OBD-II.
+    \item \textbf{Respuestas negativas UDS}: Las respuestas NRC (por ejemplo, \texttt{0x22} al leer un DID propietario fuera de la sesión extendida) fueron detectadas y registradas correctamente. El hilo de monitorización omite la muestra afectada y prosigue con el siguiente PID del ciclo, sin bloquear la sesión.
 
-    \item \textbf{Latencia variable}: El incremento de latencia hasta 15\,ms en la capa CAN resultó imperceptible a nivel de aplicación, dado que la latencia dominante del sistema es la capa BLE ($>$10\,ms). La monitorización continua no registró pérdidas de muestras atribuibles a la latencia CAN.
+    \item \textbf{Robustez del transporte}: El timeout de recepción de 5\,segundos y el reensamblado automático de \texttt{can-isotp} absorbieron la latencia de las transmisiones multi-frame sin generar falsos errores, manteniendo la sesión estable durante toda la prueba.
 \end{itemize}
 
-La tasa de errores no recuperables (timeouts que provocan el descarte definitivo de una muestra) se situó en un 0,08\% sobre el total de consultas realizadas con ruido activo, valor que se considera aceptable para el uso previsto del sistema.
+La Figura~\ref{fig:res_consolas} muestra la traza de ejecución durante una de estas pruebas: la consola del simulador Arduino, que emite las tramas de difusión y el ruido inyectado en los sensores, y la consola de la Raspberry Pi, donde la pila \texttt{can-isotp} descarta las tramas ajenas y decodifica únicamente las respuestas dirigidas a la dirección de la ECU.
 
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{Ilustraciones/iter_2_ard.png}
+\subcaption{Consola del simulador Arduino.}
+\label{fig:res_consola_ard}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{Ilustraciones/iter_2_pi.png}
+\subcaption{Consola de la Raspberry Pi.}
+\label{fig:res_consola_pi}
+\end{minipage}
+\caption{Traza de ejecución bajo condiciones de bus realistas: consola del simulador Arduino emitiendo tramas de difusión y ruido (a) y consola de la Raspberry Pi filtrando y decodificando las respuestas válidas (b).}
+\label{fig:res_consolas}
+\end{figure}
+
+\section{Interfaz de la aplicación móvil}
+\label{sec:resultados_app}
+
+A continuación se recogen las capturas de las distintas pantallas de la aplicación móvil obtenidas durante las pruebas en el vehículo real, que ilustran el resultado final de la interfaz de usuario sobre las cinco pestañas de navegación y el flujo de conexión.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\linewidth]{Ilustraciones/datos_real.png}
+\hfill
+\includegraphics[width=0.48\linewidth]{Ilustraciones/uds_real.png}
+\caption{Pantalla \textit{Panel}: telemetría en tiempo real (izquierda) y pestaña UDS con control de sesión y lectura de DIDs (derecha).}
+\label{fig:res_app_panel}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\linewidth]{Ilustraciones/dtcs_real.png}
+\hfill
+\includegraphics[width=0.48\linewidth]{Ilustraciones/sesiones_sim.png}
+\caption{Pantallas \textit{Averías} (izquierda), con la lista de DTCs leídos de la ECU, y \textit{Sesiones} (derecha), con el historial de sesiones almacenado en SQLite.}
+\label{fig:res_app_dtc_sesiones}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\linewidth]{Ilustraciones/sesion_detalle.png}
+\hfill
+\includegraphics[width=0.48\linewidth]{Ilustraciones/logs_real.png}
+\caption{Detalle de una sesión con las muestras agrupadas por sensor (izquierda) y pantalla \textit{Consola} con el envío de comandos JSON y el registro de comunicación BLE (derecha).}
+\label{fig:res_app_detalle_consola}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.48\linewidth]{Ilustraciones/conexion.png}
+\hfill
+\includegraphics[width=0.48\linewidth]{Ilustraciones/ajustes.png}
+\caption{Pantalla \textit{Ajustes} (izquierda), con la gestión de conexión y el modo de simulación, y la pantalla de ajustes (derecha).}
+\label{fig:res_app_ajustes_conexion}
+\end{figure}
 
 % TODO - revisar y redactar
 \section{Grado de consecución de los objetivos}
@@ -118,7 +191,7 @@ La tasa de errores no recuperables (timeouts que provocan el descarte definitivo
 
 La tabla~\ref{tab:objetivos} recoge el grado de consecución de cada uno de los objetivos específicos definidos en la Sección~\ref{sec:objetivos}, evaluado sobre la base de los resultados de las pruebas de integración.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \caption{Evaluación del grado de consecución de los objetivos específicos.}
 \label{tab:objetivos}
 \centering
@@ -129,7 +202,7 @@ La tabla~\ref{tab:objetivos} recoge el grado de consecución de cada uno de los 
 \hline
 O1 & Pila ISO-TP + OBD-II modos 0x01/03/04/09 operativa & Completo \\
 O2 & Simulador Arduino responde a los 4 modos con datos realistas & Completo \\
-O3 & Ruido CAN: descarte, NRC, latencia, tráfico de fondo & Completo \\
+O3 & Servicios UDS (0x10/0x22) y mecanismos opcionales de ruido/difusión & Completo \\
 O4 & Servidor BLE GATT con NUS operativo en Raspberry Pi & Completo \\
 O5 & App React Native Android/iOS con 5 pantallas funcionales & Completo \\
 O6 & Logging SQLite con sesiones, muestras y comandos & Completo \\

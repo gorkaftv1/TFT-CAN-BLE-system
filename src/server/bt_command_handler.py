@@ -201,7 +201,7 @@ class BtCommandHandler:
         cycle_size = len(pids)
 
         with self._monitor_lock:
-            if self._monitor is not None and self._monitor.is_running():
+            if self._monitor is not None and self._monitor.is_running:
                 return {"status": "ok", "data": "monitor already running"}
 
             sample_batch: list[dict] = []

@@ -1,0 +1,48 @@
+\chapter{Catálogo de comandos del protocolo JSON sobre NUS}
+\label{anx:ble_commands}
+
+La siguiente tabla recoge el conjunto completo de comandos del protocolo NDJSON descrito en la Sección~\ref{sec:proto_ble}. El campo \texttt{cmd} identifica la operación; los parámetros opcionales se incluyen en el mismo objeto JSON de petición, y la columna \texttt{data} indica el contenido del campo de datos de la respuesta positiva.
+
+\begin{table}[!htbp]
+\caption{Comandos del protocolo JSON sobre NUS.}
+\label{tab:ble_commands}
+\centering
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{|l|p{3.8cm}|p{7cm}|}
+\hline
+\textbf{\texttt{cmd}} & \textbf{Parámetros} & \textbf{\texttt{data} en respuesta} \\
+\hline
+\texttt{auth}            & \texttt{token: str}                                        & \texttt{"authenticated"} \\
+\hline
+\texttt{ping}            & -                                                          & \texttt{"pong"} \\
+\hline
+\texttt{probe\_pids}     & -                                                          & \texttt{[int]} - PIDs soportados por la ECU \\
+\hline
+\texttt{snapshot}        & -                                                          & \texttt{\{pid: \{value, unit\}\}} - lectura puntual de todos los PIDs activos \\
+\hline
+\texttt{monitor\_start}  & \texttt{pids: [int]}, \texttt{interval\_ms: int}           & \texttt{"monitor started"}; las muestras se envían como \textit{push} \texttt{\{type:"samples"\}} \\
+\hline
+\texttt{monitor\_stop}   & -                                                          & \texttt{"monitor stopped"} \\
+\hline
+\texttt{dtcs}            & -                                                          & \texttt{[\{code, description\}]} \\
+\hline
+\texttt{clear\_dtcs}     & -                                                          & \texttt{null} \\
+\hline
+\texttt{vin}             & -                                                          & \texttt{str} - cadena VIN de 17 caracteres ASCII \\
+\hline
+\texttt{uds\_session}    & \texttt{session\_type: int}                                & \texttt{\{session\_type, p2\_server\_ms, p2\_extended\_ms\}} \\
+\hline
+\texttt{uds\_read\_did}  & \texttt{did: str} (hex, ej.\ \texttt{"0xF190"})           & \texttt{\{did, name, value, unit\}} \\
+\hline
+\texttt{sessions}        & \texttt{limit: int}                                        & \texttt{[\{session\_id, label, started\_at, ended\_at, sample\_count\}]} \\
+\hline
+\texttt{session\_samples}& \texttt{session\_id}, \texttt{pid?}, \texttt{limit?}       & \texttt{[\{pid, name, value, unit, ts\}]} \\
+\hline
+\texttt{session\_commands}& \texttt{session\_id: int}                                 & \texttt{[\{command, request\_hex, response\_hex, timestamp\}]} \\
+\hline
+\texttt{session\_dtcs}   & \texttt{session\_id: int}                                  & \texttt{[\{code, description, raw\}]} \\
+\hline
+\texttt{disconnect}      & -                                                          & - \\
+\hline
+\end{tabular}
+\end{table}
