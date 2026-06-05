@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
+import sys
 import time
 
 try:
@@ -27,10 +29,9 @@ _NUS_TX      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 _BLE_NAME              = "diag_tool"
 _MTU                   = 240
-_CLIENT_TIMEOUT_S      = 15.0
-_SERVER_TIMEOUT_S      = 20.0
+_CLIENT_TIMEOUT_S      = 30.0
+_SERVER_TIMEOUT_S      = 40.0
 _WATCHDOG_INTERVAL     = 5.0
-_HEARTBEAT_INTERVAL    = 8.0
 _RECV_BUFFER_MAX_SIZE  = 4096
 _MAX_RECONNECT_RETRIES = 5
 
@@ -50,7 +51,6 @@ class BLEDiagServer:
         self._client_connected: bool = False
         self._server_running: bool = False
         self._watchdog_task: asyncio.Task | None = None
-        self._heartbeat_task: asyncio.Task | None = None
         self._reconnect_count: int = 0
 
     async def start(self) -> None:
@@ -103,18 +103,16 @@ class BLEDiagServer:
         print(f"[BLE] Advertising '{_BLE_NAME}' — waiting for connection...")
         logger.info(f"[BLE] Advertising '{_BLE_NAME}'")
 
-        self._watchdog_task  = asyncio.create_task(self._watchdog_loop())
-        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        self._watchdog_task = asyncio.create_task(self._watchdog_loop())
 
     async def _shutdown(self) -> None:
         self._server_running = False
-        for task in [self._watchdog_task, self._heartbeat_task]:
-            if task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+            try:
+                await self._watchdog_task
+            except asyncio.CancelledError:
+                pass
         if self._server:
             try:
                 await self._server.stop()
@@ -143,8 +141,19 @@ class BLEDiagServer:
         self._last_rx_time = time.time()
         if not self._client_connected:
             self._client_connected = True
-            print("[BLE] Client connected — first write received")
-            logger.info("[BLE] Client connected")
+            # Log negotiated MTU: the first write size reveals the MTU the client is using
+            negotiated_mtu = len(value)
+            mtu_info = f"first write size={negotiated_mtu}b (server TX MTU={_MTU}b)"
+            print(f"[BLE] Client connected — {mtu_info}")
+            logger.info(f"[BLE] Client connected — {mtu_info}")
+            # Try to read MTU from bless server if available
+            try:
+                if hasattr(self._server, "get_mtu"):
+                    blz_mtu = self._server.get_mtu()
+                    print(f"[BLE] BlueZ reported MTU: {blz_mtu}")
+                    logger.info(f"[BLE] BlueZ reported MTU: {blz_mtu}")
+            except Exception as e:
+                logger.debug(f"[BLE] Could not read BlueZ MTU: {e}")
 
         chunk = bytes(value).decode("utf-8", errors="replace")
 
@@ -170,11 +179,6 @@ class BLEDiagServer:
             except json.JSONDecodeError as exc:
                 logger.warning(f"[BLE] Invalid JSON: {exc}")
                 self._notify_from_loop({"status": "error", "message": f"Invalid JSON: {exc}"})
-                continue
-
-            if cmd.get("type") == "heartbeat_ack":
-                # Client acknowledged our heartbeat — keep _last_rx_time fresh
-                self._last_rx_time = time.time()
                 continue
 
             logger.info(format_ble_rx(line, cmd))
@@ -203,60 +207,26 @@ class BLEDiagServer:
                         logger.warning(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         print(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         await self._handle_disconnect()
-                        return  # restart created a new watchdog; this one exits
         except asyncio.CancelledError:
             pass
         except Exception as e:
             logger.error(f"[Watchdog] Error: {e}")
             raise
 
-    async def _heartbeat_loop(self) -> None:
-        try:
-            while True:
-                await asyncio.sleep(_HEARTBEAT_INTERVAL)
-                if self._client_connected:
-                    elapsed = time.time() - self._last_rx_time
-                    if elapsed > _HEARTBEAT_INTERVAL:
-                        self._notify_from_loop({"type": "heartbeat", "timestamp": time.time()})
-                        logger.debug("[Heartbeat] Sent")
-        except asyncio.CancelledError:
-            pass
-
     async def _handle_disconnect(self) -> None:
         self._client_connected = False
         self._recv_buf = ""
         self._handler.on_disconnect()
-        logger.info("[BLE] Client disconnected — state reset")
-        print("[BLE] Client disconnected — state reset")
-        await self._restart_server()
-
-    async def _restart_server(self) -> None:
-        """Stop and restart the BLE server so advertising resumes for new connections."""
-        logger.info("[BLE] Restarting server to re-enable advertising...")
-        print("[BLE] Restarting server to re-enable advertising...")
-        self._server_running = False
-
-        current_task = asyncio.current_task()
-        for task in [self._watchdog_task, self._heartbeat_task]:
-            if task and not task.done() and task is not current_task:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-        self._watchdog_task = None
-        self._heartbeat_task = None
-
-        if self._server:
-            try:
-                await self._server.stop()
-            except Exception as e:
-                logger.warning(f"[BLE] Error stopping server during restart: {e}")
-            self._server = None
-
-        await asyncio.sleep(1)
-        await self._start_server()
-        print("[BLE] Server restarted — advertising again")
+        logger.info("[BLE] Client disconnected — closing session and restarting process")
+        print("[BLE] Client disconnected — closing session and restarting process")
+        # Flush DB and end session cleanly before restart
+        try:
+            self._handler.close_session()
+            print("[BLE] Session closed and DB flushed")
+        except Exception as e:
+            logger.warning(f"[BLE] Error closing session: {e}")
+        # Replace process — BlueZ cleans up when D-Bus socket closes
+        os.execv(sys.executable, [sys.executable] + sys.argv)
 
     # ── Dispatch and notify ────────────────────────────────────────────
 

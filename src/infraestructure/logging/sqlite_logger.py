@@ -126,9 +126,11 @@ class SqliteDataLogger(IDataLogger):
         cur = self._conn.execute(
             """
             SELECT s.id, s.label, s.started_at, s.ended_at,
-                   COUNT(sa.id) AS sample_count
+                   COUNT(DISTINCT sa.id) AS sample_count,
+                   COUNT(DISTINCT d.id)  AS dtc_count
             FROM sessions s
             LEFT JOIN samples sa ON sa.session_id = s.id
+            LEFT JOIN dtcs    d  ON d.session_id  = s.id
             GROUP BY s.id
             ORDER BY s.id DESC
             LIMIT ?
@@ -142,6 +144,7 @@ class SqliteDataLogger(IDataLogger):
                 started_at=row[2],
                 ended_at=row[3],
                 sample_count=row[4],
+                dtc_count=row[5],
             )
             for row in cur.fetchall()
         ]
@@ -151,23 +154,24 @@ class SqliteDataLogger(IDataLogger):
         session_id: int,
         pid: int | None = None,
         limit: int = 1000,
+        offset: int = 0,
     ) -> list[MonitorSample]:
         if pid is None:
             cur = self._conn.execute(
-                "SELECT pid, name, value, unit, monotonic_ts"
+                "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ?"
-                " ORDER BY monotonic_ts LIMIT ?",
-                (session_id, limit),
+                " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
+                (session_id, limit, offset),
             )
         else:
             cur = self._conn.execute(
-                "SELECT pid, name, value, unit, monotonic_ts"
+                "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ? AND pid = ?"
-                " ORDER BY monotonic_ts LIMIT ?",
-                (session_id, pid, limit),
+                " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
+                (session_id, pid, limit, offset),
             )
         return [
-            MonitorSample(pid=r[0], name=r[1], value=r[2], unit=r[3], timestamp=r[4])
+            MonitorSample(pid=r[0], name=r[1], value=r[2], unit=r[3], timestamp=r[4], wall_ts=r[5])
             for r in cur.fetchall()
         ]
 
