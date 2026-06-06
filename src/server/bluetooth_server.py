@@ -243,6 +243,12 @@ class BLEDiagServer:
         # 3. Start fresh server
         print("[BLE] Restarting BLE server...")
         await self._start_server()
+        # 4. Roll a new DB session for the next client (DB stays open)
+        try:
+            self._handler.start_session()
+            print("[BLE] New DB session started for next client")
+        except Exception as e:
+            logger.warning(f"[BLE] Error starting new session: {e}")
 
     # ── Dispatch and notify ────────────────────────────────────────────
 

@@ -25,6 +25,10 @@ class LoggedDiagnosticSession(IDiagnosticSession):
         self._session_id = session_id
         self._transport = transport
 
+    def set_session_id(self, session_id: int) -> None:
+        # Used when the server rolls a new session on client reconnect.
+        self._session_id = session_id
+
     def _log(self, command: str) -> None:
         self._logger.log_command(
             self._session_id,

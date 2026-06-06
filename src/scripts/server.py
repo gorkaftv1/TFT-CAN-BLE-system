@@ -123,9 +123,11 @@ async def main(mock: bool) -> None:
         with session:
             await ble_server.start()
     finally:
-        logger_db.end_session(session_id)
+        # End whichever session is currently active (it may have rolled over
+        # across client reconnects) and close the DB on full shutdown.
+        handler.close_session()
         logger_db.close()
-        print(f"[LOG] Session #{session_id} closed.")
+        print("[LOG] Session closed.")
 
 
 if __name__ == "__main__":
