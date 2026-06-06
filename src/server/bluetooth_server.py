@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+import subprocess
 import sys
 import time
 
@@ -217,16 +218,31 @@ class BLEDiagServer:
         self._client_connected = False
         self._recv_buf = ""
         self._handler.on_disconnect()
-        logger.info("[BLE] Client disconnected — closing session and restarting process")
-        print("[BLE] Client disconnected — closing session and restarting process")
-        # Flush DB and end session cleanly before restart
+        logger.info("[BLE] Client disconnected — restarting BLE server")
+        print("[BLE] Client disconnected — restarting BLE server")
+        # Flush DB and end session cleanly
         try:
             self._handler.close_session()
             print("[BLE] Session closed and DB flushed")
         except Exception as e:
             logger.warning(f"[BLE] Error closing session: {e}")
-        # Replace process — BlueZ cleans up when D-Bus socket closes
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        # 1. Stop current server (unregister GATT app from D-Bus)
+        self._server_running = False
+        if self._watchdog_task:
+            self._watchdog_task.cancel()
+        if self._server:
+            try:
+                await self._server.stop()
+            except Exception as e:
+                logger.warning(f"[BLE] Error stopping server: {e}")
+            self._server = None
+        # 2. Reset HCI adapter to clear BlueZ advertising state
+        print("[BLE] Resetting HCI adapter...")
+        subprocess.run(["sudo", "hciconfig", "hci0", "reset"], timeout=5)
+        await asyncio.sleep(2)
+        # 3. Start fresh server
+        print("[BLE] Restarting BLE server...")
+        await self._start_server()
 
     # ── Dispatch and notify ────────────────────────────────────────────
 
