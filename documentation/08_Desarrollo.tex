@@ -295,18 +295,18 @@ La Figura~\ref{fig:fase4_app_screens} muestra las pantallas principales de la ap
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=0.35\textheight]{Ilustraciones/conexion.png}%
+\includegraphics[height=7cm]{Ilustraciones/conexion.png}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=0.35\textheight]{Ilustraciones/panel.jpeg}
+\includegraphics[height=7cm]{Ilustraciones/panel.jpeg}
 \caption{\textit{Conexión} (izquierda) y \textit{Panel} (derecha)}
 \label{fig:fase4_app_screens}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=0.35\textheight]{Ilustraciones/dtcs.jpeg}%
+\includegraphics[height=7cm]{Ilustraciones/dtcs.jpeg}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=0.35\textheight]{Ilustraciones/sesiones.jpeg}
+\includegraphics[height=7cm]{Ilustraciones/sesiones.jpeg}
 \caption{\textit{Averías} (izquierda) y \textit{Sesiones} (derecha)}
 \label{fig:fase4_app_screens2}
 \end{figure}
@@ -630,33 +630,117 @@ La aplicación sigue una arquitectura basada en tres capas:
 
 \subsection{Pantallas y funcionalidades}
 
-La navegación principal se organiza en cinco pestañas (\textit{bottom tab navigator}): \textit{Panel}, \textit{Averías}, \textit{Sesiones}, \textit{Consola} y \textit{Ajustes}. El flujo de conexión (escaneo, selección de dispositivo y autenticación) se presenta mediante diálogos modales lanzados desde la pantalla de Ajustes.
+La navegación principal se organiza en cinco pestañas (\textit{bottom tab navigator}): \textit{Panel}, \textit{Averías}, \textit{Sesiones}, \textit{Consola} y \textit{Ajustes}. El flujo de conexión (escaneo, selección de dispositivo y autenticación) se presenta mediante diálogos modales lanzados desde la pantalla de Ajustes o desde el estado vacío de las pantallas operativas. A continuación se detallan los casos de uso de cada pantalla y los controles que los soportan.
+
+\noindent\textbf{Estado sin conexión}
+
+Mientras no hay conexión activa ni modo de simulación, las pantallas operativas (\textit{Panel}, \textit{Averías} y \textit{Consola}) muestran un estado vacío contextual que informa de que el usuario está sin conexión y describe la función de la pantalla. Desde este estado se ofrecen dos botones: \textbf{CONECTAR}, que abre el modal de búsqueda de dispositivos, y \textbf{SIMULAR}, que activa el modo de simulación.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_estado.png}
+\caption{Estado sin conexión de una pantalla operativa, con los botones \textit{Conectar} y \textit{Simular}.}
+\label{fig:app_estado}
+\end{figure}
 
 \noindent\textbf{Flujo de conexión}
 
-El usuario inicia el escaneo de dispositivos BLE cercanos desde la pantalla de Ajustes, la aplicación enumera todos los dispositivos y el usuario selecciona el adaptador (la Raspberry Pi se anuncia como \texttt{diag\_tool}). Durante el proceso se muestra el progreso de las fases: conexión física, negociación de MTU, descubrimiento de servicios, suscripción a notificaciones y autenticación por token. Una vez conectado exitosamente con la Pi le solicita el VIN del vehiculo y los PIDs soportados. El adaptador BLE implementa un \textit{watchdog} de inactividad que desconecta automáticamente la sesión si no hay actividad durante el periodo establecido.
+El modal de búsqueda realiza un escaneo BLE de hasta 20 segundos (botones \textit{Buscar}/\textit{Detener}/\textit{Actualizar} y \textit{Cancelar}) y enumera todos los dispositivos cercanos, situando en primer lugar el adaptador objetivo (la Raspberry Pi se anuncia como \texttt{diag\_tool}), que se marca con la etiqueta \textit{Recomendado}. Para cada dispositivo se indica una estimación cualitativa de la intensidad de señal RSSI traducida a etiquetas legibles (\textit{Señal excelente}, \textit{buena}, \textit{débil} o \textit{muy débil}) y un botón \textit{Conectar}. Al seleccionar un dispositivo, la aplicación recorre las fases de conexión física, negociación de MTU, descubrimiento de servicios, suscripción a notificaciones y autenticación por token, cerrando el modal automáticamente al quedar conectada y solicitando entonces el VIN del vehículo y los PIDs soportados. El adaptador BLE implementa un \textit{watchdog} de inactividad que comprueba la actividad cada 5\,segundos y desconecta la sesión si esta cesa.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_scan.png}
+\caption{Modal de búsqueda de dispositivos BLE, con el adaptador objetivo marcado como \textit{Recomendado} y la intensidad de señal.}
+\label{fig:app_scan}
+\end{figure}
+
+\noindent\textbf{Pérdida repentina de la conexión}
+
+Ante una caída inesperada del enlace BLE (alejamiento del vehículo, apagado de la Raspberry Pi o interferencias), el adaptador dispara la rutina \texttt{onUnexpectedDisconnect}, que detiene el servicio de monitorización, limpia el estado de telemetría y de PIDs soportados y marca la desconexión como inesperada. Esta condición muestra un \textbf{modal de conexión perdida} a nivel global, con el título \textit{Error de conexión}, el mensaje \textit{«La conexión con el dispositivo se ha perdido inesperadamente»} y un botón \textit{Cerrar}. Así se evita que la interfaz siga mostrando datos obsoletos y se distingue una desconexión voluntaria de una caída fortuita.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_desconexion.png}
+\caption{Modal de conexión perdida mostrado ante una caída inesperada del enlace BLE.}
+\label{fig:app_desconexion}
+\end{figure}
+
+\noindent\textbf{Modo de simulación}
+
+Al pulsar \textbf{SIMULAR} se muestra un modal de confirmación que advierte de que los datos serán generados por la propia aplicación. Tras confirmar, el adaptador simulado \texttt{MockAdapter} sustituye al \texttt{BleAdapter} manteniendo la misma interfaz \texttt{IVehicleAdapter}, de modo que el resto de la aplicación opera de forma idéntica. El modo puede activarse y desactivarse en cualquier momento desde la pantalla de \textit{Ajustes}.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_simulacion.png}
+\caption{Modal de confirmación previo a activar el modo de simulación.}
+\label{fig:app_simulacion}
+\end{figure}
 
 \noindent\textbf{Pantalla Panel}
 
-La pantalla principal del diagnóstico muestra las opciones de obtener una snapshot (captura de datos) en un momento determinado o de obtener en tiempo real los parámetros del vehículo recibidos por monitorización continua. Los indicadores se presentan en forma de tarjetas con el valor actual, la unidad y cuyo color refleja la calidad del dato (si representa valor crítico o dentro de los parámetros normales). Incluye además una pestaña dedicada a UDS, que permite cambiar la sesión de diagnóstico y leer los identificadores de datos (DID) estándar y extendidos.
+Es la pantalla principal del diagnóstico. Una cabecera muestra el VIN y un conmutador de protocolo \textbf{OBD}/\textbf{UDS}. La barra de acciones ofrece dos botones: \textbf{Captura}, que toma una instantánea puntual de todos los parámetros, y \textbf{Monitorizar}/\textbf{Detener}, que arranca o detiene la monitorización continua (un banner «en vivo» indica que está activa). En modo OBD, una fila de sondeo muestra el número de PIDs detectados y un botón \textbf{Escanear PIDs}/\textbf{Re-escanear}; al conectar, la aplicación obtiene automáticamente la máscara de PIDs soportados por la ECU y verifica cada uno para descartar falsos positivos. En modo UDS, un botón de sesión alterna entre \textit{Sesión por defecto} y \textit{Sesión extendida} y se listan los DID estándar y extendidos. Los valores se presentan como tarjetas con nombre, identificador, marca de tiempo, valor y unidad, con un punto de color que refleja el estado del dato (rango normal, fuera de rango, sin umbral, \textit{timeout}, leyendo o sin datos); una leyenda al pie explica el código de colores.
 
-Al establecer la conexión, la aplicación inicia automáticamente una solicitud para obtener una máscara que refleja que PIDs soporta la ECU conectada y posteriormente realiza una prueba de cada uno de ellos verificando que no haya falsos positivos. 
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_panel.png}
+\caption{Pantalla \textit{Panel}: telemetría OBD-II en tarjetas, conmutador OBD/UDS y barra de acciones.}
+\label{fig:app_panel}
+\end{figure}
 
 \noindent\textbf{Pantalla Averías (DTCs)}
 
-La pantalla de códigos de avería da la opción de realizar un escaneo de la lista de DTCs activos leída desde la ECU. Cada código se presenta con su identificador alfanumérico (formato J2012), su descripción en texto y un indicador de categoría (P/C/B/U). La pantalla ofrece la acción de borrado de todos los DTCs, con un diálogo de confirmación previo por tratarse de una operación irreversible.
+Permite leer la lista de DTCs activos de la ECU mediante el botón \textbf{Escanear} y borrarlos con el botón \textbf{Borrar}, que abre un diálogo de confirmación por tratarse de una operación irreversible (queda deshabilitado si no hay códigos). Cada código se presenta con su identificador alfanumérico (formato J2012), un indicador de severidad (\textit{Informativo}, \textit{Aviso}, \textit{Fallo grave}), su descripción en texto y, cuando aplica, una etiqueta de fabricante. Una barra superior resume el número de averías encontradas.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_dtcs.png}
+\caption{Pantalla \textit{Averías}: lista de DTCs con código J2012, severidad y descripción.}
+\label{fig:app_dtcs}
+\end{figure}
 
 \noindent\textbf{Pantalla Sesiones}
 
-La pantalla de historial muestra la lista de sesiones de diagnóstico almacenadas en la base de datos SQLite de la Raspberry Pi, ordenadas de la más reciente a la más antigua. Al seleccionar una sesión, se entra en la pantalla de detalles de sesión donde se muestra lista de muestras de telemetría agrupadas por PID desplegable que nos muestra las distintas muestras obtenidas con su timestamp, así mismo también hay una pestaña para ver las DTCs registradas en esa sesión.
+Muestra la lista de sesiones de diagnóstico almacenadas en SQLite en la Raspberry Pi, ordenadas de la más reciente a la más antigua y recargables con el botón \textbf{Actualizar}. Cada tarjeta resume fecha, hora de inicio, duración, número de muestras y de averías. Al seleccionar una sesión se entra en la vista de detalle, con un botón \textbf{← Sesiones} para volver y tres pestañas: \textit{Averías} (DTCs registrados), \textit{Muestras} (telemetría agrupada por PID en tarjetas desplegables que muestran número de muestras, mínimo, media, máximo y el listado con su \textit{timestamp}) y \textit{Comandos} (traza TX/RX de la sesión).
+
+\begin{figure}[htbp]
+\centering
+\begin{minipage}[t]{0.42\textwidth}
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_sesiones.png}
+\subcaption{Lista de sesiones.}
+\label{fig:app_sesiones_lista}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.42\textwidth}
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_sesion_detalle.png}
+\subcaption{Detalle de sesión (muestras por PID).}
+\label{fig:app_sesion_detalle}
+\end{minipage}
+\caption{Pantalla \textit{Sesiones}: historial almacenado en SQLite (a) y vista de detalle con las pestañas \textit{Averías}, \textit{Muestras} y \textit{Comandos} (b).}
+\label{fig:app_sesiones}
+\end{figure}
 
 \noindent\textbf{Pantalla Consola}
 
-Esta es una pantalla añadida para poder monitorizar y depurar el estado de la aplicación y poder obtener más detalles de los distintos protocolos. En esta pantalla se muestran los logs de la comunicación BLE mostrando el registro de comunicación BLE (RX/TX), del protocolo OBD-II, UDS y de el estado de la App en distintas pestañas. Asímismo cuenta con un botón de exportación de logs a csv.
+Pantalla de monitorización y depuración que muestra la traza de comunicación en cuatro pestañas con contador de entradas: \textbf{BLE} (RX/TX), \textbf{OBD}, \textbf{UDS} y \textbf{App}. La barra de herramientas incluye un botón \textbf{Auto}/\textbf{Manual} que activa o detiene el desplazamiento automático, un botón \textbf{Limpiar} que borra la pestaña actual (con confirmación), un botón \textbf{Todo} que borra todas las secciones y un botón \textbf{CSV} que exporta los registros, permitiendo elegir entre la pestaña actual o el registro completo. Cada entrada se colorea según el tipo de evento.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_consola.png}
+\caption{Pantalla \textit{Consola}: traza de comunicación en las pestañas BLE/OBD/UDS/App.}
+\label{fig:app_consola}
+\end{figure}
 
 \noindent\textbf{Pantalla Ajustes}
 
-La pantalla de ajustes gestiona la conexión con el adaptador (escaneo y selección de dispositivo), el modo de simulación (\textit{mock}) para usar la aplicación sin hardware, la frecuencia de sondeo para el modo de monitorización, reorganizar los PIDs mostrados en el panel y realizar nuevamente una prueba de PIDs.
+Centraliza la configuración. La tarjeta de \textit{Estado de conexión} muestra el estado actual y un botón \textbf{Conectar}/\textbf{Desconectar}. Un interruptor activa el \textit{Modo simulación} (con confirmación si hay una conexión activa, ya que la cierra). Con el adaptador real, un campo de texto permite fijar el nombre Bluetooth del dispositivo (\texttt{diag\_tool} por defecto) con un botón \textbf{Guardar}. El \textit{Tiempo de sondeo} se elige entre cuatro opciones (\textit{Tiempo real} 250\,ms, \textit{Normal} 500\,ms, \textit{Lento} 1\,s y \textit{Muy lento} 2\,s). Por último, la sección de datos mostrados permite activar o desactivar cada sensor del Panel mediante interruptores, reordenarlos con flechas arriba/abajo y usar los botones \textbf{Seleccionar todo}/\textbf{Deseleccionar todo}; los sensores no detectados en el último sondeo se resaltan.
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[height=0.4\textheight]{Ilustraciones/app_ajustes.png}
+\caption{Pantalla \textit{Ajustes}: estado de conexión, modo de simulación, tiempo de sondeo y selección de sensores.}
+\label{fig:app_ajustes}
+\end{figure}
 
 \subsection{Comunicación BLE}
 
