@@ -107,16 +107,12 @@ export class MockAdapter implements IVehicleAdapter {
   async getSessionCommands(sessionId: number): Promise<any[]> {
     if (sessionId !== 3) return [];
     return [
-      { ts: '2026-05-20T09:10:00.100Z', direction: 'tx', raw: '{"cmd":"auth","token":"1234"}' },
-      { ts: '2026-05-20T09:10:00.250Z', direction: 'rx', raw: '{"status":"ok","data":"authenticated"}' },
-      { ts: '2026-05-20T09:10:00.300Z', direction: 'tx', raw: '{"cmd":"probe_pids"}' },
-      { ts: '2026-05-20T09:10:01.800Z', direction: 'rx', raw: '{"status":"ok","data":[12,5,13,4,17,47,66]}' },
-      { ts: '2026-05-20T09:10:02.000Z', direction: 'tx', raw: '{"cmd":"monitor_start","pids":[12,5,13,4],"interval_ms":500}' },
-      { ts: '2026-05-20T09:10:02.150Z', direction: 'rx', raw: '{"status":"ok","data":"monitor_started"}' },
-      { ts: '2026-05-20T09:44:55.000Z', direction: 'tx', raw: '{"cmd":"monitor_stop"}' },
-      { ts: '2026-05-20T09:44:55.100Z', direction: 'rx', raw: '{"status":"ok","data":"monitor_stopped"}' },
-      { ts: '2026-05-20T09:44:56.000Z', direction: 'tx', raw: '{"cmd":"dtcs"}' },
-      { ts: '2026-05-20T09:44:56.800Z', direction: 'rx', raw: '{"status":"ok","data":[{"code":"P0501","description":"Vehicle Speed Sensor Range/Performance"},{"code":"U0415","description":"Invalid Data Received From ABS Control Module"}]}' },
+      { command: 'get_vin',               request_hex: '0902', response_hex: '4902013030303030303030303030303030303030', timestamp: '2026-05-20T09:10:00.100Z' },
+      { command: 'get_engine_rpm',        request_hex: '010c', response_hex: '410c0a14',                                 timestamp: '2026-05-20T09:10:02.000Z' },
+      { command: 'get_coolant_temp',      request_hex: '0105', response_hex: '410566',                                   timestamp: '2026-05-20T09:10:02.050Z' },
+      { command: 'get_vehicle_speed',     request_hex: '010d', response_hex: '410dff',                                   timestamp: '2026-05-20T09:10:02.100Z' },
+      { command: 'get_throttle_position', request_hex: '0111', response_hex: '411120',                                  timestamp: '2026-05-20T09:10:02.150Z' },
+      { command: 'get_dtcs',              request_hex: '03',   response_hex: '4302c4150501',                             timestamp: '2026-05-20T09:44:56.000Z' },
     ];
   }
 
