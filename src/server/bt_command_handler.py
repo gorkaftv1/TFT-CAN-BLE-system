@@ -135,9 +135,6 @@ class BtCommandHandler:
                     raw = self._transport.receive()
                 value = pid_def.decode(raw)
                 data[pid_def.name] = {"value": value, "unit": pid_def.unit}
-                self._logger.log_command(
-                    self._session_id, pid_def.name, pid_def.request, raw
-                )
             except DiagnosticTimeoutError:
                 if self._supported_pids is not None:
                     self._supported_pids.discard(pid_id)
