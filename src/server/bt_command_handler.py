@@ -135,6 +135,9 @@ class BtCommandHandler:
                     raw = self._transport.receive()
                 value = pid_def.decode(raw)
                 data[pid_def.name] = {"value": value, "unit": pid_def.unit}
+                self._logger.log_command(
+                    self._session_id, pid_def.name, pid_def.request, raw
+                )
             except DiagnosticTimeoutError:
                 if self._supported_pids is not None:
                     self._supported_pids.discard(pid_id)
@@ -344,6 +347,7 @@ class BtCommandHandler:
             raise RuntimeError(f"UDS NRC 0x{nrc:02X} for RDBI DID 0x{did_int:04X}")
         if len(raw) < 3 or raw[0] != 0x62:
             raise RuntimeError(f"Unexpected RDBI response: {raw.hex()}")
+        self._logger.log_command(self._session_id, f"uds_read_did_{did_str}", request, raw)
         data = raw[3:]
         meta = _DID_META.get(did_int)
         if meta:
