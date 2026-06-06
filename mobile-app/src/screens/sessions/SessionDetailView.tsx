@@ -5,7 +5,12 @@ import {
 } from 'react-native';
 import { getAdapter } from '../../infrastructure/adapterFactory';
 import { Session } from '../../domain/models/Session';
+import { dtcSeverity } from '../../domain/services/DtcLookupService';
 import { colors, fontSize, monoFont, spacing } from '../../shared/theme';
+
+// Same severity palette as the Averías screen (DtcScreen)
+const SEVERITY_COLOR = { info: colors.primary, warning: colors.warning, error: colors.error };
+const SEVERITY_LABEL = { info: 'Informativo', warning: 'Aviso', error: 'Fallo grave' };
 
 const SAMPLES_DISCOVERY_LIMIT = 50;
 const SAMPLES_PER_PID_LIMIT   = 400;   // max samples per PID — keeps BLE payload small
@@ -16,7 +21,7 @@ type Tab = 'dtcs' | 'samples' | 'commands';
 
 interface SessionDtc  { code: string; description: string; raw: string; }
 interface SessionSample { pid: number; name: string; value: number; unit: string; ts: string; }
-interface SessionCommand { ts: string; direction: 'tx' | 'rx'; raw: string; }
+interface SessionCommand { command: string; request_hex: string; response_hex: string; timestamp: string; }
 
 interface PidEntry {
   pid:     number;
@@ -62,13 +67,21 @@ function DtcsTab({ dtcs, loading }: { dtcs: SessionDtc[]; loading: boolean }) {
   if (dtcs.length === 0) return <Empty text="Sin averías registradas en esta sesión" />;
   return (
     <ScrollView contentContainerStyle={styles.listContent}>
-      {dtcs.map((d) => (
-        <View key={d.code} style={styles.dtcCard}>
-          <Text style={styles.dtcCode}>{d.code}</Text>
-          <Text style={styles.dtcDesc}>{d.description}</Text>
-          <Text style={styles.dtcRaw}>Raw: {d.raw}</Text>
-        </View>
-      ))}
+      {dtcs.map((d) => {
+        const color = SEVERITY_COLOR[dtcSeverity(d.code)];
+        return (
+          <View key={d.code} style={styles.dtcRow}>
+            <View style={[styles.codeBadge, { borderColor: color, backgroundColor: color + '22' }]}>
+              <Text style={[styles.codeText, { color }]}>{d.code}</Text>
+              <Text style={[styles.severityText, { color }]}>{SEVERITY_LABEL[dtcSeverity(d.code)]}</Text>
+            </View>
+            <View style={styles.descCol}>
+              <Text style={styles.dtcDesc} numberOfLines={3}>{d.description}</Text>
+              <Text style={styles.dtcRaw}>Raw: {d.raw}</Text>
+            </View>
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -212,14 +225,21 @@ function CommandsTab({ commands, loading }: { commands: SessionCommand[]; loadin
   if (loading) return <Loader />;
   if (commands.length === 0) return <Empty text="Sin comandos registrados en esta sesión" />;
   return (
-    <ScrollView contentContainerStyle={styles.logContent}>
+    <ScrollView contentContainerStyle={styles.listContent}>
       {commands.map((c, i) => (
-        <View key={i} style={styles.logLine}>
-          <Text style={styles.logTs}>{fmtTs(c.ts)}</Text>
-          <Text style={[styles.logDir, c.direction === 'tx' ? styles.logTx : styles.logRx]}>
-            {c.direction === 'tx' ? '→' : '←'}
-          </Text>
-          <Text style={styles.logRaw} numberOfLines={2}>{c.raw}</Text>
+        <View key={i} style={styles.cmdCard}>
+          <View style={styles.cmdHeader}>
+            <Text style={styles.cmdName}>{c.command}</Text>
+            <Text style={styles.cmdTs}>{fmtTs(c.timestamp)}</Text>
+          </View>
+          <View style={styles.cmdLine}>
+            <Text style={[styles.cmdDir, styles.logTx]}>→</Text>
+            <Text style={styles.cmdHex} numberOfLines={2}>{c.request_hex}</Text>
+          </View>
+          <View style={styles.cmdLine}>
+            <Text style={[styles.cmdDir, styles.logRx]}>←</Text>
+            <Text style={styles.cmdHex} numberOfLines={2}>{c.response_hex}</Text>
+          </View>
         </View>
       ))}
     </ScrollView>
@@ -346,14 +366,17 @@ const styles = StyleSheet.create({
 
   listContent: { padding: spacing.md, gap: spacing.sm },
 
-  // DTCs
-  dtcCard: {
-    backgroundColor: colors.surface, borderRadius: 10,
-    padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 3,
+  // DTCs (same badge format as the Averías screen)
+  dtcRow: {
+    flexDirection: 'row', alignItems: 'flex-start', backgroundColor: colors.surface,
+    borderRadius: 10, padding: spacing.md, borderWidth: 1, borderColor: colors.border,
   },
-  dtcCode: { fontSize: fontSize.sm, fontWeight: '700', color: colors.warning, fontFamily: monoFont },
-  dtcDesc: { fontSize: fontSize.sm, color: colors.text },
-  dtcRaw:  { fontSize: fontSize.xs, color: colors.textMuted, fontFamily: monoFont },
+  codeBadge:    { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs, borderRadius: 6, borderWidth: 1, marginRight: spacing.md, minWidth: 80, alignItems: 'center' },
+  codeText:     { fontSize: fontSize.sm, fontWeight: '700', fontFamily: monoFont },
+  severityText: { fontSize: 9, marginTop: 2, fontWeight: '500' },
+  descCol:      { flex: 1 },
+  dtcDesc: { fontSize: fontSize.sm, color: colors.text, lineHeight: 19 },
+  dtcRaw:  { fontSize: fontSize.xs, color: colors.textMuted, fontFamily: monoFont, marginTop: 4 },
 
   // Samples table
   statsHeader: {
@@ -400,16 +423,17 @@ const styles = StyleSheet.create({
   sampleTs:  { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, fontFamily: monoFont },
   sampleVal: { flex: 1, fontSize: fontSize.xs, color: colors.text, textAlign: 'right', fontFamily: monoFont },
 
-  // Commands log
-  logContent: { padding: spacing.sm, gap: 2 },
-  logLine: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
-    paddingVertical: spacing.xs + 1,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border,
+  // Commands (request/response per logged command)
+  cmdCard: {
+    backgroundColor: colors.surface, borderRadius: 10,
+    padding: spacing.md, borderWidth: 1, borderColor: colors.border, gap: 4,
   },
-  logTs:  { fontSize: fontSize.xs, color: colors.textMuted, fontFamily: monoFont, width: 52, flexShrink: 0, paddingTop: 1 },
-  logDir: { fontSize: fontSize.sm, fontWeight: '700', width: 16, flexShrink: 0 },
+  cmdHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cmdName:   { fontSize: fontSize.sm, fontWeight: '700', color: colors.text, fontFamily: monoFont },
+  cmdTs:     { fontSize: fontSize.xs, color: colors.textMuted, fontFamily: monoFont },
+  cmdLine:   { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  cmdDir:    { fontSize: fontSize.sm, fontWeight: '700', width: 16, flexShrink: 0 },
+  cmdHex:    { flex: 1, fontSize: fontSize.xs, color: colors.textSecondary, fontFamily: monoFont, lineHeight: 17 },
   logTx:  { color: colors.primary },
   logRx:  { color: colors.success },
-  logRaw: { flex: 1, fontSize: fontSize.xs, color: colors.text, fontFamily: monoFont, lineHeight: 17 },
 });
