@@ -386,7 +386,17 @@ class BtCommandHandler:
         self._uds_session_type = 1
 
     def close_session(self) -> None:
-        """Flush DB buffer and end session cleanly before process restart."""
+        """Flush DB buffer and end the current session on client disconnect.
+
+        Does NOT close the DB connection: the server restarts in-place and
+        reuses this handler/logger, so the connection must stay open. The
+        real close() happens on full process shutdown (server entry point).
+        """
         self.stop_monitor()
         self._logger.end_session(self._session_id)
-        self._logger.close()
+
+    def start_session(self, label: str = "BLE session") -> None:
+        """Begin a fresh session row for a new client connection."""
+        self._session_id = self._logger.start_session(label)
+        if hasattr(self._session, "set_session_id"):
+            self._session.set_session_id(self._session_id)
