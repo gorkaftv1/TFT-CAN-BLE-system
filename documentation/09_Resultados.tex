@@ -39,9 +39,35 @@ La conexión al vehículo demostró que el protocolo OBD-II implementado es comp
 \label{fig:vehiculo_real}
 \end{figure}
 
+Los datos leídos del Škoda Yeti se almacenaron en la base de datos SQLite como una sesión más, lo que permitió revisar a posteriori la telemetría capturada desde la propia aplicación móvil. La Figura~\ref{fig:skoda_sesion} muestra el detalle de la sesión registrada sobre el vehículo real: la lista de muestras agrupadas por sensor, el detalle de una muestra concreta con su valor decodificado y la lista de DTCs leídos de la ECU del vehículo.
+
+\begin{figure}[H]
+\centering
+\begin{minipage}[t]{0.32\textwidth}
+\centering
+\includegraphics[height=7cm]{Ilustraciones/app_session_muestras.jpg}
+\subcaption{Muestras de la sesión por sensor.}
+\label{fig:skoda_muestras}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}
+\centering
+\includegraphics[height=7cm]{Ilustraciones/app_session_muestra_detalle.jpg}
+\subcaption{Detalle de una muestra.}
+\label{fig:skoda_muestra_detalle}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.32\textwidth}
+\centering
+\includegraphics[height=7cm]{Ilustraciones/app_session_dtc.jpg}
+\subcaption{DTCs leídos de la ECU.}
+\label{fig:skoda_dtc}
+\end{minipage}
+\caption{Validación sobre el Škoda Yeti: detalle de la sesión registrada en SQLite, con las muestras de telemetría agrupadas por sensor (a), el detalle de una muestra concreta (b) y la lista de DTCs leídos del vehículo (c).}
+\label{fig:skoda_sesion}
+\end{figure}
+
 Finalmente se realizó una prueba adicional sobre un \textbf{Opel Astra K}, perteneciente al grupo PSA/Opel y, por tanto, a una arquitectura de diagnóstico distinta a la del grupo VAG. Esta prueba corroboró el correcto funcionamiento del protocolo OBD-II: la herramienta consultó sin incidencias los PIDs del modo 0x01 y leyó el VIN del vehículo, confirmando que la capa de diagnóstico estandarizada es interoperable entre fabricantes. Sin embargo, la prueba puso de manifiesto la dificultad de implementar el protocolo UDS de forma genérica, dado que los servicios extendidos (en particular la lectura de datos por identificador, servicio 0x22) se apoyan en \textit{Data Identifiers} (DID) propietarios cuyo significado y disponibilidad varían según el fabricante. Al solicitar los DID validados sobre la plataforma VAG, la ECU del Opel respondió con códigos de respuesta negativa (NRC), confirmando que estos identificadores no están normalizados y que un soporte UDS completo exigiría incorporar la base de datos de DID específica de cada marca. La Figura~\ref{fig:opel_astra} contrasta la lectura de la herramienta de referencia comercial con el panel de telemetría y el escaneo de DTCs obtenidos por la herramienta desarrollada sobre el Opel Astra K.
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
 \begin{minipage}[t]{0.32\textwidth}
 \centering
@@ -156,13 +182,13 @@ La Figura~\ref{fig:res_consolas} muestra la traza de ejecución durante una de e
 \centering
 \begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[width=\linewidth]{Ilustraciones/iter_2_ard.png}
+\includegraphics[height=7.5cm]{Ilustraciones/iter_2_ard.png}
 \subcaption{Consola del simulador Arduino.}
 \label{fig:res_consola_ard}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[width=\linewidth]{Ilustraciones/iter_2_pi.png}
+\includegraphics[height=7.5cm]{Ilustraciones/iter_2_pi.png}
 \subcaption{Consola de la Raspberry Pi.}
 \label{fig:res_consola_pi}
 \end{minipage}
