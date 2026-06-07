@@ -1,5 +1,6 @@
 \centering
 \renewcommand{\arraystretch}{1.4}
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{|l|c|c|c|c|c|c|c|c|}
 \hline
 \textbf{Tipo} &
@@ -19,15 +20,9 @@ D\textsubscript{3} & D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6
 D\textsubscript{4} & D\textsubscript{5} & D\textsubscript{6} & D\textsubscript{7} \\
 \hline
 \textbf{FC} \textit{Flow Control} &
-\textbf{0x3F} & \textbf{BS} & \textbf{STmin} & \textit{0xAA} &
+\textbf{0x3\{FS\}} & \textbf{BS} & \textbf{STmin} & \textit{0xAA} &
 \textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \vspace{0.5em}
-\begin{tabular}{ll}
-\textbf{N} & longitud payload (SF) o número de secuencia (CF, 0x1--0xF) \\
-\textbf{H:LL} & longitud total del mensaje en 12 bits (FF, máx. 4095 bytes) \\
-\textbf{F} & flag Flow Control: 0=ContinueSending, 1=Wait, 2=Overflow \\
-\textbf{BS} & BlockSize: número de CFs antes del siguiente FC (0 = sin límite) \\
-\textbf{STmin} & separación mínima entre CFs en milisegundos \\
-\end{tabular}

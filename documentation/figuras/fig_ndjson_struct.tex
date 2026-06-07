@@ -1,0 +1,26 @@
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|l|l|p{8.2cm}|}
+\hline
+\textbf{Tipo de mensaje} & \textbf{Campos} & \textbf{Descripción} \\
+\hline
+\textbf{Petición} & \texttt{cmd} (+ params) &
+  Cliente \textrightarrow\ servidor. \texttt{cmd} identifica la operación; los parámetros opcionales se incluyen en el mismo objeto. \\
+\hline
+\textbf{Respuesta OK} & \texttt{status="ok"}, \texttt{data} &
+  Servidor \textrightarrow\ cliente. \texttt{data} contiene el resultado (escalar, objeto o lista). \\
+\hline
+\textbf{Respuesta error} & \texttt{status="error"}, \texttt{message} &
+  Servidor \textrightarrow\ cliente. \texttt{message} describe la causa del fallo. \\
+\hline
+\textbf{Push} & \texttt{type} (+ datos) &
+  Servidor \textrightarrow\ cliente sin petición previa (\texttt{samples}, \texttt{error}, \texttt{heartbeat}). \\
+\hline
+\end{tabular}
+\vspace{0.6em}
+
+\begin{tabular}{ll}
+\textbf{Ejemplo petición:}  & \texttt{\{"cmd":"uds\_read\_did","did":"0xF190"\}\textbackslash n} \\
+\textbf{Ejemplo respuesta:} & \texttt{\{"status":"ok","data":\{"did":"0xF190","name":"VIN",...\}\}\textbackslash n} \\
+\end{tabular}
+\vspace{0.5em}

@@ -1,9 +1,9 @@
-\chapter*{Anexo C — Código fuente de la aplicación móvil}
-\addcontentsline{toc}{chapter}{Anexo C — Código fuente de la aplicación móvil}
+\chapter{Código fuente de la aplicación móvil}
 \label{anexo:app}
 
 Este anexo recoge los fragmentos más representativos del adaptador BLE de la
-aplicación móvil React Native.
+aplicación móvil React Native. El código completo está disponible en el repositorio
+del proyecto (\texttt{mobile-app/src/}).
 
 \section*{C.1 — Constantes NUS y conexión GATT}
 
@@ -14,7 +14,8 @@ const NUS_SERVICE = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 const RX_CHAR     = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 const TX_CHAR     = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
 
-const MTU                = 240;   // NUS safe max
+const MTU                = 128;   // MTU negociado en la conexion
+const WRITE_CHUNK_BYTES  = 240;   // troceo de escritura sobre RX
 const SCAN_TIMEOUT_MS    = 20_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const PING_INTERVAL_MS   = 7_000; // < server timeout (15s) con margen
@@ -139,9 +140,9 @@ private async writeRx(data: string, withResponse = true): Promise<void> {
   if (!this.device) throw new Error('Not connected');
   const bytes = new TextEncoder().encode(data);
 
-  // Fragmentar en chunks de MTU bytes para el caso de payloads grandes
-  for (let offset = 0; offset < bytes.length; offset += MTU) {
-    const slice = bytes.subarray(offset, offset + MTU);
+  // Fragmentar en chunks para el caso de payloads grandes
+  for (let offset = 0; offset < bytes.length; offset += WRITE_CHUNK_BYTES) {
+    const slice = bytes.subarray(offset, offset + WRITE_CHUNK_BYTES);
     let bin = '';
     for (let i = 0; i < slice.length; i++) bin += String.fromCharCode(slice[i]);
     const b64 = btoa(bin);

@@ -33,9 +33,12 @@
 %                                              └──────────────────────────┘
 %
 %   Junto al bus CAN: TX: 0x7E0 | RX: 0x7E8 | 500 kbps
-%   Junto al BLE: NUS UUID: 6E400001-... | MTU: 240 bytes
-%   Botones D7 (ignición) y D6 (DTC fault) en Arduino
+%   Junto al BLE: NUS UUID: 6E400001-... (nombre: diag_tool) | MTU servidor 240 / app 128 bytes
+%   Botones D5 (ignición) y D4 (DTC fault) en Arduino
+%   Pantallas app (tabs): Panel, Averías, Sesiones, Consola, Ajustes (+ conexión por modal)
+%   ECU también responde UDS: 0x10 (DiagnosticSessionControl) y 0x22 (ReadDataByIdentifier)
+%   Ruido de sensores y tramas de difusión: opcionales, desactivados por defecto
 %   Leyenda de colores: Rojo=física, Naranja=transporte, Verde=aplicación
 % =========================================================
 % TODO draw.io: dibujar arquitectura 3 nodos (Arduino ↔ CAN ↔ RPi ↔ BLE ↔ App) y exportar como arch_general.png
-% \includegraphics[width=\textwidth]{Ilustraciones/arch_general.png}
+\includegraphics[width=\textwidth]{Ilustraciones/arch_general.png}

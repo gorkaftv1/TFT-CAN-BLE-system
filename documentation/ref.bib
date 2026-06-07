@@ -79,10 +79,10 @@
   title        = {{E/E Diagnostic Test Modes}},
   institution  = {SAE International},
   number       = {SAE J1979},
-  year         = {2014},
+  year         = {2017},
   type         = {Standard},
   address      = {Warrendale, PA, USA},
-  url          = {https://www.sae.org/standards/content/j1979da_202305/}
+  url          = {https://www.sae.org/standards/j1979_201702-e-e-diagnostic-test-modes/}
 }
 
 @techreport{SAEJ2012:2016,
@@ -92,7 +92,7 @@
   year         = {2016},
   type         = {Standard},
   address      = {Warrendale, PA, USA},
-  url          = {https://www.sae.org/standards/content/j2012_201303/}
+  url          = {https://www.sae.org/standards/j2012_201612-diagnostic-trouble-code-definitions/}
 }
 
 % --- Organismos oficiales y reguladores ---
@@ -155,6 +155,14 @@
 
 % --- Documentación de protocolos y servicios ---
 
+@techreport{Bluetooth_CoreSpec,
+  title       = {{Bluetooth Core Specification, Version 5.4}},
+  author      = {{Bluetooth SIG}},
+  institution = {Bluetooth Special Interest Group},
+  year        = {2023},
+  note        = {Generic Attribute Profile (GATT). Accedido: 2026-05-23}
+}
+
 @misc{Nordic_NUS,
   title        = {{Nordic UART Service ({NUS}) --- nRF Connect SDK Documentation}},
   author       = {{Nordic Semiconductor ASA}},
@@ -172,6 +180,15 @@
                   Accedido: 2026-05-23}
 }
 
+@misc{WaleedDTC,
+  title        = {{DTC Database --- Diagnostic Trouble Code Reference}},
+  author       = {{Waleed Judah}},
+  howpublished = {\url{https://github.com/Wal33D/dtc-database}},
+  year         = {2024},
+  note         = {Base de datos de referencia de códigos DTC para diagnóstico OBD-II.
+                  Accedido: 2026-05-27}
+}
+
 @misc{CSSElec_OBD2,
   title        = {{OBD2 Explained --- A Simple Intro}},
   author       = {{CSS Electronics}},
@@ -179,4 +196,78 @@
   year         = {2026},
   note         = {CSS Electronics. Referencia técnica de ingeniería industrial.
                   Accedido: 2026-05-23}
+}
+
+% --- Software y librerías de terceros ---
+
+@misc{Twiss23-pythoncan,
+  title        = {{python-can --- Controller Area Network interface module for Python}},
+  author       = {{python-can contributors}},
+  howpublished = {\url{https://python-can.readthedocs.io/}},
+  year         = {2024},
+  note         = {Librería de acceso al bus CAN sobre SocketCAN. Accedido: 2026-05-23}
+}
+
+@misc{Menager23-isotp,
+  title        = {{can-isotp --- ISO-TP (ISO 15765-2) support for python-can}},
+  author       = {{Pier-Yves Lessard}},
+  howpublished = {\url{https://can-isotp.readthedocs.io/}},
+  year         = {2024},
+  note         = {Implementación del protocolo de transporte ISO-TP en Python. Accedido: 2026-05-23}
+}
+
+@misc{Bless_lib,
+  title        = {{bless --- Bluetooth Low Energy Server Supplement for Python}},
+  author       = {{Kevin Davis and contributors}},
+  howpublished = {\url{https://github.com/kevincar/bless}},
+  year         = {2024},
+  note         = {Servidor GATT BLE multiplataforma sobre BlueZ/asyncio. Accedido: 2026-05-23}
+}
+
+@misc{ArduinoCAN_lib,
+  title        = {{Arduino CAN --- An Arduino library for sending and receiving data using CAN bus}},
+  author       = {{Sandeep Mistry}},
+  howpublished = {\url{https://github.com/sandeepmistry/arduino-CAN}},
+  year         = {2023},
+  note         = {Abstracción del controlador MCP2515 vía SPI para Arduino. Accedido: 2026-05-23}
+}
+
+@misc{ReactNativeBLEPLX,
+  title        = {{react-native-ble-plx --- BLE library for React Native}},
+  author       = {{Dotintent}},
+  howpublished = {\url{https://github.com/dotintent/react-native-ble-plx}},
+  year         = {2024},
+  note         = {Cliente BLE nativo para React Native (Android/iOS). Accedido: 2026-05-23}
+}
+
+@misc{Expo_docs,
+  title        = {{Expo --- Framework and platform for universal React applications}},
+  author       = {{Expo}},
+  howpublished = {\url{https://docs.expo.dev/}},
+  year         = {2024},
+  note         = {Plataforma de desarrollo para React Native. Accedido: 2026-05-23}
+}
+
+@misc{Zustand_lib,
+  title        = {{Zustand --- A small, fast and scalable state management solution}},
+  author       = {{Poimandres}},
+  howpublished = {\url{https://github.com/pmndrs/zustand}},
+  year         = {2024},
+  note         = {Gestión de estado para React. Accedido: 2026-05-23}
+}
+
+@misc{KONWEII_scanner,
+  title        = {{KONWEII --- Escáner de diagnóstico OBD-II}},
+  author       = {{KONWEII}},
+  howpublished = {\url{https://es.aliexpress.com/item/1005007493967100.html}},
+  year         = {2024},
+  note         = {Lector OBD-II comercial genérico usado como referencia de validación. Accedido: 2026-06-05}
+}
+
+@misc{CarScanner_app,
+  title        = {{Car Scanner ELM OBD2 --- Aplicación de diagnóstico OBD-II}},
+  author       = {{Ovz}},
+  howpublished = {\url{https://apps.apple.com/es/app/car-scanner-elm-obd2/id1259933623}},
+  year         = {2024},
+  note         = {Aplicación móvil OBD-II comercial usada como referencia de validación. Accedido: 2026-06-05}
 }

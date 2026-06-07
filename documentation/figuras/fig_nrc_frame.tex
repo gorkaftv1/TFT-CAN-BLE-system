@@ -1,0 +1,21 @@
+\centering
+\renewcommand{\arraystretch}{1.4}
+\resizebox{\linewidth}{!}{%
+\begin{tabular}{|c|c|c|c|c|c|c|c|c|}
+\hline
+\textbf{CAN ID} &
+\textbf{Byte 0} & \textbf{Byte 1} & \textbf{Byte 2} & \textbf{Byte 3} &
+\textbf{Byte 4} & \textbf{Byte 5} & \textbf{Byte 6} & \textbf{Byte 7} \\
+\hline
+\texttt{0x7E8} &
+\texttt{0x03} & \texttt{0x7F} & SID & NRC &
+\texttt{0xAA} & \texttt{0xAA} & \texttt{0xAA} & \texttt{0xAA} \\
+\hline
+\textit{ECU resp.} &
+\multicolumn{1}{c|}{\textit{PCI (SF, len=3)}} &
+\multicolumn{3}{c|}{\textit{Payload UDS (Negative Response)}} &
+\multicolumn{4}{c|}{\textit{Padding}} \\
+\hline
+\end{tabular}%
+}
+\vspace{0.5em}

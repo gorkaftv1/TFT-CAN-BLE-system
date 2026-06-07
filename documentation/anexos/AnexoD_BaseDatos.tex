@@ -1,9 +1,8 @@
-\chapter*{Anexo D — Esquema de la base de datos SQLite}
-\addcontentsline{toc}{chapter}{Anexo D — Esquema de la base de datos SQLite}
+\chapter{Esquema de la base de datos SQLite}
 \label{anexo:bbdd}
 
 La base de datos SQLite empleada para la persistencia de datos de diagnóstico se
-compone de tres tablas relacionadas. El esquema completo, incluyendo los índices
+compone de cuatro tablas relacionadas. El esquema completo, incluyendo los índices
 y la configuración WAL, se muestra a continuación.
 
 \section*{D.1 — Esquema SQL}
@@ -35,9 +34,19 @@ CREATE TABLE IF NOT EXISTS samples (
 CREATE TABLE IF NOT EXISTS commands (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id   INTEGER NOT NULL REFERENCES sessions(id),
-    command      TEXT    NOT NULL,   -- nombre del comando (query, dtcs, vin...)
+    command      TEXT    NOT NULL,   -- nombre del comando (snapshot, dtcs, vin...)
     request_hex  TEXT    NOT NULL,   -- trama ISO-TP de peticion en hex
     response_hex TEXT    NOT NULL,   -- trama ISO-TP de respuesta en hex
+    wall_ts      TEXT    NOT NULL    -- ISO 8601 UTC
+);
+
+-- Codigos de averia (DTC) leidos en cada sesion
+CREATE TABLE IF NOT EXISTS dtcs (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id   INTEGER NOT NULL REFERENCES sessions(id),
+    code         TEXT    NOT NULL,   -- codigo J2012 (p.ej. P0420)
+    raw_hex      TEXT    NOT NULL,   -- 2 bytes crudos del DTC en hex
+    description  TEXT    NOT NULL DEFAULT '',
     wall_ts      TEXT    NOT NULL    -- ISO 8601 UTC
 );
 
@@ -47,6 +56,9 @@ CREATE INDEX IF NOT EXISTS idx_samples_session
 
 CREATE INDEX IF NOT EXISTS idx_commands_session
     ON commands(session_id);
+
+CREATE INDEX IF NOT EXISTS idx_dtcs_session
+    ON dtcs(session_id);
 \end{lstlisting}
 
 \section*{D.2 — Descripción de las tablas}
@@ -66,6 +78,11 @@ La tabla \textbf{commands} registra todos los comandos ejecutados desde la aplic
 móvil, incluyendo los de gestión de DTCs y obtención de VIN. El campo
 \texttt{response\_hex} de un comando de modo 0x09 (VIN) contiene la concatenación
 de la First Frame y las Consecutive Frames recibidas.
+
+La tabla \textbf{dtcs} almacena los códigos de avería leídos en cada sesión, con el
+código en formato J2012 (\texttt{code}), los dos bytes crudos del DTC (\texttt{raw\_hex})
+y, cuando está disponible, su descripción textual. Se rellena al ejecutar una lectura
+de DTCs (modo 0x03).
 
 \section*{D.3 — Ejemplo de contenido}
 

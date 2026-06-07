@@ -5,10 +5,12 @@
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{lmodern}
+\usepackage[T1]{fontenc}
 \usepackage{float}
-\usepackage[spanish]{babel}
+\usepackage[spanish,es-noshorthands]{babel}
 \usepackage{csquotes}
 \usepackage[figurename=Ilustración]{caption}
+\usepackage{subcaption}
 \usepackage[numbers]{natbib}
 \usepackage{ragged2e}
 \usepackage{array}
@@ -61,6 +63,13 @@
     keywordstyle=\bfseries,
     commentstyle=\color{gray}\itshape,
     stringstyle=\color{black},
+    extendedchars=true,
+    literate=%
+      {á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+      {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+      {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {ü}{{\"u}}1
+      {¿}{{\textquestiondown}}1 {¡}{{\textexclamdown}}1
+      {°}{{\textdegree}}1 {—}{{---}}1 {–}{{--}}1,
 }
 
 \lstdefinelanguage{JavaScript}{
@@ -87,7 +96,7 @@
 \renewcommand{\contentsname}{Contenido}
 \renewcommand{\figurename}{Ilustración}
 \usepackage{pifont}
-\renewcommand\labelitemi{\ding{52}}
+\renewcommand\labelitemi{\textbullet}
 
 \begin{document}
 %\maketittle
@@ -117,78 +126,48 @@
 \pagenumbering{arabic}
 
 \chapter{Introducción}
+En este capítulo se realizará una introducción general al contexto del sector autmotriz en el que se plantea el trabajo realizado y el motivo de porque se ha realizado este trabajo.
 \input{04_Introduccion.tex}
 
 \chapter{Estado actual y objetivos}
+Este capítulo expone los protocolos(CAN, OBD-II, ISO-TP, UDS) y herramientas tanto software como hardware (Raspberry Pi) que se usan en el marco en el que se encuentra el trabajo planteado a desarrollar, así como los objetivos definidos para la realización del mismo.
 \input{05_EstadoDelArte.tex}
 
 \chapter{Aportaciones del trabajo}
+En esta capítulo se presentan las aportaciones de este trabajo así como las competencias y ODS que sigue.
 \chaptermark{Aportaciones, competencias y ODS}
 \input{06_Competencias.tex}
 
 \chapter{Metodología de desarrollo}
+En este capítulo se detalla lo conseguido durante las distintas etapas del desarrollo detallando el análisis, diseño.
 \input{07_Metodologia.tex}
 
 \chapter{Desarrollo del sistema}
 \input{08_Desarrollo.tex}
 
 \chapter{Resultados}
+En este capítulo se estudian los resultados obtenidos, realizando una comparación con una herramienta comercial que nos ofrece la realización de escaneo.
 \input{09_Resultados.tex}
 
 \chapter{Conclusiones y trabajo futuro}
 \input{10_Conclusiones.tex}
 
 \appendix
+\renewcommand{\appendixname}{Anexo}
+% Anexos de código (A-D) desactivados temporalmente para aligerar la memoria.
+% El código completo está en el repositorio del proyecto.
 % \input{anexos/AnexoA_CodigoArduino.tex}
 % \input{anexos/AnexoB_CodigoPython.tex}
 % \input{anexos/AnexoC_CodigoApp.tex}
 % \input{anexos/AnexoD_BaseDatos.tex}
+\input{anexos/AnexoE_PIDs.tex}
+\input{anexos/AnexoF_ComandosBLE.tex}
 
 
 \clearpage
 
-\begin{thebibliography}{9}
-
-\bibitem{Bosch91-can}
-Robert Bosch GmbH,
-\textit{CAN Specification Version 2.0},
-Robert Bosch GmbH, Stuttgart, 1991.
-
-\bibitem{ISO11898-1-15}
-International Organization for Standardization,
-\textit{ISO 11898-1:2015 -- Road vehicles -- Controller area network (CAN) --
-Part 1: Data link layer and physical signalling},
-ISO, Ginebra, 2015.
-
-\bibitem{ISO15765-2-16}
-International Organization for Standardization,
-\textit{ISO 15765-2:2016 -- Road vehicles -- Diagnostic communication over
-Controller Area Network (DoCAN) -- Part 2: Transport protocol and
-network layer services},
-ISO, Ginebra, 2016.
-
-\bibitem{SAE-J1979-12}
-Society of Automotive Engineers,
-\textit{SAE J1979:2012 -- E/E Diagnostic Test Modes},
-SAE International, Warrendale, 2012.
-
-\bibitem{ISO14229-1-20}
-International Organization for Standardization,
-\textit{ISO 14229-1:2020 -- Road vehicles -- Unified diagnostic services (UDS) --
-Part 1: Application layer},
-ISO, Ginebra, 2020.
-
-\bibitem{Menager23-isotp}
-S. Ménager \textit{et al.},
-\textit{python-can-isotp Documentation},
-2023. Disponible en: \url{https://can-isotp.readthedocs.io/}
-
-\bibitem{Twiss23-pythoncan}
-python-can contributors,
-\textit{python-can Documentation},
-2023. Disponible en: \url{https://python-can.readthedocs.io/}
-
-\end{thebibliography}
+\bibliographystyle{unsrtnat}
+\bibliography{ref}
 
 \printglossaries
 

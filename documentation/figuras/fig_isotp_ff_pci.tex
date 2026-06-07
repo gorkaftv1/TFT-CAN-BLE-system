@@ -1,0 +1,18 @@
+\centering
+\renewcommand{\arraystretch}{1.4}
+\begin{tabular}{|c|c|}
+\hline
+\multicolumn{2}{|c|}{\textbf{First Frame — 2 bytes de PCI (16 bits)}} \\
+\hline
+\textbf{PCItype} & \textbf{FF\_DL} \\
+\hline
+4 bits & 12 bits \\
+\hline
+bits 15--12 & bits 11--0 \\
+\hline
+\texttt{0x1} & longitud total del mensaje (máx.\ 4\,095 bytes) \\
+\hline
+\multicolumn{2}{|l|}{\footnotesize Byte 0 = \texttt{0x1H} (nibble \texttt{0x1} + bits 11--8 de FF\_DL); Byte 1 = bits 7--0 de FF\_DL.} \\
+\multicolumn{2}{|l|}{\footnotesize Bytes 2--7 de la trama CAN transportan los 6 primeros bytes de datos.} \\
+\hline
+\end{tabular}
