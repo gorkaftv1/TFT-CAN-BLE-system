@@ -83,8 +83,13 @@ class BtCommandHandler:
     def set_push_callback(self, cb) -> None:
         self._push = cb
 
-    def handle(self, cmd: dict) -> dict:
+    def handle(self, cmd: dict) -> dict | None:
         name = cmd.get("cmd", "")
+
+        # Async/keepalive frames carry a "type" (e.g. {"type": "heartbeat_ack"})
+        # and no "cmd". They are not commands: acknowledge silently, no response.
+        if not name:
+            return None
 
         if not self._authenticated:
             if name != "auth":
@@ -201,7 +206,7 @@ class BtCommandHandler:
         cycle_size = len(pids)
 
         with self._monitor_lock:
-            if self._monitor is not None and self._monitor.is_running():
+            if self._monitor is not None and self._monitor.is_running:
                 return {"status": "ok", "data": "monitor already running"}
 
             sample_batch: list[dict] = []
