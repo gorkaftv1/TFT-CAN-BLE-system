@@ -255,7 +255,8 @@ class BLEDiagServer:
     async def _dispatch_async(self, cmd: dict) -> None:
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(None, self._handler.handle, cmd)
-        self._notify_from_loop(response)
+        if response is not None:
+            self._notify_from_loop(response)
         if cmd.get("cmd") == "disconnect":
             await self._handle_disconnect()
 
