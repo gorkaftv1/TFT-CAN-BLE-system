@@ -6,6 +6,14 @@ Para lograr una comunicación fiable, en tiempo real y con gestión de prioridad
 
 Por otra parte, en 1996 se introdujo el estándar OBD-II (\textit{On-Board Diagnostics, segunda generación}), que define un conector físico de 16 pines situado en el habitáculo(J1962), un conjunto de protocolos de comunicación y una batería de códigos de error comunes (DTCs - \textit{Diagnostic Trouble Code}). Con todo esto también indica que sensores deben vigilar el coche continuamente permitiendo la monitorización y evaluación del estado de los microcontroladores integrados en el vehículo.
 
+Este contexto técnico es el que ha motivado el desarrollo del presente Trabajo de Fin de Título, cuyo origen y enfoque se exponen a continuación.
+
+En el plan de estudios del Grado de Ingeniería Informática, la asignatura de Internet de las cosas introduce el ecosistema de los sistemas empotrados y sus protocolos de comunicación, entre ellos el bus CAN y su uso en el sector del automóvil. Esa primera toma de contacto, unida al interés personal por la automoción, es la que ha dado lugar a este trabajo, centrado en el estudio y la implementación del bus CAN, el protocolo OBD-II y los demás protocolos que orquestan la comunicación en un vehículo.
+
+Actualmente los automóviles cuentan con un sistema de numerosos microcontroladores que generan una cantidad muy voluminosa de datos de telemetría y además cuentan con el protocolo de diagnóstico a bordo (OBD-II). Estos son accesibles a través del puerto OBD que se encuentra normalmente en la parte inferior del volante en el asiento del piloto. Este puerto permite que no solo los talleres y personas especializadas en el mundo de la mecánica y electromecánica, sino que cualquier persona con un "escáner" pueda ver el estado de su coche o pueda diagnosticar qué fallo tiene o anticipar posibles fallos.
+
+En el mercado existen numerosas soluciones para el acceso al diagnóstico OBD-II~\cite{CSSElec_OBD2}, en su mayoría basadas en el adaptador ELM327 junto con aplicaciones como Torque Pro u OBD Fusion. Más que recurrir a una de ellas, este trabajo aborda la construcción del sistema desde cero —implementando los protocolos de aplicación OBD-II y UDS sobre la capa de transporte ISO-TP—, con un fin principalmente formativo y de comprensión profunda de los protocolos de comunicación del vehículo.
+
 \section{Descripción del sistema desarrollado}
 
 Este proyecto se ha centrado en el diseño y desarrollo de un sistema de diagnóstico de vehículos que usan el protocolo OBD-II sobre bus CAN y que ofrece acceso inalámbrico usando Bluetooth Low Energy (BLE). Durante el desarrollo se han implementado tres componentes principales:
@@ -25,14 +33,6 @@ El tercer componente es una \textbf{aplicación móvil nativa} desarrollada con 
 
 El conjunto del desarrollo de los tres componentes ha resultado en un sistema de diagnóstico OBD-II portable, inalambrico, validado en el simulador de ECU desarrollado en la placa de Arduino de manera previa a ser usado en un vehiculo real.
 
-\section{Motivación}
-
-En el actual plan de estudios del Grado de Ingeniería Informáica en la asignatura de Internet de las cosas se estudia el ecosistema de los sistemas empotrados y sus múltiples protocolos de comunicación. Dentro de la amplia gama de protocolos de comunicación el estudio del bus CAN y se comentó su uso en el sector automotriz, esto dió lugar a la motivación por la cual se ha desarrollado este Trabajo de Fin de Título en el que se estudia el uso del bus CAN y el protoclo OBD-II y demás protocolos que orquestan la comunicación de información en un vehiculo.
-
-Actualmente los automóviles cuentan con un sistema de numerosos microcontroladores que generan una cantidad muy voluminosa de datos de telemetría y además cuentan con el protocolo de diagnóstico abordo (OBD-II). Estos son accesbles a traves del puerto OBD que se encuentra normalmente en la parte inferior del volante en el asiento del piloto. Este puerto permite que no solo los talleres y personas especializadas en el mundo de la mecánica y electromecánica, sino que cualquier persona con un "escáner" pueda ver el estado de su coche o pueda diagnositcar que fallo tiene o anticipar posibles fallos.
-
-Actualmente en el mercado han aparecido numerosas soluciones para facilitar el acceso al diagnóstico OBD-II~\cite{CSSElec_OBD2}. La mayor parte de estas soluciones emplean el adaptador ELM327, un circuito integrado que actúa como puente entre el bus CAN del vehículo y una interfaz accesible vía Bluetooth o Wi-Fi. Existen numerosas aplicaciones móviles compatibles con estos adaptadores, tales como Torque Pro u OBD Fusion; no obstante, estas soluciones no suelen permitir el registro estructurado de datos para análisis y la mayor parte de ellas introducen latencias significativas, dando lugar a una experiencia de usuario limitada.
-
 \section{Estructura del documento}
 
 El presente documento se organiza en siete capítulos cuyo contenido se resume a continuación.
@@ -49,5 +49,4 @@ El \textbf{Capítulo~6} se presentan los resultados obtenidos verificados frente
 
 El \textbf{Capítulo~7} detalla las conclusiones del trabajo, las líneas de trabajo futuro identificadas y el uso de herramientas de inteligencia artificial durante el desarrollo.
 
-% TODO - última correción para comprobar los anexos y demás
-Finalmente, el documento incluye la bibliografía de referencia y cuatro anexos con fragmentos representativos del código fuente desarrollado y el esquema de la base de datos.
+Finalmente, el documento incluye la bibliografía de referencia y dos anexos: la tabla completa de los PIDs del modo 0x01 definidos por el estándar OBD-II y el catálogo de comandos del protocolo BLE empleado entre la aplicación móvil y la Raspberry Pi. El código fuente completo del proyecto está disponible en su repositorio.

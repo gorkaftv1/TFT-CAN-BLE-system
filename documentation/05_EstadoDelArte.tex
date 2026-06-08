@@ -10,9 +10,9 @@ Posteriormente, se realizará una explicación sobre las plataformas de hardware
 \subsection{CAN - Controller Area Network (ISO 11898)}
 \label{sec:proto_can}
 
-El bus CAN es un protocolo de comunicaciones serie orientado a mensajes, diseñado para comunicación entre múltiples nodos en entornos con alta interferencia electromagnética~\cite{ISO11898-1:2024}. Su desarrollo fue iniciado en Robert Bosch GmbH a partir de 1983 y publicado en 1986, siendo estandarizado bajo la norma ISO~11898~\cite{ISO11898:1993, CiA_CANhistory}.
+El bus CAN es un protocolo de comunicaciones serie orientado a mensajes y multi-maestro, diseñado para la comunicación robusta entre múltiples nodos en entornos con alta interferencia electromagnética~\cite{ISO11898-1:2024}. Su desarrollo se inició en Robert Bosch GmbH en 1983 y se estandarizó bajo la norma ISO~11898~\cite{ISO11898:1993, CiA_CANhistory}. Físicamente es un bus diferencial de dos hilos (\textbf{CAN\_H} y \textbf{CAN\_L}) terminado con resistencias de 120\,$\Omega$, lo que le confiere alta inmunidad al ruido electromagnético~\cite{ISO11898-2:2024}. En este trabajo se emplea la variante CAN 2.0A (identificador de 11 bits) a \textbf{500\,kbps}, configuración \texttt{CAN~11/500} definida por ISO~15765-4 para los sistemas OBD-II~\cite{ISO15765-4:2021}.
 
-En su variante CAN 2.0A, que es la empleada en este trabajo, cada trama de datos está compuesta por los campos que se recogen en la siguiente tabla~\ref{tab:can_frame}.
+La estructura de la trama de datos CAN 2.0A se recoge en la tabla~\ref{tab:can_frame}.
 
 \begin{table}[!htbp]
 \caption{Estructura de la trama CAN 2.0A (\textit{Standard Frame Format}) según ISO~11898-1~\cite{ISO11898-1:2024}.}
@@ -20,70 +20,9 @@ En su variante CAN 2.0A, que es la empleada en este trabajo, cada trama de datos
 \input{figuras/fig_can_frame.tex}
 \end{table}
 
-El campo \textbf{Identificador (ID)} (11 bits en CAN 2.0A) determina tanto la prioridad del mensaje como su propósito lógico~\cite{ISO11898-1:2024}. En el contexto OBD-II, el escáner externo emplea el identificador funcional \texttt{0x7DF} para direccionamiento broadcast o el identificador \texttt{0x7E0} para dirigirse directamente a la ECU, mientras que la ECU responde con \texttt{0x7E8}~\cite{ISO15765-4:2021}. 
+El campo \textbf{Identificador (ID)} determina tanto la prioridad del mensaje como su propósito lógico mediante un \textbf{arbitraje no destructivo}: ante una colisión, los nodos comparan bit a bit su identificador y el mensaje de menor valor numérico gana el bus sin que ninguna trama se corrompa, lo que garantiza una latencia determinista para los mensajes más prioritarios (ABS, ESP, airbag)~\cite{ISO11898-1:2024}. En el contexto OBD-II, el escáner emplea el identificador \texttt{0x7DF} (funcional/\textit{broadcast}) o \texttt{0x7E0} (dirigido a la ECU), y la ECU responde con \texttt{0x7E8}~\cite{ISO15765-4:2021}.
 
-El mecanismo de arbitraje no destructivo garantiza que, en caso de colisión, el mensaje con identificador de menor valor gana el bus sin que ningún nodo pierda datos~\cite{ISO11898-1:2024}, pues en caso de colisión se comparan bit a bit los identificadores menteniendo la transmisión del que tenga valor menor (más MSB=0).
-
-El campo \textbf{DLC} (\textit{Data Length Code}, 4 bits) indica el número de bytes de datos de la trama, de 0 a 8~\cite{ISO11898-1:2024}. OBD-II utiliza tramas de 8 bytes, rellenando con \texttt{0x55} o \texttt{0xAA} los bytes no utilizados (\textit{padding})~\cite{ISO15765-4:2021}.
-
-En este trabajo, el bus opera a \textbf{500\,kbps}, velocidad estándar definida por ISO~15765-4 para los sistemas OBD-II modernos en la configuración CAN~11/500~\cite{ISO15765-4:2021}. 
-
-La interfaz \texttt{SocketCAN} de Linux, accesible desde la Raspberry Pi a través del controlador MCP2515~\cite{Microchip_MCP2515, Waveshare_RS485CANHAT}, expone el bus CAN como un \textit{socket} de red estándar, lo que permite su uso desde Python mediante la librería \texttt{python-can} con una abstracción de alto nivel.
-
-
-\medskip\noindent\textbf{Fundamentos físicos del bus CAN}
-
-El bus CAN es un bus serie diferencial de dos hilos: \textbf{CAN\_H} (\textit{CAN High}) y \textbf{CAN\_L} (\textit{CAN Low}). La información se codifica en la diferencia de tensión entre ambos conductores, lo que confiere alta inmunidad al ruido electromagnético (EMI), imprescindible en entornos con motores eléctricos, bobinas de encendido y alternadores~\cite{ISO11898-2:2024}. El estándar ISO~11898-2 define dos estados lógicos:
-
-\begin{itemize}
-    \item \textbf{Dominante} (lógico~0): CAN\_H $\approx 3{,}5$\,V y CAN\_L $\approx 1{,}5$\,V; diferencia diferencial $\geq 2$\,V. Un bit dominante \emph{siempre gana} sobre un bit recesivo en el arbitraje.
-    \item \textbf{Recesivo} (lógico~1): CAN\_H $\approx$ CAN\_L $\approx 2{,}5$\,V; diferencia diferencial $\approx 0$\,V. Cede el bus ante cualquier bit dominante.
-\end{itemize}
-
-El bus termina en sus extremos con resistencias de 120\,$\Omega$ para evitar reflexiones de señal~\cite{ISO11898-2:2024}. La longitud máxima depende de la velocidad: a 500\,kbps (velocidad estándar OBD-II~\cite{ISO15765-4:2021}) el bus puede extenderse hasta $\approx 100$\,m; a 1\,Mbps, hasta $\approx 40$\,m.
-
-\medskip\noindent\textbf{Arbitraje no destructivo CSMA/CR}
-
-El bus CAN implementa \textbf{CSMA/CR} (\textit{Carrier Sense Multiple Access / Collision Resolution}), también denominado arbitraje no destructivo por dominancia de bit~\cite{ISO11898-1:2024}. A diferencia de Ethernet (CSMA/CD), en CAN ninguna trama se destruye durante el arbitraje. El mecanismo opera de la siguiente forma:
-
-\begin{enumerate}
-    \item Antes de transmitir, cada nodo escucha el bus; si detecta actividad, espera a que quede libre.
-    \item Cuando dos o más nodos comienzan a transmitir simultáneamente, cada uno monitoriza el bus mientras emite su identificador bit a bit, comenzando por el más significativo.
-    \item Si un nodo transmite un bit \textbf{recesivo} (1) pero lee un bit \textbf{dominante} (0), otro nodo con identificador de menor valor numérico ha ganado el bus. El nodo perdedor cesa su transmisión \emph{sin haber corrompido la trama ganadora} y reintentará en el siguiente período de interframe.
-    \item El nodo ganador completa su trama sin interrupción.
-\end{enumerate}
-
-Esta propiedad garantiza latencia determinista para los mensajes más prioritarios, propiedad básica para sistemas de seguridad activa como ABS, ESP o airbag~\cite{ISO11898-1:2024}.
-
-\medskip\noindent\textbf{Tipos de trama CAN}
-
-El protocolo CAN clásico define cuatro tipos de trama~\cite{ISO11898-1:2024}:
-
-\begin{itemize}
-    \item \textbf{Data Frame}: transporta hasta 8 bytes de payload. Es la trama ordinaria; en OBD-II todas las peticiones y respuestas son Data Frames.
-    \item \textbf{Remote Frame}: solicita al nodo propietario de un identificador que emita la Data Frame correspondiente (RTR~=~1). Rara vez usada en sistemas modernos.
-    \item \textbf{Error Frame}: emitida por cualquier nodo que detecta un error. Compuesta por un \textit{Error Flag} (6 bits dominantes) y un \textit{Error Delimiter} (8 bits recesivos). Destruye la trama errónea y fuerza la retransmisión.
-    \item \textbf{Overload Frame}: señaliza que un nodo necesita tiempo adicional de procesamiento. Estructuralmente similar al Error Frame pero emitida en el período de interframe.
-\end{itemize}
-
-\medskip\noindent\textbf{Mecanismos de detección de errores}
-
-CAN implementa cinco mecanismos ortogonales de detección de error~\cite{ISO11898-1:2024}:
-
-\begin{enumerate}
-    \item \textbf{CRC-15}: CRC de 15 bits sobre SOF, arbitración, control y datos, con polinomio $x^{15}+x^{14}+x^{10}+x^8+x^7+x^4+x^3+1$. Los receptores recalculan y comparan.
-    \item \textbf{Bit Monitoring}: el transmisor lee el bus mientras transmite; si detecta discrepancia fuera del campo de arbitraje, señaliza error inmediatamente.
-    \item \textbf{Bit Stuffing}: tras 5 bits consecutivos del mismo nivel lógico, el transmisor inserta un \textit{stuff bit} del nivel opuesto. Si el receptor detecta 6 bits consecutivos iguales, señaliza error de stuffing.
-    \item \textbf{Frame Check}: verifica que los campos fijos (CRC Delimiter, ACK Delimiter, EOF) tienen el nivel lógico definido por el estándar.
-    \item \textbf{ACK Check}: el transmisor verifica que al menos un receptor ha confirmado la recepción correcta escribiendo dominante en el ACK Slot.
-\end{enumerate}
-
-\medskip\noindent\textbf{Variantes CAN 2.0A y CAN 2.0B}
-\begin{itemize}
-    \item \textbf{CAN 2.0A} (\textit{Standard Frame Format}) utiliza un identificador de 11 bits ($2^{11} = 2\,048$ identificadores). Es la variante empleada en este trabajo bajo la configuración \texttt{CAN~11/500} de ISO~15765-4~\cite{ISO15765-4:2021}.
-    \item\textbf{CAN 2.0B} (\textit{Extended Frame Format}) amplía el identificador a 29 bits mediante la concatenación de 11 bits de base con 18 bits de extensión, separados por los bits SRR e IDE, alcanzando $2^{29} \approx 537$ millones de identificadores~\cite{ISO11898-1:2024}. 
-\end{itemize}
-  ISO~15765-4 contempla la configuración \texttt{CAN~29/500} para fabricantes que emplean identificadores de 29 bits~\cite{ISO15765-4:2021}. La coexistencia de ambas variantes en el mismo bus es posible: ante igual base de identificador, la trama estándar (IDE dominante) tiene mayor prioridad que la extendida (IDE recesivo).
+El campo \textbf{DLC} (\textit{Data Length Code}) limita el \textit{payload} a un máximo de 8 bytes~\cite{ISO11898-1:2024}; OBD-II emplea tramas de 8 bytes rellenando con \textit{padding} los no utilizados~\cite{ISO15765-4:2021}. Precisamente esta limitación a 8 bytes es la que obliga a introducir una capa de transporte (ISO-TP) para los mensajes más largos, como el VIN. En la Raspberry Pi, el bus se expone mediante la interfaz \texttt{SocketCAN} de Linux a través del controlador MCP2515~\cite{Microchip_MCP2515, Waveshare_RS485CANHAT}, accesible desde Python con la librería \texttt{python-can}.
 
 \subsection{ISO-TP - Transport Protocol (ISO 15765-2)}
 \label{sec:proto_isotp}
@@ -123,10 +62,38 @@ Para mensajes más largos, como la respuesta al PID (\textit{Parameter Identifie
 
 \begin{figure}[!htbp]
 \centering
-\input{figuras/fig_isotp_multiframe.tex}
+\includegraphics[width=1\textwidth]{Ilustraciones/isotp_multiframe_sequence.png}
 \caption{Secuencia de intercambio ISO-TP para la obtención del VIN (20~bytes: modo 0x49, PID 0x02, contador 0x01 y 17~bytes ASCII). El escáner envía una petición Single Frame, la ECU responde con First Frame + Flow Control (BS=0, STmin=0) + dos Consecutive Frames.}
 \label{fig:isotp_multiframe}
 \end{figure}
+
+El Algoritmo~\ref{alg:isotp_tx} resume la lógica general de transmisión de un mensaje según ISO-TP: si el mensaje cabe en 7~bytes se envía en una única \textit{Single Frame}; en caso contrario se segmenta en una \textit{First Frame} seguida de tantas \textit{Consecutive Frames} como sean necesarias, respetando el \textit{Flow Control}, el \textit{Block Size} y la separación mínima entre tramas indicados por el receptor.
+
+\begin{algorithm}[H]
+\caption{Transmisión segmentada de un mensaje según ISO-TP (ISO~15765-2).}
+\label{alg:isotp_tx}
+\begin{algorithmic}[1]
+\Require mensaje $M$ de longitud $L$ bytes
+\If{$L \leq 7$}
+    \State enviar \textit{Single Frame}: $PCI \gets \texttt{0x0}L$, datos $\gets M$ \Comment{cabe en una trama}
+    \State \Return
+\EndIf
+\State enviar \textit{First Frame}: $PCI \gets \texttt{0x1} \mathbin{|} (L \gg 8)$, $L \land \texttt{0xFF}$, primeros 6 bytes de $M$
+\State esperar \textit{Flow Control} (FC) del receptor
+\If{$FS = \textit{Overflow}$} \State abortar transmisión; \Return \EndIf
+\State leer \textit{Block Size} ($BS$) y \textit{STmin} del FC
+\State $enviados \gets 6$;\quad $SN \gets 1$;\quad $n \gets 0$
+\While{$enviados < L$}
+    \State enviar \textit{Consecutive Frame}: $PCI \gets \texttt{0x2} \mathbin{|} SN$, siguientes 7 bytes de $M$
+    \State $enviados \gets enviados + 7$;\quad $SN \gets (SN + 1) \bmod 16$;\quad $n \gets n + 1$
+    \If{$BS > 0$ \textbf{and} $n = BS$}
+        \State esperar nuevo \textit{Flow Control}; \quad $n \gets 0$
+    \Else
+        \State esperar $STmin$ antes de la siguiente trama
+    \EndIf
+\EndWhile
+\end{algorithmic}
+\end{algorithm}
 
 La implementación Python utiliza la librería \textbf{\texttt{can-isotp}} sobre el socket \texttt{ISOTP} de SocketCAN~\cite{LinuxKernel_ISOTP}, que gestiona de forma transparente la segmentación, el Flow Control y la temporización, exponiendo al nivel de aplicación una interfaz de lectura/escritura de mensajes completos.
 
@@ -142,6 +109,27 @@ OBD-II es el estándar de diagnóstico del vehículo, obligatorio en todos los v
 \end{table}
 
 Cada petición OBD-II incluye un byte de modo y, opcionalmente, uno o más bytes de PID para solicitar la información únicamente de esos PIDs. La respuesta de la ECU incluye el modo de respuesta (modo + \texttt{0x40}), el o los PIDs solicitados y los bytes de datos codificados, cuya interpretación depende de la fórmula de decodificación definida por el estándar para cada PID~\cite{SAEJ1979:2014}.
+
+El Algoritmo~\ref{alg:obd2_cycle} describe el ciclo genérico de petición-respuesta de un parámetro en tiempo real (modo \texttt{0x01}): el escáner envía el par modo-PID, la ECU responde con el eco del modo incrementado en \texttt{0x40} y los datos, o bien con una respuesta negativa que el escáner debe detectar antes de intentar decodificar.
+
+\begin{algorithm}[H]
+\caption{Ciclo de petición-respuesta de un parámetro OBD-II (SAE~J1979).}
+\label{alg:obd2_cycle}
+\begin{algorithmic}[1]
+\Require modo de servicio $S$, identificador de parámetro $p$
+\Ensure valor físico decodificado, con unidad
+\State enviar $[\,S,\ p\,]$ sobre ISO-TP \Comment{p.\,ej.\ \texttt{0x01 0x0C} para RPM}
+\State $resp \gets$ respuesta de la ECU (identificador \texttt{0x7E8})
+\If{$resp[0] = \texttt{0x7F}$} \Comment{respuesta negativa}
+    \State $NRC \gets resp[2]$; notificar el rechazo; \Return
+\ElsIf{$resp[0] \neq S + \texttt{0x40}$}
+    \State descartar: eco de modo inesperado; \Return
+\EndIf
+\State $datos \gets resp$ tras los bytes de modo y PID
+\State $valor \gets$ fórmula de decodificación del PID $p$ aplicada a $datos$
+\State \Return $valor$ con su unidad física
+\end{algorithmic}
+\end{algorithm}
 
 SAE~J1979 define diez servicios de diagnóstico, numerados del modo \texttt{0x01} al \texttt{0x0A}~\cite{SAEJ1979:2014}. Estos servicios cubren desde la lectura de datos en tiempo real hasta la gestión de códigos de avería, la consulta de resultados de los monitores a bordo y la identificación del vehículo. A continuación se describe cada uno de ellos:
 
@@ -180,15 +168,6 @@ Cuando la ECU no puede atender una petición (modo no soportado, condiciones no 
 
 % \input{figuras/fig_obd2_pids_mandatory.tex}
 
-% El ciclo completo de una consulta OBD-II se muestra en la figura~\ref{fig:obd2_cycle}, donde se puede apreciar la propagación del comando desde la aplicación móvil hasta la ECU y el camino de vuelta de los datos decodificados.
-
-% \begin{figure}[!htbp]
-% \centering
-% \input{figuras/fig_obd2_cycle.tex}
-% \caption{ Ciclo de una trama OBD-II desde la Raspberry Pi sobre una trama ISO-TP/CAN a la ECU}
-% \label{fig:obd2_cycle}
-% \end{figure}
-
 
 \subsection{UDS - Unified Diagnostic Services (ISO 14229-1)}
 \label{sec:proto_uds}
@@ -204,6 +183,27 @@ Cada petición UDS se estructura con un byte de identificador de servicio (\text
 \end{table}
 
 Tanto UDS como OBD-II usan el mismo esquema de codificación para las respuestas positivas (\texttt{ID+0x40}) y comparten el mismo mecanismo para respuestas negativas (\textit{Negative Response}) definido por la norma ISO~\cite{ISO14229-1:2020}. Los servicios UDS que se han implementado en el sistema son \textit{DiagnosticSessionControl} (\texttt{0x10}), que controla el modo de sesión activo en la ECU, y \textit{ReadDataByIdentifier} (\texttt{0x22}), que permite leer datos solicitados a través de un identificador DID (\textit{Data Identifier}) de 2 bytes.
+
+El Algoritmo~\ref{alg:uds_did} ilustra la lectura de un dato por identificador (servicio \texttt{0x22}) cuando el DID es de acceso restringido: antes de la lectura, el cliente debe conmutar a sesión extendida mediante \textit{DiagnosticSessionControl} (\texttt{0x10}); de lo contrario, la ECU rechaza la petición con un código NRC.
+
+\begin{algorithm}[H]
+\caption{Lectura de un dato por identificador en UDS (servicio \texttt{0x22}).}
+\label{alg:uds_did}
+\begin{algorithmic}[1]
+\Require identificador $d$ (2 bytes); sesión activa $sesion$
+\If{$d$ requiere sesión extendida \textbf{and} $sesion \neq$ extendida}
+    \State enviar \textit{DiagnosticSessionControl}: $[\texttt{0x10}, \texttt{0x03}]$
+    \State esperar respuesta positiva (\texttt{0x50}); $sesion \gets$ extendida
+\EndIf
+\State enviar $[\texttt{0x22},\ d_{hi},\ d_{lo}]$
+\State $resp \gets$ respuesta de la ECU
+\If{$resp[0] = \texttt{0x7F}$} \Comment{respuesta negativa}
+    \State $NRC \gets resp[2]$ \Comment{\texttt{0x22} condiciones no cumplidas; \texttt{0x31} fuera de rango}
+    \State notificar el rechazo; \Return
+\EndIf
+\State \Return datos de $resp$ tras $[\texttt{0x62}, d_{hi}, d_{lo}]$
+\end{algorithmic}
+\end{algorithm}
 
 Los códigos NRC más relevantes se recogen en la tabla~\ref{tab:uds_nrc}.
 
@@ -273,7 +273,7 @@ El servicio empleado en este trabajo es el \textbf{Nordic UART Service (NUS)}~\c
 
 \begin{figure}[!htbp]
 \centering
-\input{figuras/fig_ble_nus_packet.tex}
+\includegraphics[width=0.5\textwidth]{Ilustraciones/BLE_layers.png}
 \caption{Pila de protocolos del Nordic UART Service (NUS) sobre BLE. Los comandos y respuestas JSON se transmiten como payload ATT sobre las características RX (escritura) y TX (notificación) del servicio NUS, con un MTU negociado de 240 bytes.}
 \label{fig:ble_nus_packet}
 \end{figure}
@@ -284,7 +284,7 @@ El flujo de establecimiento de conexión se puede observar en la siguiente figur
 
 \begin{figure}[!htbp]
 \centering
-\input{figuras/fig_ble_gatt_flow.tex}
+\includegraphics[width=0.8\textwidth]{Ilustraciones/ble_gatt_flow.png}
 \caption{Flujo completo de una conexión BLE GATT con el servicio NUS. Tras el descubrimiento y negociación de MTU, la app habilita las notificaciones en la característica TX y comienza el intercambio de comandos JSON. Un mecanismo de keepalive mantiene la conexión activa; la inactividad superior a 20 segundos provoca el cierre de sesión.}
 \label{fig:ble_gatt_flow}
 \end{figure}
@@ -302,6 +302,13 @@ La estructura de los mensajes del protocolo se recoge en la tabla~\ref{tab:ndjso
 \end{table}
 
 Adicionalmente, el servidor puede enviar mensajes \textit{push} sin petición previa: \texttt{\{type: "samples"\}} con un ciclo de muestras del monitor de datos en vivo, \texttt{\{type: "error"\}} ante un fallo de lectura de PID, y \texttt{\{type:"heartbeat"\}} como sonda de keepalive cuando el cliente permanece inactivo más de 8 segundos. El cliente debe responder al heartbeat con \texttt{\{type:"heartbeat\_ack"\}} para mantener la sesión activa; la inactividad superior a 15 segundos provoca la desconexión automática y el reinicio del servidor BLE.
+
+\subsection{Trabajos relacionados}
+\label{sec:trabajos_relacionados}
+
+El acceso al diagnóstico OBD-II está ampliamente cubierto por soluciones comerciales. La más extendida es el adaptador \textbf{ELM327}, un circuito integrado que actúa de puente entre el bus del vehículo y una interfaz Bluetooth o Wi-Fi, utilizado junto a aplicaciones móviles como \textit{Torque Pro}, \textit{OBD Fusion} o \textit{Car Scanner ELM OBD2}~\cite{CarScanner_app}, así como lectores genéricos independientes~\cite{KONWEII_scanner}. Existen además bibliotecas y proyectos de código abierto que implementan partes de la pila de comunicación, como \texttt{python-can}~\cite{Twiss23-pythoncan} y \texttt{can-isotp}~\cite{Menager23-isotp} para el transporte sobre SocketCAN.
+
+El presente trabajo se diferencia de estas soluciones en que no se apoya en un adaptador ELM327, sino que construye la pila de diagnóstico desde la capa de aplicación: implementa los servicios OBD-II y UDS sobre el transporte ISO-TP, expone la sesión mediante un servidor BLE GATT propio con perfil Nordic UART Service montado en la Raspberry Pi, registra la telemetría de forma estructurada en una base de datos SQLite y se acompaña de un simulador de ECU sobre Arduino que permite validar el sistema de forma controlada. El objetivo no es competir con las herramientas comerciales, sino comprender e implementar de primera mano los protocolos que orquestan la comunicación del vehículo.
 
 \section{Objetivos}
 \label{sec:objetivos}
