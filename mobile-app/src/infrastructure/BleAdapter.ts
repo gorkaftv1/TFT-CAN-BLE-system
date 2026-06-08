@@ -61,6 +61,7 @@ export class BleAdapter implements IVehicleAdapter {
   private sampleCbs: Set<(s: MonitorSample) => void> = new Set();
   private lastActivityTime = 0;
   private lastSampleAckMs = 0;
+  private intentionalDisconnect = false;
   private activityMonitorInterval: ReturnType<typeof setInterval> | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   onUnexpectedDisconnect: (() => void) | null = null;
@@ -126,6 +127,7 @@ export class BleAdapter implements IVehicleAdapter {
   }
 
   async disconnect(): Promise<void> {
+    this.intentionalDisconnect = true; // suppress the onDisconnected -> unexpected handler
     this.onUnexpectedDisconnect = null; // intentional — prevent callback from firing
     if (this.device) {
       try { await this.writeRx(JSON.stringify({ cmd: 'disconnect' }) + '\n', false); } catch { /* ignore */ }
@@ -140,6 +142,7 @@ export class BleAdapter implements IVehicleAdapter {
       try { await this.device.cancelConnection(); } catch { /* ignore */ }
       this.device = null;
     }
+    this.intentionalDisconnect = false;
   }
 
   isConnected(): boolean {
@@ -148,16 +151,13 @@ export class BleAdapter implements IVehicleAdapter {
 
   startMonitor(pids: number[], intervalMs: number, onSample: (s: MonitorSample) => void): () => void {
     this.sampleCbs.add(onSample);
-    const cmd = JSON.stringify({ cmd: 'monitor_start', pids, interval_ms: intervalMs });
-    LogService.addBleTx(cmd);
+    // request() -> writeRx() already logs the BLE TX; do not log it again here.
     this.request({ cmd: 'monitor_start', pids, interval_ms: intervalMs }).catch((e) => {
       LogService.add('error', `Error al iniciar monitor: ${e instanceof Error ? e.message : String(e)}`);
     });
     return () => {
       this.sampleCbs.delete(onSample);
       if (this.sampleCbs.size === 0) {
-        const stopCmd = JSON.stringify({ cmd: 'monitor_stop' });
-        LogService.addBleTx(stopCmd);
         this.request({ cmd: 'monitor_stop' }).catch(() => {});
       }
     };
@@ -270,6 +270,11 @@ export class BleAdapter implements IVehicleAdapter {
 
     if (msg.status === 'ok' && msg.data === 'pong') return;
 
+    // Defensive: a server that still replies to heartbeat_ack emits this stray
+    // error; it must NOT be matched to a pending request (would reject it wrongly).
+    if (msg.status === 'error' && typeof msg.message === 'string'
+        && msg.message.startsWith('Unknown command')) return;
+
     const pending = this.queue.shift();
     if (!pending) return;
     clearTimeout(pending.timer);
@@ -379,6 +384,8 @@ export class BleAdapter implements IVehicleAdapter {
   }
 
   private handleUnexpectedDisconnect(): void {
+    // Manual disconnect() already cleaned up and triggers onDisconnected — ignore it.
+    if (this.intentionalDisconnect) return;
     LogService.add('error', 'Device disconnected unexpectedly');
     if (this.pingInterval) { clearInterval(this.pingInterval); this.pingInterval = null; }
     if (this.activityMonitorInterval) { clearInterval(this.activityMonitorInterval); this.activityMonitorInterval = null; }
