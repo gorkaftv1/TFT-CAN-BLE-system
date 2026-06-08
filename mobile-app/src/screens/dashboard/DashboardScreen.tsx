@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator, ScrollView, StyleSheet, Text,
   TouchableOpacity, View,
@@ -209,6 +209,20 @@ export function DashboardScreen() {
   const [snapshotLoading, setSnapshotLoading] = useState(false);
   const [udsMonitoring, setUdsMonitoring] = useState(false);
   const udsMonitorRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stop the UDS polling interval when the link drops or the screen unmounts,
+  // otherwise it keeps calling readAllAvailable() on a dead adapter.
+  const live = useMock || status === 'connected';
+  useEffect(() => {
+    if (!live && udsMonitorRef.current) {
+      clearInterval(udsMonitorRef.current);
+      udsMonitorRef.current = null;
+      setUdsMonitoring(false);
+    }
+  }, [live]);
+  useEffect(() => () => {
+    if (udsMonitorRef.current) clearInterval(udsMonitorRef.current);
+  }, []);
 
   const visibleWidgets = [...widgets]
     .filter((w) => w.visible && (supportedPids === null || supportedPids.includes(w.pid)))
