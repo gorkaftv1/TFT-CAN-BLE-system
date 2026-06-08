@@ -53,6 +53,13 @@ if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
     Err "JDK not found. Install JDK 17 from https://adoptium.net"
 }
 
+# Prefer JAVA_HOME (what Gradle uses) over the PATH java. Oracle's java8path often
+# shadows a newer JDK on PATH, so align java/keytool/gradle on JAVA_HOME's JDK.
+if ($env:JAVA_HOME -and (Test-Path "$env:JAVA_HOME\bin\java.exe")) {
+    $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
+    Info "Using JDK from JAVA_HOME: $env:JAVA_HOME"
+}
+
 # java -version writes to stderr; capture it via a temp file to avoid NativeCommandError
 $javaVerTmp = Join-Path $env:TEMP 'java_version.txt'
 Start-Process java -ArgumentList '-version' -NoNewWindow `
