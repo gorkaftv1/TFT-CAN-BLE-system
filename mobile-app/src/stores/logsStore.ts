@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { LogEntry, LogSection } from '../domain/models/LogEntry';
 
-const MAX_ENTRIES = 1000;
+const MAX_ENTRIES = 20000;
 
 interface LogsState {
   entries: LogEntry[];
