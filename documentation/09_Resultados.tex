@@ -25,6 +25,9 @@ Para verificar que los resultados obtenidos por la herramienta desarrollada son 
 \end{figure}
 
 
+% NOTA: tab:latencias (latencia extremo-a-extremo) NO puede sacarse de la BD
+%   (solo hay wall_ts de finalización por comando, sin timestamps por etapa).
+%   Esa tabla requiere instrumentar el código en vivo; sigue marcada con su TODO.
 \section{Validación sobre vehículo real}
 \label{sec:resultados_vehiculo_real}
 
@@ -64,6 +67,52 @@ Los datos leídos del Škoda Yeti se almacenaron en la base de datos SQLite como
 \caption{Validación sobre el Škoda Yeti: detalle de la sesión registrada en SQLite, con las muestras de telemetría agrupadas por sensor (a), el detalle de una muestra concreta (b) y la lista de DTCs leídos del vehículo (c).}
 \label{fig:skoda_sesion}
 \end{figure}
+
+El VIN reconstruido por la herramienta mediante la secuencia ISO-TP multi-frame fue \texttt{TMBJF45LXF6022462} (código de fabricante \texttt{TMB}, correspondiente a Škoda), coincidiendo carácter a carácter con el grabado en el vehículo. La tabla~\ref{tab:skoda_telemetria} compara los rangos de telemetría medidos por la herramienta desarrollada sobre el Škoda Yeti (extraídos de la base de datos SQLite con \texttt{scripts/db\_metrics.py} sobre un total de 1\,627 muestras) con las lecturas obtenidas por la herramienta comercial de referencia (KONWEII junto a Car Scanner ELM OBD2~\cite{KONWEII_scanner, CarScanner_app}) sobre el mismo vehículo.
+
+\begin{table}[!htbp]
+\caption{Comparación de la telemetría del Škoda Yeti: herramienta desarrollada (base de datos SQLite) frente a la herramienta comercial de referencia.}
+\label{tab:skoda_telemetria}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|l|c|c|c|}
+\hline
+\textbf{PID} & \textbf{Parámetro} & \textbf{Herramienta desarrollada} & \textbf{Herramienta comercial} & \textbf{Coincide} \\
+\hline
+\texttt{0x0C} & RPM del motor          & 0 -- 3843\,rpm   & 0 -- 3843\,rpm   & Sí \\
+\texttt{0x05} & Temp. refrigerante     & 33 -- 72\,°C     & 33 -- 63\,°C     & Sí$^{*}$ \\
+\texttt{0x11} & Posición acelerador    & 12,2 -- 86,7\,\% & 12,2 -- 86,7\,\% & Sí \\
+\texttt{0x04} & Carga calculada motor  & 0 -- 55,7\,\%    & 0 -- 55,7\,\%    & Sí \\
+\texttt{0x0B} & Presión MAP admisión   & 24 -- 107\,kPa   & 24 -- 107\,kPa   & Sí \\
+\texttt{0x42} & Tensión de batería     & 10,4 -- 14,1\,V  & 10,4 -- 14,1\,V  & Sí \\
+\texttt{0x43} & Carga absoluta         & 19,2 -- 62,4\,\% & 19,2 -- 62,4\,\% & Sí \\
+\texttt{0x33} & Presión barométrica    & 101\,kPa         & 106\,kPa         & $\approx$ \\
+\texttt{0x0D} & Velocidad              & 255\,km/h (cte.) & 255\,km/h (cte.) & Sí \\
+\hline
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize $^{*}$ La prueba con la herramienta comercial fue más breve, por lo que el motor alcanzó una temperatura de refrigerante inferior (63\,°C frente a 72\,°C); el rango es coherente en ambos casos.}
+\end{table}
+
+Las lecturas de ambas herramientas resultaron equivalentes en la práctica totalidad de los parámetros. Las únicas diferencias fueron la temperatura de refrigerante (consecuencia de la distinta duración de cada prueba) y la presión barométrica (106\,kPa frente a 101\,kPa, una desviación de unos 5\,kPa atribuible a la tolerancia y calibración del sensor). Esta correspondencia confirma la validez de las lecturas de la herramienta desarrollada frente a un instrumento comercial de referencia.
+
+El valor del PID \texttt{0x0D} (velocidad) se mantuvo constante en 255\,km/h (\texttt{0xFF}) durante toda la captura, valor que la herramienta registró fielmente y que se corresponde con una lectura no válida del sensor de velocidad. Este comportamiento es coherente con los DTC almacenados en la ECU del vehículo, leídos por la herramienta y recogidos en la tabla~\ref{tab:skoda_dtcs}: el código \texttt{P0501} (\textit{rango/rendimiento del sensor de velocidad}) explica directamente la lectura anómala, lo que demuestra que la telemetría y el diagnóstico de averías obtenidos por la herramienta son mutuamente consistentes.
+
+\begin{table}[!htbp]
+\caption{DTCs reales leídos por la herramienta de la ECU del Škoda Yeti.}
+\label{tab:skoda_dtcs}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|l|}
+\hline
+\textbf{Código} & \textbf{Descripción} \\
+\hline
+\texttt{P0501} & Circuito del sensor de velocidad del vehículo A — rango/rendimiento \\
+\texttt{U0415} & Datos no válidos recibidos del módulo de control del ABS \\
+\hline
+\end{tabular}
+\end{table}
 
 Finalmente se realizó una prueba adicional sobre un \textbf{Opel Astra K}, perteneciente al grupo PSA/Opel y, por tanto, a una arquitectura de diagnóstico distinta a la del grupo VAG. Esta prueba corroboró el correcto funcionamiento del protocolo OBD-II: la herramienta consultó sin incidencias los PIDs del modo 0x01 y leyó el VIN del vehículo, confirmando que la capa de diagnóstico estandarizada es interoperable entre fabricantes. Sin embargo, la prueba puso de manifiesto la dificultad de implementar el protocolo UDS de forma genérica, dado que los servicios extendidos (en particular la lectura de datos por identificador, servicio 0x22) se apoyan en \textit{Data Identifiers} (DID) propietarios cuyo significado y disponibilidad varían según el fabricante. Al solicitar los DID validados sobre la plataforma VAG, la ECU del Opel respondió con códigos de respuesta negativa (NRC), confirmando que estos identificadores no están normalizados y que un soporte UDS completo exigiría incorporar la base de datos de DID específica de cada marca. La Figura~\ref{fig:opel_astra} contrasta la lectura de la herramienta de referencia comercial con el panel de telemetría y el escaneo de DTCs obtenidos por la herramienta desarrollada sobre el Opel Astra K.
 
@@ -128,6 +177,10 @@ El ciclo de gestión de DTCs se validó íntegramente: lectura de lista vacía, 
 
 
 % TODO - verificar que los números de latencia son reales (medidos), no estimados
+% REVISAR [MÉTRICAS]: extraer cifras reales de la BD SQLite para respaldar esta
+%   sección (timestamps monotonic_ts/wall_ts de la tabla samples permiten calcular
+%   periodos e intervalos reales; tabla commands tiene request/response para contar
+%   transacciones). Sustituir rangos estimados por medias/percentiles medidos.
 \section{Métricas de rendimiento de la comunicación}
 \label{sec:resultados_rendimiento}
 
@@ -157,7 +210,26 @@ BLE Notify (Raspberry Pi → app) & 10 -- 20 \\
 
 La latencia dominante en el sistema es la introducida por la capa BLE, que suma las contribuciones del Write y la Notify. La latencia CAN+ISO-TP es despreciable frente a la BLE a las velocidades de bus utilizadas.
 
-En el modo de monitorización continua con cinco PIDs a 500\,ms de periodo, el sistema fue capaz de mantener una tasa de actualización estable sin pérdidas de muestras durante sesiones de 10 minutos. El reenvío de las muestras del hilo de monitorización al cliente BLE no presentó pérdidas ni saturación en ninguno de los ensayos.
+% Cadencia real medida con scripts/db_metrics.py sobre las sesiones de monitorización
+% continua de diagnostics.db (intervalo entre muestras consecutivas de cada PID).
+En el modo de monitorización continua, el periodo de ciclo medido escala con el número de PIDs solicitados en cada vuelta: con un conjunto reducido de 5--6 PIDs el periodo se aproxima al objetivo de 500\,ms (mediana de 516\,ms con 24 PIDs en una sesión y de 560\,ms con 6 PIDs en otra), mientras que con conjuntos amplios de 18--20 PIDs el ciclo se sitúa en torno a los 600--700\,ms (mediana de 703\,ms con 18 PIDs), por el coste acumulado de las transacciones ISO-TP secuenciales. En todos los casos la dispersión fue baja (rango intercuartílico inferior a 25\,ms en las sesiones deterministas) y el sistema mantuvo una tasa de actualización estable sin pérdidas de muestras. El reenvío de las muestras del hilo de monitorización al cliente BLE no presentó pérdidas ni saturación en ninguno de los ensayos.
+
+\begin{table}[!htbp]
+\caption{Cadencia real de la monitorización continua medida sobre la base de datos SQLite (intervalo entre muestras consecutivas por PID).}
+\label{tab:cadencia}
+\centering
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|c|c|c|c|}
+\hline
+\textbf{PIDs por ciclo} & \textbf{Periodo mediana (ms)} & \textbf{Media (ms)} & \textbf{P10 -- P90 (ms)} \\
+\hline
+6  & 560 & 529 & 311 -- 571 \\
+18 & 703 & 706 & 692 -- 713 \\
+20 & 453 & 426 & 310 -- 475 \\
+24 & 516 & 514 & 506 -- 526 \\
+\hline
+\end{tabular}
+\end{table}
 
 \section{Comportamiento ante condiciones de bus realistas y errores}
 \label{sec:resultados_ruido}

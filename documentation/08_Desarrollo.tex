@@ -5,7 +5,7 @@ El sistema desarrollado se articula en torno a tres nodos de procesamiento indep
 
 \begin{figure}[H]
 \centering
-\input{figuras/fig_arch_general.tex}
+\includegraphics[width=\textwidth]{Ilustraciones/arch_general.png}
 \caption{Arquitectura general del sistema de diagnóstico del vehículo.}
 \label{fig:arch_general}
 \end{figure}
@@ -17,6 +17,15 @@ La \textbf{herramienta de diagnóstico} (Raspberry Pi con controlador MCP2515) a
 La \textbf{aplicación móvil} (React Native) se conecta a la Raspberry Pi vía BLE e interactúa con el sistema a través de comandos JSON sobre el servicio Nordic UART Service. Ofrece una interfaz de usuario estructurada en cinco pantallas funcionales.
 
 La separación de responsabilidades entre los tres componentes permite que cada uno sea sustituido o extendido de forma independiente. En particular, la herramienta Python puede operar con un transporte simulado (\textit{mock}) sin necesidad de hardware CAN, y la aplicación móvil incorpora un adaptador simulado que permite su desarrollo sin conexión Bluetooth activa.
+
+Mientras que la figura~\ref{fig:arch_general} ofrece una vista estática de los nodos y sus enlaces, la figura~\ref{fig:obd2_cycle} muestra el flujo dinámico de una petición concreta a través del sistema completo: desde el comando JSON emitido por la aplicación móvil, su traducción a una trama ISO-TP/CAN en la Raspberry Pi, la respuesta de la ECU simulada y el camino de vuelta de los datos decodificados hasta el cuadro de mando de la aplicación.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\textwidth]{Ilustraciones/obd2_cycle.png}
+\caption{Flujo extremo a extremo de una petición OBD-II en el sistema desarrollado: aplicación móvil → BLE → Raspberry Pi → ISO-TP/CAN → ECU, y el camino de vuelta con los datos decodificados.}
+\label{fig:obd2_cycle}
+\end{figure}
 
 
 % ======================================================================
@@ -353,7 +362,30 @@ Las variables del modelo físico son:
     \item \textbf{Tensión de batería} y \textbf{nivel de combustible}: la tensión sube con el motor en marcha (alternador) y cae en reposo; el combustible se consume a un ritmo dependiente de la carga.
 \end{itemize}
 
-El modelo se actualiza cada \texttt{SIM\_UPDATE\_INTERVAL\_DEFAULT} (200\,ms) en el bucle principal, y los valores calculados se codifican directamente en los bytes de respuesta OBD-II según las fórmulas del estándar SAE J1979 para cada PID.
+El modelo se actualiza cada \texttt{SIM\_UPDATE\_INTERVAL\_DEFAULT} (200\,ms) en el bucle principal, y los valores calculados se codifican directamente en los bytes de respuesta OBD-II según las fórmulas del estándar SAE J1979 para cada PID. El Listado~\ref{lst:modelo_fisico} recoge el núcleo de este modelo: el filtro exponencial de primer orden que lleva las RPM hacia su objetivo y el modelo longitudinal que integra la velocidad a partir del balance entre fuerza motriz y resistencia aerodinámica.
+
+\begin{lstlisting}[language=C++,caption={Núcleo del modelo físico del motor: filtro exponencial de RPM e integración de velocidad (\texttt{updateVehicleSimulation()}).},label={lst:modelo_fisico}]
+// Objetivo de RPM proporcional al acelerador + filtro exponencial (retardo 1er orden)
+int16_t targetRpm = (int16_t)map(vehicle.throttlePos, 0, 100, 850, 5500);
+float alpha = 0.3f * ((float)dtMs / 200.0f);          // factor del filtro (depende de dt)
+if (alpha > 1.0f) alpha = 1.0f;
+vehicle.rpm = (uint16_t)(vehicle.rpm + alpha * (targetRpm - (int16_t)vehicle.rpm));
+
+// Modelo longitudinal: fuerza motriz (prop. RPM*carga) menos arrastre (prop. v^2)
+float force = 0.00002f * (float)vehicle.rpm * (float)vehicle.engineLoad
+            - 0.003f   * (float)vehicle.speed * (float)vehicle.speed;
+force *= ((float)dtMs / 200.0f);                       // integracion por delta-t
+vehicle.speed = (uint8_t)constrain((int16_t)vehicle.speed + (int16_t)force, 0, 180);
+
+// Parametros correlacionados derivados del estado del motor
+vehicle.engineLoad    = (uint8_t)map(vehicle.throttlePos, 0, 100, 15, 85);
+vehicle.mafFlow       = (uint16_t)((vehicle.rpm * vehicle.engineLoad) / 500);
+vehicle.timingAdvance = (int8_t)map(vehicle.rpm, 800, 6000, 8, 32);
+
+// Acotado final de cada variable a su rango fisico valido
+vehicle.rpm   = constrain(vehicle.rpm,   750, 6500);
+vehicle.speed = constrain(vehicle.speed,   0,  180);
+\end{lstlisting}
 
 
 \subsection{Implementación de los modos OBD-II y servicios UDS}
@@ -399,29 +431,49 @@ La secuencia de transmisión es:
     \item \textbf{Consecutive Frame 2}: SN \texttt{0x22}, bytes 11--17 del VIN (con padding).
 \end{enumerate}
 
-El Algoritmo~\ref{alg:vin_multiframe} detalla la generación de esta secuencia en el simulador.
+El Listado~\ref{lst:vin_multiframe} muestra la implementación real de esta secuencia en el simulador.
 
-\begin{algorithm}[!htbp]
-\caption{Transmisión ISO-TP multi-frame del VIN en el simulador}
-\label{alg:vin_multiframe}
-\begin{algorithmic}[1]
-\State $payload \gets [\texttt{0x49}, \texttt{0x02}, \texttt{0x01}] \mathbin\Vert VIN$ \Comment{20 bytes}
-\State $len \gets |payload|$
-\State $FF[0] \gets \texttt{0x10} \lor (len \gg 8)$;\quad $FF[1] \gets len \land \texttt{0xFF}$
-\State copiar $payload[0..5]$ en $FF[2..7]$;\quad \Call{enviarCAN}{\texttt{0x7E8}, $FF$}
-\If{\textbf{not} \Call{esperarFlowControl}{}} \Comment{timeout 1\,s}
-    \State registrar aviso y continuar
-\EndIf
-\State $enviados \gets 6$;\quad $SN \gets 1$
-\While{$enviados < len$}
-    \State $CF[0] \gets \texttt{0x20} \lor (SN \land \texttt{0x0F})$
-    \State copiar los siguientes 7 bytes (rellenando con \texttt{0xAA}) en $CF[1..7]$
-    \State \Call{enviarCAN}{\texttt{0x7E8}, $CF$}
-    \State $enviados \gets enviados + 7$;\quad $SN \gets (SN + 1) \land \texttt{0x0F}$
-    \State \Call{esperar}{\texttt{ISOTP\_CF\_SEP\_MS}} \Comment{25\,ms entre Consecutive Frames}
-\EndWhile
-\end{algorithmic}
-\end{algorithm}
+\begin{lstlisting}[language=C++,caption={Transmisión ISO-TP multi-frame del VIN en el simulador (\texttt{sendVINMultiFrame()}).},label={lst:vin_multiframe}]
+void sendVINMultiFrame() {
+  const uint8_t PAYLOAD_LEN = 3 + VIN_LENGTH;            // 3 cabecera + 17 VIN = 20
+  uint8_t payload[20];
+  payload[0] = MODE_09_VEHICLE_INFO + RESPONSE_SUCCESS;  // 0x49
+  payload[1] = 0x02;                                     // PID
+  payload[2] = 0x01;                                     // num. de elementos
+  for (uint8_t i = 0; i < VIN_LENGTH; i++)
+    payload[3 + i] = (uint8_t)vehicle.vin[i];
+
+  // First Frame: PCI (0x1X XX = longitud total) + primeros 6 bytes del payload
+  uint8_t ff[8];
+  ff[0] = ISOTP_PCI_FF | ((PAYLOAD_LEN >> 8) & 0x0F);
+  ff[1] = PAYLOAD_LEN & 0xFF;
+  for (uint8_t i = 0; i < ISOTP_FF_DATA_BYTES; i++) ff[2 + i] = payload[i];
+  CAN.beginPacket(ECU_RESPONSE_ID);
+  for (uint8_t i = 0; i < 8; i++) CAN.write(ff[i]);
+  CAN.endPacket();
+
+  // Espera del Flow Control del escáner antes de enviar las Consecutive Frames
+  if (!waitForFlowControl())
+    Serial.println(F("[WARN] FC timeout - sending CFs anyway"));
+
+  uint8_t bytesSent = ISOTP_FF_DATA_BYTES;
+  uint8_t sn = 1;                                        // número de secuencia
+  while (bytesSent < PAYLOAD_LEN) {
+    uint8_t cf[8];
+    cf[0] = ISOTP_PCI_CF | (sn & 0x0F);
+    for (uint8_t i = 0; i < ISOTP_CF_DATA_BYTES; i++) {
+      uint8_t idx = bytesSent + i;
+      cf[1 + i] = (idx < PAYLOAD_LEN) ? payload[idx] : ISOTP_PADDING_BYTE;
+    }
+    CAN.beginPacket(ECU_RESPONSE_ID);
+    for (uint8_t i = 0; i < 8; i++) CAN.write(cf[i]);
+    CAN.endPacket();
+    bytesSent += ISOTP_CF_DATA_BYTES;
+    sn = (sn + 1) & 0x0F;
+    if (bytesSent < PAYLOAD_LEN) delay(ISOTP_CF_SEP_MS); // separación entre tramas
+  }
+}
+\end{lstlisting}
 
 Esta implementación manual de la secuencia multi-frame en el simulador fue clave, dado que cualquier error en el contador de secuencia o en el timing entre tramas provocaba el rechazo de la sesión por parte de la librería \texttt{can-isotp} en la Raspberry Pi.
 
@@ -435,6 +487,65 @@ Además de los cuatro modos OBD-II, el simulador implementa dos servicios UDS qu
 
     \item \textbf{Servicio \texttt{0x22} — ReadDataByIdentifier}: \texttt{handleMode22()} responde a los DID estándar \texttt{0xF190} (VIN), \texttt{0xF18C} (número de serie de la ECU) y \texttt{0xF189} (versión de software), accesibles en cualquier sesión, y a los DID propietarios de telemetría \texttt{0x2001}--\texttt{0x2008} (carga, refrigerante, RPM, velocidad, acelerador, combustible, aceite y batería), accesibles \textbf{solo en sesión extendida}. Una petición de un DID propietario fuera de la sesión extendida se rechaza con NRC \texttt{0x22} (\textit{conditionsNotCorrect}), y un DID desconocido con NRC \texttt{0x31} (\textit{requestOutOfRange}). Las respuestas que superan 7 bytes (como el VIN) se transmiten mediante la secuencia ISO-TP multi-frame genérica \texttt{sendMultiFrame()}.
 \end{itemize}
+
+Ambos servicios se implementaron manualmente, sin recurrir a ninguna librería UDS. El Listado~\ref{lst:handle_mode10} muestra el control de sesión (\texttt{0x10}): la respuesta positiva \texttt{0x50} devuelve los tiempos \texttt{P2}/\texttt{P2*} y cualquier subfunción distinta de \texttt{0x01}/\texttt{0x03} se rechaza con NRC.
+
+\begin{lstlisting}[language=C++,caption={Servicio UDS 0x10 — DiagnosticSessionControl (\texttt{handleMode10()}).},label={lst:handle_mode10}]
+bool handleMode10(uint8_t subFunc) {
+  if (subFunc != 0x01 && subFunc != 0x03) {            // solo default / extended
+    sendNegativeResponse(0x10, NRC_SUBFUNCTION_NOT_SUPP);
+    return true;
+  }
+  udsSession = subFunc;                                // cambia el estado de sesión
+  responseBuffer[0] = 0x50;                            // respuesta positiva (0x10 + 0x40)
+  responseBuffer[1] = subFunc;
+  responseBuffer[2] = 0x00; responseBuffer[3] = 0x19;  // P2   = 25 ms
+  responseBuffer[4] = 0x01; responseBuffer[5] = 0xF4;  // P2*  = 500 ms
+  responseLength = 6;
+  sendResponse();
+  return true;
+}
+\end{lstlisting}
+
+El Listado~\ref{lst:handle_mode22} recoge la lectura de datos por identificador (\texttt{0x22}). Se distingue entre DID estándar accesibles en cualquier sesión y DID propietarios que exigen sesión extendida: si no se cumple esa condición se responde con NRC \texttt{0x22} (\textit{conditionsNotCorrect}) y, si el DID no existe, con NRC \texttt{0x31} (\textit{requestOutOfRange}).
+
+\begin{lstlisting}[language=C++,caption={Servicio UDS 0x22 — ReadDataByIdentifier (\texttt{handleMode22()}, fragmento).},label={lst:handle_mode22}]
+bool handleMode22(uint16_t did) {
+  uint8_t payload[24];
+  uint8_t payloadLen = 0;
+  payload[0] = 0x62;                       // respuesta positiva (0x22 + 0x40)
+  payload[1] = (did >> 8) & 0xFF;
+  payload[2] = did & 0xFF;
+
+  switch (did) {
+    case 0xF190:                           // VIN: DID estándar, cualquier sesión
+      for (uint8_t i = 0; i < VIN_LENGTH; i++) payload[3 + i] = vehicle.vin[i];
+      payloadLen = 3 + VIN_LENGTH;
+      break;
+    case 0x2003:                           // RPM: DID propietario, solo extendida
+      if (udsSession != 3) {
+        sendNegativeResponse(0x22, NRC_CONDITIONS_NOT_CORRECT);   // NRC 0x22
+        return true;
+      }
+      encodeRPM(&payload[3], vehicle.rpm);
+      payloadLen = 5;
+      break;
+    // ... resto de DID 0x2001-0x2008 (misma comprobación de sesión) ...
+    default:
+      sendNegativeResponse(0x22, NRC_REQUEST_OUT_OF_RANGE);       // NRC 0x31
+      return true;
+  }
+
+  if (payloadLen <= ISOTP_SF_MAX_PAYLOAD) {            // cabe en Single Frame
+    memcpy(responseBuffer, payload, payloadLen);
+    responseLength = payloadLen;
+    sendResponse();
+  } else {
+    sendMultiFrame(payload, payloadLen);              // multi-frame (p. ej. VIN)
+  }
+  return true;
+}
+\end{lstlisting}
 
 
 \subsection{Mecanismos opcionales de variabilidad del bus}
@@ -465,6 +576,36 @@ El patrón de implementación sigue la práctica estándar para ISR en Arduino:
     \item Cada pulsación inserta secuencialmente el siguiente código del conjunto \texttt{DTC\_FAULT\_SET} (\texttt{P0300} (fallo de encendido), \texttt{P0171} (mezcla pobre) y \texttt{P0420} (eficiencia del catalizador)) en \texttt{dtcList[]} y activa el testigo \texttt{checkEngine}.
     \item Cuando ya hay tres averías activas, una pulsación adicional borra todas, permitiendo reiniciar el ciclo de prueba.
 \end{enumerate}
+
+El Listado~\ref{lst:isr_dtc} muestra el patrón ISR mínima con histéresis: la rutina de interrupción solo aplica el antirrebote por \texttt{millis()} e incrementa un contador \texttt{volatile}, dejando todo el trabajo pesado para el bucle principal.
+
+\begin{lstlisting}[language=C++,caption={Inyección de DTCs por interrupción: ISR mínima con histéresis (\texttt{onDTCPress()}) y procesamiento diferido (\texttt{handleDTCButton()}).},label={lst:isr_dtc}]
+volatile uint16_t dtcFlag    = 0;
+volatile uint32_t lastDtcISR = 0;
+
+// ISR minimalista: antirrebote por millis() + incremento de un contador volatil
+void onDTCPress() {
+  uint32_t now = millis();
+  if ((uint32_t)(now - lastDtcISR) < DTC_HYSTERESIS_MS) return;   // 300 ms
+  lastDtcISR = now;
+  dtcFlag++;
+}
+
+// Trabajo pesado fuera de la ISR, invocado desde loop() (Serial es seguro aqui)
+void handleDTCButton() {
+  if (!dtcFlag) return;
+  dtcFlag--;
+  if (numStoredDTCs >= DTC_FAULT_SET_SIZE) {       // cuarta pulsacion: borra todo
+    for (uint8_t i = 0; i < 8; i++) { dtcList[i].active = false; }
+    numStoredDTCs = 0; vehicle.numDTCs = 0; vehicle.checkEngine = false;
+  } else {                                         // inyecta el siguiente DTC del set
+    dtcList[numStoredDTCs].code   = DTC_FAULT_SET[numStoredDTCs];
+    dtcList[numStoredDTCs].active = true;
+    numStoredDTCs++;
+    vehicle.numDTCs = numStoredDTCs; vehicle.checkEngine = true;
+  }
+}
+\end{lstlisting}
 
 Esta funcionalidad permite al operador del banco de pruebas introducir averías de forma controlada durante una sesión de diagnóstico activa y verificar que la herramienta Python las detecta correctamente en la siguiente consulta del modo 0x03.
 
@@ -502,26 +643,49 @@ Sobre esta estructura base se aplica el patrón decorador en dos niveles. \textb
     \texttt{Obd2ProtocolBuilder},\ \texttt{Obd2DataDecoder}),\ \texttt{SqliteDataLogger}\big)
 \]
 
-El núcleo funcional de la herramienta es el ciclo de consulta de un PID, que orquesta las cuatro interfaces en la secuencia construir\,→\,enviar\,→\,recibir\,→\,validar\,→\,decodificar. El Algoritmo~\ref{alg:consulta_pid} describe este flujo, común a todas las operaciones del modo 0x01.
+El núcleo funcional de la herramienta es el ciclo de consulta de un PID, que orquesta las cuatro interfaces en la secuencia construir\,→\,enviar\,→\,recibir\,→\,validar\,→\,decodificar. El Listado~\ref{lst:consulta_pid} muestra este flujo en la clase \texttt{DiagnosticSession}, común a todas las operaciones del modo 0x01; cada método público sigue exactamente el mismo patrón de cuatro pasos.
 
-\begin{algorithm}[!htbp]
-\caption{Ciclo de consulta de un PID OBD-II (Modo 0x01)}
-\label{alg:consulta_pid}
-\begin{algorithmic}[1]
-\Require $pid$ (identificador de parámetro), $modo \gets \texttt{0x01}$
-\Ensure valor físico decodificado, con unidad
-\State $peticion \gets [\,modo,\ pid\,]$ \Comment{p.\,ej. \texttt{0x01 0x0C} para RPM}
-\State \Call{transporte.enviar}{$peticion$} \Comment{ISO-TP segmenta si $>7$ bytes}
-\State $resp \gets$ \Call{transporte.recibir}{} \Comment{reensambla ISO-TP; timeout 5\,s}
-\If{$resp[0] = \texttt{0x7F}$} \Comment{respuesta negativa (NRC)}
-    \State \textbf{lanzar} \textsc{NrcException}($resp[1]$, $resp[2]$)
-\ElsIf{$resp[0] \neq modo + \texttt{0x40}$}
-    \State \textbf{lanzar} \textsc{InvalidResponseError} \Comment{eco de modo inesperado}
-\EndIf
-\State $datos \gets resp[2{:}]$
-\State \Return \Call{decodificar}{$pid$, $datos$} \Comment{fórmula SAE J1979 del PID}
-\end{algorithmic}
-\end{algorithm}
+\begin{lstlisting}[language=Python,caption={Ciclo de consulta de un PID en \texttt{DiagnosticSession} (construir → enviar → recibir → validar → decodificar).},label={lst:consulta_pid}]
+def get_engine_rpm(self) -> float:
+    self._transport.send(self._builder.build_read_rpm_request())  # construir + enviar
+    raw = self._transport.receive()                               # recibir (ISO-TP reensambla)
+    self._decoder.validate_response(raw, expected_mode=0x01)      # validar (detecta NRC 0x7F)
+    return self._decoder.decode_rpm(raw)                          # decodificar (formula J1979)
+
+def get_dtcs(self) -> list[Dtc]:
+    self._transport.send(self._builder.build_read_dtcs_request())
+    raw = self._transport.receive()
+    self._decoder.validate_response(raw, expected_mode=0x03)
+    return self._decoder.decode_dtcs(raw)
+\end{lstlisting}
+
+La decodificación de los DTC (modo 0x03) es un ejemplo de implementación propia del formato SAE J2012. El Listado~\ref{lst:decode_dtcs} muestra cómo \texttt{decode\_dtcs()} recorre los pares de bytes y cómo \texttt{Dtc.from\_raw()} extrae la categoría (P/C/B/U) de los dos bits más significativos y los cuatro dígitos hexadecimales restantes.
+
+\begin{lstlisting}[language=Python,caption={Decodificación de DTCs en formato SAE J2012 (\texttt{decode\_dtcs()} y \texttt{Dtc.from\_raw()}).},label={lst:decode_dtcs}]
+# Bits 15-14 de la palabra de 2 bytes -> prefijo de categoria
+_DTC_PREFIX = {0b00: "P", 0b01: "C", 0b10: "B", 0b11: "U"}
+
+def decode_dtcs(self, raw: bytes) -> list[Dtc]:
+    dtc_count = raw[1]                       # num. de DTC en la respuesta
+    dtcs = []
+    for i in range(dtc_count):
+        offset = 2 + i * 2
+        pair = raw[offset: offset + 2]       # cada DTC ocupa 2 bytes
+        if pair == b"\x00\x00":
+            continue
+        dtcs.append(Dtc.from_raw(pair))
+    return dtcs
+
+@classmethod
+def from_raw(cls, raw: bytes, lang: str = "es") -> "Dtc":
+    prefix = _DTC_PREFIX[(raw[0] >> 6) & 0x03]   # categoria (P/C/B/U)
+    digit1 = (raw[0] >> 4) & 0x03
+    digit2 = raw[0] & 0x0F
+    digit3 = (raw[1] >> 4) & 0x0F
+    digit4 = raw[1] & 0x0F
+    code = f"{prefix}{digit1}{digit2:X}{digit3:X}{digit4:X}"   # p. ej. P0300
+    ...
+\end{lstlisting}
 
 
 \subsection{Capa de transporte CAN e ISO-TP}
@@ -552,12 +716,54 @@ El \texttt{SqliteDataLogger} acumula las muestras en un buffer en memoria y las 
 \subsection{Monitor de datos en tiempo real}
 
 El monitor de datos (\texttt{LiveDataMonitor}) se ejecuta en un hilo \textit{daemon} en segundo plano con un periodo de muestreo de 500\,ms por defecto. En cada ciclo consulta un conjunto configurable de PIDs del modo 0x01, decodifica los valores recibidos e invoca un \textit{callback} \texttt{on\_sample} por cada muestra. El \texttt{BtCommandHandler} agrupa las muestras de cada ciclo y las reenvía al cliente móvil como una única notificación BLE, además de almacenarlas en SQLite. El acceso al bus CAN se serializa con el hilo de atención a comandos mediante un \textit{lock}(candado de mutua exclusión) compartido.
-
 El conjunto de PIDs monitorizados por defecto incluye temperatura del refrigerante, carga calculada del motor, RPM, velocidad y posición del acelerador. La lista es configurable en tiempo de ejecución a través del comando JSON correspondiente.
+
+La sincronización entre el hilo de monitorización y el hilo de atención a comandos BLE es uno de los puntos críticos del diseño: ambos comparten el mismo bus CAN, por lo que una petición puntual (por ejemplo, leer los DTC) no puede solaparse con el ciclo de muestreo continuo. La solución consiste en inyectar un único \texttt{threading.Lock} compartido a ambos componentes. El Listado~\ref{lst:lock} muestra el ciclo de muestreo del monitor, que adquiere ese mismo \textit{lock} para enviar la petición, recibir la respuesta y descartar las tramas tardías de peticiones anteriores antes de liberarlo.
+
+\begin{lstlisting}[language=Python,caption={Acceso serializado al bus CAN desde el hilo de monitorización mediante el lock compartido (\texttt{LiveDataMonitor.\_poll\_single}).},label={lst:lock}]
+def _poll_single(self, pid_def):
+    if pid_def.pid in self._nrc_pids:          # PID ya marcado como no soportado
+        return
+    with self._lock:                           # mismo lock que el hilo de comandos BLE
+        self._transport.send(pid_def.request)
+        raw = self._transport.receive()
+        # descarta tramas tardias de peticiones previas sin soltar el lock
+        for _ in range(self._MAX_DRAIN):
+            if len(raw) < 2 or raw[0] == 0x7F or raw[1] == pid_def.pid:
+                break
+            raw = self._transport.receive()
+    # ... validacion y decodificacion fuera de la seccion critica ...
+\end{lstlisting}
+
+El mismo \texttt{self.\_lock} es el que adquiere \texttt{BtCommandHandler} en cada comando que accede al bus (\texttt{with self.\_lock: self.\_session.get\_dtcs()}), de modo que las peticiones puntuales y el muestreo continuo nunca compiten por el transporte.
 
 \subsection{Servidor BLE GATT}
 
-El servidor BLE se implementa mediante la librería \texttt{bless}, que proporciona una interfaz asíncrona (\texttt{asyncio}) para la gestión del servicio GATT. El servidor expone el servicio NUS con sus dos características (TX y RX) y gestiona la conexión del cliente BLE.
+El servidor BLE se implementa mediante la librería \texttt{bless}, que proporciona una interfaz asíncrona (\texttt{asyncio}) para la gestión del servicio GATT. El servidor expone el servicio NUS con sus dos características (TX y RX) y gestiona la conexión del cliente BLE. El Listado~\ref{lst:ble_init} muestra la publicación del servicio NUS: la característica RX se declara con permisos de escritura (recepción de comandos) y la TX con la propiedad \textit{notify} (envío de respuestas y telemetría).
+
+\begin{lstlisting}[language=Python,caption={Inicialización del servidor BLE GATT con el servicio NUS (\texttt{bless} sobre \texttt{asyncio}).},label={lst:ble_init}]
+_NUS_SERVICE = "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
+_NUS_RX      = "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
+_NUS_TX      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
+
+async def _start_server(self) -> None:
+    self._server = BlessServer(name=_BLE_NAME, loop=self._loop)
+    self._server.read_request_func  = self._on_read
+    self._server.write_request_func = self._on_write
+
+    await self._server.add_new_service(_NUS_SERVICE)
+    await self._server.add_new_characteristic(          # RX: el cliente escribe comandos
+        _NUS_SERVICE, _NUS_RX,
+        GATTCharacteristicProperties.write | GATTCharacteristicProperties.write_without_response,
+        None, GATTAttributePermissions.writeable,
+    )
+    await self._server.add_new_characteristic(          # TX: notifica respuestas/telemetria
+        _NUS_SERVICE, _NUS_TX,
+        GATTCharacteristicProperties.notify,
+        None, GATTAttributePermissions.readable,
+    )
+    await self._server.start()
+\end{lstlisting}
 
 El manejador de comandos \texttt{BtCommandHandler} recibe los objetos JSON escritos por el cliente en la característica RX, los despacha al método correspondiente (sobre la \texttt{LoggedDiagnosticSession}, el logger o el transporte según el comando) y envía la respuesta JSON como notificación en la característica TX.
 
@@ -578,37 +784,69 @@ Los comandos JSON implementados son:
     \item \verb|{"cmd": "disconnect"}|: cierre ordenado de la sesión.
 \end{itemize}
 
-El comando \verb|probe_pids| merece una mención aparte por su lógica en dos etapas: primero declara los PIDs soportados leyendo las máscaras de bits estándar (\texttt{0x00}, \texttt{0x20}, \dots), y después confirma cada uno con una consulta real para descartar falsos positivos. El Algoritmo~\ref{alg:probe_pids} explica este procedimiento.
+Los comandos \texttt{uds\_session} y \texttt{uds\_read\_did} se atienden a través de un cliente UDS propio (\texttt{UdsSession}). Una decisión de diseño relevante es que la comprobación de sesión se realiza \textbf{localmente} antes de acceder al bus: si se solicita un DID propietario sin estar en sesión extendida, el cliente lanza la excepción correspondiente sin llegar a emitir la petición CAN, como muestra el Listado~\ref{lst:uds_client}.
 
-\begin{algorithm}[H]
-\caption{Descubrimiento de PIDs soportados (\texttt{probe\_pids})}
-\label{alg:probe_pids}
-\begin{algorithmic}[1]
-\State $declarados \gets \emptyset$
-\For{cada PID de soporte $s \in \{\texttt{0x00}, \texttt{0x20}, \dots, \texttt{0xE0}\}$}
-    \State enviar $[\texttt{0x01}, s]$;\quad $resp \gets$ recibir()
-    \If{$resp$ es respuesta válida a $s$}
-        \State $mask \gets$ 32 bits de $resp[2..5]$
-        \For{$i \gets 0$ \textbf{to} $31$}
-            \If{bit $i$ de $mask$ está activo}
-                \State añadir $(s + i + 1)$ a $declarados$
-            \EndIf
-        \EndFor
-        \If{bit menos significativo de $mask$ $= 0$}
-            \State \textbf{break} \Comment{no se anuncia el siguiente rango}
-        \EndIf
-    \EndIf
-\EndFor
-\State $confirmados \gets \emptyset$
-\For{cada $pid \in declarados$ (ordenados)}
-    \State enviar $[\texttt{0x01}, pid]$;\quad $resp \gets$ recibir()
-    \If{$resp$ es positiva y hace eco de $pid$}
-        \State añadir $pid$ a $confirmados$
-    \EndIf
-\EndFor
-\State \Return $confirmados \cap \{$PIDs con decodificador$\}$
-\end{algorithmic}
-\end{algorithm}
+\begin{lstlisting}[language=Python,caption={Cliente UDS: control de sesión y lectura de DID con validación local de sesión (\texttt{UdsSession}).},label={lst:uds_client}]
+def set_session(self, session_type: int) -> dict:
+    req = self._builder.build_session_control(session_type)
+    self._transport.send(req)
+    raw = self._transport.receive()
+    response = self._decoder.validate_response(raw, _SID_SESSION_CTRL)
+    info = self._decoder.decode_session_info(response)
+    self._current_session = session_type          # recuerda la sesion activa
+    return info
+
+def read_did(self, did: int) -> object:
+    definition = _dids.DIDS.get(did)
+    if definition is None:
+        raise InvalidResponseError(f"DID 0x{did:04X} not in registry")
+    # validacion LOCAL: no se accede al bus si la sesion no es la correcta
+    if definition.extended_only and self._current_session != _dids.UDS_SESSION_EXTENDED:
+        raise NrcException(mode=_SID_READ_DATA_BY_ID, nrc_code=0x7E)
+    req = self._builder.build_read_did(did)
+    self._transport.send(req)
+    raw = self._transport.receive()
+    response = self._decoder.validate_response(raw, _SID_READ_DATA_BY_ID)
+    return self._decoder.decode_did(response, did)
+\end{lstlisting}
+
+El comando \verb|probe_pids| merece una mención aparte por su lógica en dos etapas: primero declara los PIDs soportados leyendo las máscaras de bits estándar (\texttt{0x00}, \texttt{0x20}, \dots), y después confirma cada uno con una consulta real para descartar falsos positivos. El Listado~\ref{lst:probe_pids} recoge la implementación real de este procedimiento.
+
+\begin{lstlisting}[language=Python,caption={Descubrimiento de PIDs soportados en dos etapas (\texttt{\_probe\_pids}).},label={lst:probe_pids}]
+def _probe_pids(self, _cmd: dict) -> dict:
+    # Etapa 1: PIDs declarados via mascaras de disponibilidad
+    declared: set[int] = set()
+    for support_pid in (0x00, 0x20, 0x40, 0x60, 0x80, 0xA0, 0xC0, 0xE0):
+        try:
+            with self._lock:
+                self._transport.send(bytes([0x01, support_pid]))
+                raw = self._transport.receive()
+            if len(raw) >= 6 and raw[0] == 0x41 and raw[1] == support_pid:
+                mask = (raw[2] << 24) | (raw[3] << 16) | (raw[4] << 8) | raw[5]
+                for i in range(32):
+                    if mask & (0x80000000 >> i):
+                        declared.add(support_pid + i + 1)
+                if not (mask & 0x01):            # no se anuncia el siguiente rango
+                    break
+        except Exception:
+            break
+
+    # Etapa 2: confirmar cada PID con una consulta real (descarta falsos positivos)
+    confirmed: set[int] = set()
+    for pid in sorted(declared):
+        try:
+            with self._lock:
+                self._transport.send(bytes([0x01, pid]))
+                raw = self._transport.receive()
+            if len(raw) >= 2 and raw[0] == 0x41 and raw[1] == pid:
+                confirmed.add(pid)
+        except Exception:
+            pass
+
+    # solo se exponen los PIDs que tienen decodificador
+    self._supported_pids = confirmed & set(PIDS.keys())
+    return {"status": "ok", "data": sorted(self._supported_pids)}
+\end{lstlisting}
 
 % ======================================================================
 \section{Aplicación móvil — React Native}
@@ -773,41 +1011,41 @@ La librería \texttt{react-native-ble-plx} gestiona las operaciones BLE de bajo 
 
 El protocolo se basa en mensajes JSON delimitados por saltos de línea (NDJSON): tanto la Raspberry Pi como la aplicación fragmentan los mensajes que superan el tamaño de escritura BLE (240 bytes) y los reensamblan en el receptor acumulando los fragmentos hasta el delimitador \texttt{\textbackslash n}. La aplicación negocia un MTU de 128 bytes en la conexión. En la práctica, la fragmentación solo se produce en las respuestas de historial de sesiones con un número elevado de muestras.
 
-El receptor debe resolver dos problemas simultáneamente: reensamblar las notificaciones BLE (que pueden llegar fragmentadas o agrupar varios mensajes) y emparejar cada respuesta con su petición sin bloquear el flujo de muestras de la monitorización continua. El Algoritmo~\ref{alg:ndjson} describe la lógica del adaptador: un búfer de recepción acumula los fragmentos y los separa por el delimitador \texttt{\textbackslash n}, mientras que un despachador encamina cada mensaje según su tipo. Los mensajes asíncronos (muestras de telemetría y \textit{heartbeats}) se entregan a los \textit{callbacks} del monitor o se responden de inmediato; el resto se empareja con la petición pendiente más antigua de una cola FIFO, que resuelve o rechaza la promesa correspondiente. La implementación completa figura en los listados del Anexo~\ref{anexo:app}.
+El receptor debe resolver dos problemas simultáneamente: reensamblar las notificaciones BLE (que pueden llegar fragmentadas o agrupar varios mensajes) y emparejar cada respuesta con su petición sin bloquear el flujo de muestras de la monitorización continua. El Listado~\ref{lst:ndjson} muestra la lógica real del adaptador: un búfer de recepción acumula los fragmentos y los separa por el delimitador \texttt{\textbackslash n}, mientras que un despachador encamina cada mensaje según su tipo. Los mensajes asíncronos (muestras de telemetría y \textit{heartbeats}) se entregan a los \textit{callbacks} del monitor o se responden de inmediato; el resto se empareja con la petición pendiente más antigua de una cola FIFO, que resuelve o rechaza la promesa correspondiente. La implementación completa está disponible en el repositorio del proyecto.
+% ============================================================================
 
-\begin{algorithm}[H]
-\caption{Reensamblado NDJSON y emparejamiento petición-respuesta}
-\label{alg:ndjson}
-\begin{algorithmic}[1]
-\State \textbf{Estado:} $buffer \gets \text{``''}$;\quad $cola \gets$ FIFO vacía de peticiones pendientes
-\Statex
-\Function{alRecibirNotificación}{$fragmento$}
-    \State $buffer \gets buffer \mathbin{+} \textsc{decodificar}(fragmento)$
-    \State $lineas \gets \textsc{separar}(buffer, \texttt{\textbackslash n})$
-    \State $buffer \gets$ último elemento de $lineas$ \Comment{fragmento incompleto}
-    \For{cada $linea$ completa de $lineas$}
-        \If{$linea$ no está vacía}
-            \State $msg \gets \textsc{parsearJSON}(linea)$;\quad \Call{despachar}{$msg$}
-        \EndIf
-    \EndFor
-\EndFunction
-\Statex
-\Function{despachar}{$msg$}
-    \If{$msg.type \in \{samples, sample, error\}$}
-        \State entregar $msg$ a los \textit{callbacks} del monitor \Comment{flujo asíncrono}
-    \ElsIf{$msg.type = heartbeat$}
-        \State enviar \textit{heartbeat\_ack}
-    \Else
-        \State $pendiente \gets$ \Call{cola.extraer}{} \Comment{petición más antigua}
-        \If{$msg.status = ok$}
-            \State \textbf{resolver} $pendiente$ con $msg.data$
-        \Else
-            \State \textbf{rechazar} $pendiente$ con $msg.message$
-        \EndIf
-    \EndIf
-\EndFunction
-\end{algorithmic}
-\end{algorithm}
+\begin{lstlisting}[language=JavaScript,caption={Reensamblado NDJSON y emparejamiento petición-respuesta en el adaptador BLE (React Native).},label={lst:ndjson}]
+// Buffer de recepcion: acumula fragmentos y los separa por '\n'
+private feedBuffer(chunk: string): void {
+  this.rxBuf += chunk;
+  const lines = this.rxBuf.split('\n');
+  this.rxBuf = lines.pop() ?? '';          // ultimo trozo = linea incompleta
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      this.dispatch(JSON.parse(t));         // JSON malformado -> se ignora
+    } catch { /* skip */ }
+  }
+}
+
+private dispatch(msg: Record<string, unknown>): void {
+  // Mensajes asincronos: se entregan a los callbacks del monitor
+  if (msg.type === 'samples') {
+    (msg.samples as MonitorSample[]).forEach(
+      (s) => this.sampleCbs.forEach((cb) => cb(s)));
+    return;
+  }
+  if (msg.type === 'heartbeat') { this.sendHeartbeatAck(); return; }
+
+  // Respuesta a comando: se empareja con la peticion mas antigua (cola FIFO)
+  const pending = this.queue.shift();
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  if (msg.status === 'ok') pending.resolve(msg.data);
+  else pending.reject(new Error((msg.message as string) ?? 'Server error'));
+}
+\end{lstlisting}
 
 % ======================================================================
 \section{Integración y pruebas}
