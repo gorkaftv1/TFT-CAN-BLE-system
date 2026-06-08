@@ -3,17 +3,15 @@
   "compilerOptions": {
     "strict": true,
     "resolveJsonModule": true,
-    "ignoreDeprecations": "5.0",
     "jsx": "react-native",
-    "baseUrl": "./src",
     "paths": {
-      "config/*": ["config/*"],
-      "infrastructure/*": ["infrastructure/*"],
-      "domain/*": ["domain/*"],
-      "stores/*": ["stores/*"],
-      "screens/*": ["screens/*"],
-      "navigation/*": ["navigation/*"],
-      "shared/*": ["shared/*"]
+      "config/*": ["./src/config/*"],
+      "infrastructure/*": ["./src/infrastructure/*"],
+      "domain/*": ["./src/domain/*"],
+      "stores/*": ["./src/stores/*"],
+      "screens/*": ["./src/screens/*"],
+      "navigation/*": ["./src/navigation/*"],
+      "shared/*": ["./src/shared/*"]
     }
   }
 }

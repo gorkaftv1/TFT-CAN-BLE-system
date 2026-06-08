@@ -51,8 +51,7 @@ export class LogService {
         if (typeof obj.data === 'string') decoded += ` data='${obj.data}'`;
       }
     } catch {}
-    const preview = json.length > 200 ? json.slice(0, 200) + '...' : json;
-    push('ble_rx', `RX - [BLE]\n  RAW    : ${preview}\n  DECODED: ${decoded}`);
+    push('ble_rx', `RX - [BLE]\n  RAW    : ${json}\n  DECODED: ${decoded}`);
   }
 
   // OBD2 sample received
