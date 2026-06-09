@@ -1,9 +1,9 @@
 \section{Estado del Arte}
 \label{sec:protocolos}
 
-Tal y como se ha comentado en la introducción, la industria automotriz ha evolucionado hacia una sensorización masiva en la que el vehículo moderno cuenta con un complejo ecosistema compuesto por numerosos microcontroladores que producen una enorme cantidad de datos en tiempo real. Muchos de estos componentes son críticos, ya que se encargan de monitorizar módulos de seguridad y sistemas de asistencia a la conducción (ADAS). Con lo que este ecosistema de microcontroladores requiere de una infraestructura de red  robusta, capaz de gestionar la criticidad y la priorización de la información.
+Tal y como se ha comentado en la introducción, la industria automotriz ha evolucionado hacia una sensorización del vehículo moderno cuenta con un complejo ecosistema compuesto por numerosos microcontroladores que producen una cantidad de datos importante en tiempo real~\cite{CSSElec_OBD2, CiA_CANhistory}. Muchos de estos componentes son críticos, ya que se encargan de monitorizar módulos de seguridad y sistemas de asistencia a la conducción (ADAS)~\cite{CARB_OBDII}\footnote{Entre los sistemas ADAS más habituales se encuentran el ABS (\textit{Anti-lock Braking System}), el ESP (\textit{Electronic Stability Program}), el TPMS (\textit{Tyre Pressure Monitoring System}) y los sistemas de frenada automática de emergencia (AEB, \textit{Autonomous Emergency Braking}).}. Con lo que este ecosistema de microcontroladores requiere de una infraestructura de red robusta, capaz de gestionar la criticidad y la priorización de la información~\cite{ISO11898-1:2024}.
 
-Para entender adecuadamente el diseño y desarrollo del sistema de diagnóstico desarrollado en este trabajo, se van a estudiar los protocolos de comunicación sobre los que se mueven los datos. Con lo que a continuación en este capítulo se realizará un estudio detallado sobre los disintos estándares, comenzando por la capa física y de enlace del bus CAN (\textit{Controller Area Network}), hasta llegar a los protocolos de la capa de aplicación como el UDS (\textit{Unified Diagnosis Services}) y pasando la capa de transporte ISO-TP.
+Para entender adecuadamente el diseño y desarrollo del sistema de diagnóstico desarrollado en este trabajo, se van a estudiar los protocolos de comunicación sobre los que se mueven los datos. Con lo que a continuación en este capítulo se realizará un estudio detallado sobre los distintos estándares, comenzando por la capa física y de enlace del bus CAN (\textit{Controller Area Network}), hasta llegar a los protocolos de la capa de aplicación como el UDS (\textit{Unified Diagnostic Services}) y pasando la capa de transporte ISO-TP.
 
 Posteriormente, se realizará una explicación sobre las plataformas de hardware y las herramientas software empleadas para la implementación y validación del sistema, analizando las arquitecturas de Raspberry Pi y Arduino, así como las características del protocolo inalámbrico \textit{Bluetooth Low Energy} (BLE) utilizado para la transmisión y visualización de los datos en smartphones y tablets.
 
@@ -20,54 +20,48 @@ La estructura de la trama de datos CAN 2.0A se recoge en la tabla~\ref{tab:can_f
 \input{figuras/fig_can_frame.tex}
 \end{table}
 
-El campo \textbf{Identificador (ID)} determina tanto la prioridad del mensaje como su propósito lógico mediante un \textbf{arbitraje no destructivo}: ante una colisión, los nodos comparan bit a bit su identificador y el mensaje de menor valor numérico gana el bus sin que ninguna trama se corrompa, lo que garantiza una latencia determinista para los mensajes más prioritarios (ABS, ESP, airbag)~\cite{ISO11898-1:2024}. En el contexto OBD-II, el escáner emplea el identificador \texttt{0x7DF} (funcional/\textit{broadcast}) o \texttt{0x7E0} (dirigido a la ECU), y la ECU responde con \texttt{0x7E8}~\cite{ISO15765-4:2021}.
+El campo \textbf{Identificador (ID)} determina tanto la prioridad del mensaje como su propósito lógico mediante un \textbf{arbitraje no destructivo}\footnote{A diferencia de Ethernet (CSMA/CD), donde una colisión corrompe todas las tramas implicadas y obliga a retransmitir, el arbitraje CAN es \textit{no destructivo}: el nodo que pierde el bus detecta la derrota y retira su trama sin dañarla, reintentándola en cuanto el bus queda libre. Esto garantiza que el mensaje más prioritario siempre se transmite sin demora adicional.}: ante una colisión, los nodos comparan bit a bit su identificador y el mensaje de menor valor numérico gana el bus sin que ninguna trama se corrompa, lo que garantiza una latencia determinista para los mensajes más prioritarios (ABS, ESP, airbag)~\cite{ISO11898-1:2024}. En el contexto OBD-II, el escáner emplea el identificador \texttt{0x7DF} (funcional/\textit{broadcast}) o \texttt{0x7E0} (dirigido a la ECU), y la ECU responde con \texttt{0x7E8}~\cite{ISO15765-4:2021}.
 
-El campo \textbf{DLC} (\textit{Data Length Code}) limita el \textit{payload} a un máximo de 8 bytes~\cite{ISO11898-1:2024}; OBD-II emplea tramas de 8 bytes rellenando con \textit{padding} los no utilizados~\cite{ISO15765-4:2021}. Precisamente esta limitación a 8 bytes es la que obliga a introducir una capa de transporte (ISO-TP) para los mensajes más largos, como el VIN. En la Raspberry Pi, el bus se expone mediante la interfaz \texttt{SocketCAN} de Linux a través del controlador MCP2515~\cite{Microchip_MCP2515, Waveshare_RS485CANHAT}, accesible desde Python con la librería \texttt{python-can}.
+El campo \textbf{DLC} (\textit{Data Length Code}) limita el \textit{payload} a un máximo de 8 bytes~\cite{ISO11898-1:2024}; OBD-II emplea tramas de 8 bytes rellenando con \textit{padding} los no utilizados~\cite{ISO15765-4:2021}. Precisamente esta limitación a 8 bytes es la que obliga a introducir una capa de transporte (ISO-TP) para los mensajes más largos, como el VIN (\textbf{Vehicle Identification Number}). En la Raspberry Pi, el bus se expone mediante la interfaz \texttt{SocketCAN}~\cite{LinuxKernel_SocketCAN} de GNU/Linux a través del controlador MCP2515, accesible desde Python con la librería \texttt{python-can}~\cite{Twiss23-pythoncan}.
 
 \subsection{ISO-TP - Transport Protocol (ISO 15765-2)}
 \label{sec:proto_isotp}
 
 El protocolo ISO-TP, definido en la ISO~15765-2~\cite{ISO15765-2:2016}, opera en la capa de transporte, entre la capa de enlace CAN y la capa de aplicación OBD-II. Su función es segmentar y reensamblar mensajes en tramas CAN cuyo campo de datos está limitado a 8~bytes. El campo \textit{First Frame Data Length} (\texttt{FF\_DL}) de 12~bits limita los mensajes a un máximo de 4\,095~bytes. ISO~15765-2:2016 introduce además una secuencia de escape (\texttt{FF\_DL = 0x000} seguido de una longitud de 4~bytes) para mensajes más largos, aunque en el contexto OBD-II el límite de 4\,095~bytes~\cite{ISO15765-2:2016} es suficiente.
 
-ISO-TP define cuatro tipos de trama, identificados por el nibble más significativo del primer byte de datos (campo PCI, \textit{Protocol Control Information}), tal como se muestra en la tabla~\ref{tab:isotp_frames}.
+ISO-TP define cuatro tipos de trama, identificados por el nibble\footnote{Un \textit{nibble} es un grupo de 4 bits, la mitad de un byte. En notación hexadecimal equivale a un único dígito (0x0--0xF).} más significativo del primer byte de datos (campo PCI, \textit{Protocol Control Information}), tal como se muestra en la tabla~\ref{tab:isotp_frames}.
 \begin{table}[!htbp]
 \caption{Estructura de los cuatro tipos de trama ISO-TP según ISO~15765-2~\cite{ISO15765-2:2016}. Los bytes de \textit{padding} (\texttt{0xAA}) en FC son ignorados por el receptor. Leyenda de campos bajo la tabla.}
 \label{tab:isotp_frames}
 \input{figuras/fig_isotp_frames.tex}
 \end{table}
 
-\begin{tabular}{@{}ll@{}}
-\textbf{N}    & longitud \textit{payload} (SF, 1--7) o número de secuencia módulo 16 (CF, 0x1--0xF\,$\rightarrow$\,0x0) \\
-\textbf{H:LL} & longitud total del mensaje en 12 bits (FF, máx.\ 4\,095 bytes) \\
+\begin{tabular}{@{}lp{13cm}@{}}
+\textbf{N}    & longitud \textit{payload} (SF (\textit{Single Frame}), 1--7) o número de secuencia módulo 16 (CF (\textit{Consecutive Frame}), 0x1--0xF\,$\rightarrow$\,0x0) \\
+\textbf{H:LL} & longitud total del mensaje en 12 bits (FF (\textit{First Frame}), máx.\ 4\,095 bytes) \\
 \textbf{FS}   & \textit{Flow Status}: 0 = \textit{ContinueSending}, 1 = \textit{Wait}, 2 = \textit{Overflow} \\
-\textbf{BS}   & \textit{Block Size}: CFs antes del siguiente FC (0 = sin límite) \\
+\textbf{BS}   & \textit{Block Size}: CFs antes del siguiente FC (\textit{Flow Control}) (0 = sin límite) \\
 \textbf{STmin}& separación mínima entre CFs: 0x00--0x7F\,=\,0--127\,ms;\enspace 0xF1--0xF9\,=\,100--900\,\textmu s \\
 \end{tabular}
 
 Para mensajes de hasta 7~bytes de datos útiles (suficiente para la mayor parte de peticiones OBD-II en modo \texttt{0x01}), se utiliza el \textbf{Single Frame} (SF). Su byte PCI tiene el formato \texttt{0x0N}, donde \texttt{N}~$\in \{1\ldots7\}$ e indica la longitud del \textit{payload}, seguido directamente por los bytes de datos~\cite{ISO15765-2:2016}.
 
-Para mensajes más largos, como la respuesta al PID (\textit{Parameter Identifier}) \texttt{0x09~0x02} (VIN, 20~bytes en total), el flujo de transmisión multi-frame ilustrado en la figura~\ref{fig:isotp_multiframe} sigue la secuencia:
+Para mensajes más largos, como la respuesta al PID (\textit{Parameter Identifier})\footnote{Un PID es un código numérico de 1 byte que identifica unívocamente el parámetro solicitado dentro de un modo de servicio OBD-II. SAE~J1979 define hasta 96 PIDs para el modo 0x01, aunque ningún fabricante está obligado a implementarlos todos; los PIDs de soporte (\texttt{0x00}, \texttt{0x20}, \texttt{0x40}) permiten al escáner descubrir dinámicamente qué PIDs están disponibles en la ECU.} \texttt{0x09~0x02} (VIN, 20~bytes en total), el flujo de transmisión multi-frame ilustrado en la figura~\ref{fig:isotp_multiframe} sigue la secuencia:
 
 \begin{enumerate}
-    \item El transmisor envía una \textbf{First Frame} (FF): los dos primeros bytes de PCI codifican el nibble \texttt{0x1} y la longitud total en 12~bits (\texttt{FF\_DL}), seguidos de los primeros 6~bytes de datos~\cite{ISO15765-2:2016}. La distribución a nivel de bit de estos dos bytes de PCI se detalla en la tabla~\ref{tab:isotp_ff_pci}.
+    \item El transmisor envía una \textbf{First Frame} (FF): los dos primeros bytes de PCI codifican el nibble \texttt{0x1} y la longitud total en 12~bits (\texttt{FF\_DL}), seguidos de los primeros 6~bytes de datos~\cite{ISO15765-2:2016}. La distribución a nivel de bit de estos dos bytes de PCI se detalla en la tabla~\ref{tab:isotp_frames}.
     \item El receptor responde con un \textbf{Flow Control} (FC): el nibble inferior del primer byte PCI es el \textit{Flow Status} (\texttt{FS}), que puede valer 0 (\textit{ContinueSending}: el transmisor puede proceder), 1 (\textit{Wait}: el receptor solicita esperar) o 2 (\textit{Overflow}: el receptor no puede aceptar el mensaje). Los bytes siguientes indican el \textit{Block Size} (\texttt{BS}: número máximo de CFs antes del siguiente FC; \texttt{BS = 0} significa que no se requiere ningún FC adicional) y el \textit{Separation Time minimum} (\texttt{STmin}: 0x00--0x7F = 0--127\,ms con resolución de 1\,ms; 0xF1--0xF9 = 100--900\,\textmu s con resolución de 100\,\textmu s)~\cite{ISO15765-2:2016}.
     \item El transmisor envía los \textbf{Consecutive Frames} (CF) necesarios. Cada CF lleva en el nibble inferior del byte PCI (\texttt{0x2}) un contador de secuencia (\texttt{SN}) que comienza en~1 y se incrementa módulo~16 (es decir, 0xF $\rightarrow$ 0x0)~\cite{ISO15765-2:2016}. Si \texttt{BS}~$>~0$, el transmisor pausa tras enviar \texttt{BS}~CFs y aguarda un nuevo FC antes de continuar.
 \end{enumerate}
 
-\begin{table}[!htbp]
-\caption{Distribución de bits de los 2 bytes de PCI de una \textit{First Frame} ISO-TP según ISO~15765-2~\cite{ISO15765-2:2016}. El nibble \texttt{0x1} identifica el tipo de trama y los 12~bits restantes codifican \texttt{FF\_DL} (longitud total del mensaje).}
-\label{tab:isotp_ff_pci}
-\input{figuras/fig_isotp_ff_pci.tex}
-\end{table}
-
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=1\textwidth]{Ilustraciones/isotp_multiframe_sequence.png}
 \caption{Secuencia de intercambio ISO-TP para la obtención del VIN (20~bytes: modo 0x49, PID 0x02, contador 0x01 y 17~bytes ASCII). El escáner envía una petición Single Frame, la ECU responde con First Frame + Flow Control (BS=0, STmin=0) + dos Consecutive Frames.}
 \label{fig:isotp_multiframe}
 \end{figure}
 
-El Algoritmo~\ref{alg:isotp_tx} resume la lógica general de transmisión de un mensaje según ISO-TP: si el mensaje cabe en 7~bytes se envía en una única \textit{Single Frame}; en caso contrario se segmenta en una \textit{First Frame} seguida de tantas \textit{Consecutive Frames} como sean necesarias, respetando el \textit{Flow Control}, el \textit{Block Size} y la separación mínima entre tramas indicados por el receptor.
+El Algoritmo~\ref{alg:isotp_tx} resume la lógica general de transmisión de un mensaje según ISO-TP: si el mensaje cabe en 7~bytes se envía en una única \textit{Single Frame}. En caso contrario se segmenta en una \textit{First Frame} seguida de tantas \textit{Consecutive Frames} como sean necesarias, respetando el \textit{Flow Control}, el \textit{Block Size} y la separación mínima entre tramas indicados por el receptor.
 
 \begin{algorithm}[H]
 \caption{Transmisión segmentada de un mensaje según ISO-TP (ISO~15765-2).}
@@ -102,13 +96,13 @@ La implementación Python utiliza la librería \textbf{\texttt{can-isotp}} sobre
 
 OBD-II es el estándar de diagnóstico del vehículo, obligatorio en todos los vehículos en Estados Unidos desde el año 1996, que define los servicios y parámetros que toda ECU debe implementar~\cite{SAEJ1979:2014, CARB_OBDII}. En la práctica, la comunicación OBD-II se estructura como un protocolo de petición-respuesta a nivel de aplicación, transportado sobre ISO-TP~\cite{ISO15765-4:2021}.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \caption{Estructura de trama OBD-II: petición (CAN ID \texttt{0x7E0}) y respuesta (CAN ID \texttt{0x7E8}) para el PID \texttt{0x0C} (RPM) según SAE~J1979~\cite{SAEJ1979:2014}.}
 \label{tab:obd2_format}
 \input{figuras/fig_obd2_format.tex}
 \end{table}
 
-Cada petición OBD-II incluye un byte de modo y, opcionalmente, uno o más bytes de PID para solicitar la información únicamente de esos PIDs. La respuesta de la ECU incluye el modo de respuesta (modo + \texttt{0x40}), el o los PIDs solicitados y los bytes de datos codificados, cuya interpretación depende de la fórmula de decodificación definida por el estándar para cada PID~\cite{SAEJ1979:2014}.
+Cada petición OBD-II incluye un byte de modo y, opcionalmente, uno o más bytes de PID para solicitar la información únicamente de esos PIDs (\textit{Parameters Identifiers}). La respuesta de la ECU incluye el modo de respuesta (modo + \texttt{0x40}), el o los PIDs solicitados y los bytes de datos codificados, cuya interpretación depende de la fórmula de decodificación definida por el estándar para cada PID~\cite{SAEJ1979:2014}.
 
 El Algoritmo~\ref{alg:obd2_cycle} describe el ciclo genérico de petición-respuesta de un parámetro en tiempo real (modo \texttt{0x01}): el escáner envía el par modo-PID, la ECU responde con el eco del modo incrementado en \texttt{0x40} y los datos, o bien con una respuesta negativa que el escáner debe detectar antes de intentar decodificar.
 
@@ -131,52 +125,52 @@ El Algoritmo~\ref{alg:obd2_cycle} describe el ciclo genérico de petición-respu
 \end{algorithmic}
 \end{algorithm}
 
+\vspace{1cm}
+
 SAE~J1979 define diez servicios de diagnóstico, numerados del modo \texttt{0x01} al \texttt{0x0A}~\cite{SAEJ1979:2014}. Estos servicios cubren desde la lectura de datos en tiempo real hasta la gestión de códigos de avería, la consulta de resultados de los monitores a bordo y la identificación del vehículo. A continuación se describe cada uno de ellos:
 
 \begin{itemize}
-    % CAMBIO: corregido conteo de PIDs de 23 a 25 y ampliada la lista con todos los grupos
-    \item \textbf{Modo 0x01 - Datos en tiempo real (PIDs activos).} Permite consultar el valor actual de parámetros operativos del motor~\cite{SAEJ1979:2014}. Se han implementado 25 PIDs(la tabla completa con todos los PIDs definidos en el OBD-II se encuentra en el Anexo~\ref{anx:obd2_pids_full}) agrupados en cinco categorías: 
+    \item \textbf{Modo 0x01 - Datos en tiempo real (PIDs activos).} Permite consultar el valor actual de parámetros operativos del motor~\cite{SAEJ1979:2014}. Se han implementado 25 PIDs (la tabla completa con todos los PIDs definidos en el OBD-II se encuentra en el Anexo~\ref{anx:obd2_pids_full}) agrupados en seis categorías:
     \begin{enumerate}
-        \item \textbf{motor} (carga \texttt{0x04}, RPM \texttt{0x0C}, avance encendido \texttt{0x0E}, tiempo desde arranque \texttt{0x1F}, carga absoluta \texttt{0x43}).
-        \item \textbf{térmicos} (temperatura refrigerante \texttt{0x05}, temperatura aire admisión \texttt{0x0F}, temperatura aceite \texttt{0x5C}, temperatura exterior \texttt{0x46}).
-        \item \textbf{combustible} (presión \texttt{0x0A}, MAP \texttt{0x0B}, flujo MAF \texttt{0x10}, nivel \texttt{0x2F}, presión rampa \texttt{0x23}, consumo \texttt{0x5E}, trim corto/largo B1 \texttt{0x06}/\texttt{0x07}).
-        \item \textbf{cinemática} (velocidad \texttt{0x0D}, distancia desde borrado DTC \texttt{0x31})
-        \item \textbf{eléctrico y posición} (tensión de batería \texttt{0x42}, presión barométrica \texttt{0x33}, posición acelerador \texttt{0x11}/\texttt{0x47}, pedal acelerador D/E \texttt{0x49}/\texttt{0x4A}.
-        \item \textbf{descubrimiento} (PID especial para solicitar los PIDs soportados por la ECU).
+        \item \textbf{Motor}: parámetros fundamentales del funcionamiento del motor: carga (\texttt{0x04}), régimen (\texttt{0x0C}), avance del encendido (\texttt{0x0E}), tiempo en marcha desde el arranque (\texttt{0x1F}) y carga absoluta (\texttt{0x43}).
+        \item \textbf{Térmicos}: temperaturas críticas del sistema que permiten detectar condiciones de sobretemperatura: refrigerante (\texttt{0x05}), aire de admisión (\texttt{0x0F}), aceite (\texttt{0x5C}) y temperatura exterior (\texttt{0x46}).
+        \item \textbf{Combustible}: estado del sistema de alimentación: presión de combustible (\texttt{0x0A}), presión del colector de admisión (MAP, \texttt{0x0B}), flujo másico de aire (MAF, \textit{Mass Air Flow}, \texttt{0x10}), nivel (\texttt{0x2F}), presión de rampa (\texttt{0x23}), consumo instantáneo (\texttt{0x5E}) y ajustes de mezcla a corto y largo plazo del banco~1 (\textit{fuel trim}, \texttt{0x06}/\texttt{0x07}). Los \textit{fuel trims} reflejan la corrección que aplica la ECU a la mezcla para mantener el estequiométrico $\lambda = 1$.
+        \item \textbf{Cinemática}: variables de movimiento del vehículo: velocidad (\texttt{0x0D}) y distancia recorrida desde el último borrado de DTCs\footnote{\textit{DTC: Diagnostic Trouble Codes}} (\texttt{0x31}).
+        \item \textbf{Eléctrico y posición}: medidas eléctricas y sensores de posición: tensión de batería (\texttt{0x42}), presión barométrica (\texttt{0x33}), posición del acelerador calculada y relativa (\texttt{0x11}/\texttt{0x47}) y posición de los pedales acelerador D/E (\texttt{0x49}/\texttt{0x4A}).
+        \item \textbf{Descubrimiento}: PIDs especiales (\texttt{0x00}, \texttt{0x20}, \texttt{0x40}) que devuelven una máscara de 32 bits indicando qué PIDs del bloque siguiente están disponibles en la ECU, permitiendo la enumeración dinámica de capacidades sin requerir conocimiento previo de los PIDs soportados~\cite{SAEJ1979:2014}.
     \end{enumerate}
 
-    \item \textbf{Modo 0x02 - Datos congelados (\textit{freeze frame}).} Devuelve una instantánea de los valores de los PIDs del modo \texttt{0x01} capturada automáticamente por la ECU en el instante exacto en que se almacenó un DTC~\cite{SAEJ1979:2014}. La petición reutiliza los mismos PIDs que el modo \texttt{0x01} pero añade un byte de \textit{frame number} que selecciona el marco congelado a consultar. Es una herramienta clave de diagnóstico, ya que permite reconstruir las condiciones de funcionamiento (RPM, carga, temperatura) que provocaron el fallo.
+    \item \textbf{Modo 0x02 - Datos congelados (\textit{freeze frame}).} Devuelve una instantánea de los valores de los PIDs del modo \texttt{0x01} capturada automáticamente por la ECU en el instante exacto en que se almacenó un DTC~\cite{SAEJ1979:2014}. La petición reutiliza los mismos PIDs que el modo de datos en tiempo real (\texttt{0x01}) pero añade un byte de \textit{frame number} que selecciona el conjunto de datos obtenido al momento del alamcenamiento de una DTC a consultar. Es una herramienta clave de diagnóstico, ya que permite reconstruir las condiciones de funcionamiento (RPM, carga, temperatura) que provocaron el fallo.
 
-    \item \textbf{Modo 0x03 - Lectura de DTCs almacenados.} Devuelve la lista de códigos de avería (\textit{Diagnostic Trouble Codes}) presentes en la memoria de la ECU~\cite{SAEJ1979:2014}. Cada DTC se codifica en dos bytes según el formato SAE~J2012~\cite{SAEJ2012:2016}: los dos bits más significativos determinan la categoría del sistema (\texttt{P} = \textit{Powertrain}, \texttt{C} = \textit{Chassis}, \texttt{B} = \textit{Body}, \texttt{U} = \textit{Network/Communication}), el siguiente par de bits indica si el código es estándar (0) o específico del fabricante (1), y los 12 bits restantes forman el código numérico de la avería. Por ejemplo, \texttt{P0300} corresponde al código hexadecimal \texttt{0x0300}: categoría Powertrain, código estándar, fallo de encendido aleatorio o múltiple~\cite{SAEJ2012:2016, WaleedDTC}.
+    \item \textbf{Modo 0x03 - Lectura de DTCs almacenados.} Devuelve la lista de códigos de avería presentes en la memoria de la ECU~\cite{SAEJ1979:2014}. Cada DTC se codifica en dos bytes según el formato SAE~J2012~\cite{SAEJ2012:2016}: los dos bits más significativos determinan la categoría del sistema (\texttt{P} = \textit{Powertrain}, \texttt{C} = \textit{Chassis}, \texttt{B} = \textit{Body}, \texttt{U} = \textit{Network/Communication}), el siguiente par de bits indica si el código es estándar (0) o específico del fabricante (1), y los 12 bits restantes forman el código numérico de la avería. Por ejemplo, \texttt{P0300} corresponde al código hexadecimal \texttt{0x0300}: categoría Powertrain, código estándar, fallo de encendido aleatorio o múltiple~\cite{SAEJ2012:2016, WaleedDTC}.
 
     \item \textbf{Modo 0x04 - Borrado de DTCs.} Borra todos los DTCs almacenados y reinicia el estado del indicador \textit{Check Engine}~\cite{SAEJ1979:2014}. Este servicio no requiere PID adicional; la ECU responde con el byte de confirmación \texttt{0x44} (modo~$+$~\texttt{0x40}). Esta operación es \textbf{irreversible}: elimina tanto los DTCs confirmados como los pendientes y reinicia todos los monitores OBD-II, por lo que debe ejecutarse únicamente tras haber registrado y analizado los códigos presentes.
 
-    \item \textbf{Modo 0x05 - Resultados de los test de los sensores de oxígeno.} Devuelve los resultados de los test de monitorización de las sondas lambda (tensiones de conmutación, tiempos de respuesta)~\cite{SAEJ1979:2014}. Este servicio solo se emplea en los buses de diagnóstico anteriores a CAN; en los vehículos con bus CAN (ISO~15765-4) su funcionalidad se traslada al modo \texttt{0x06}, por lo que se considera obsoleto.
+    \item \textbf{Modo 0x05 - Resultados de los test de los sensores de oxígeno.} Devuelve los resultados de los test de monitorización de los sensores de oxígeno (conocidos también como sondas lambda, denominación derivada del símbolo $\Lambda$ usado para expresar la relación aire-combustible), incluyendo tensiones de conmutación y tiempos de respuesta~\cite{SAEJ1979:2014}. Este servicio solo se emplea en los buses de diagnóstico anteriores a CAN. En los vehículos con bus CAN (ISO~15765-4) su funcionalidad se traslada al modo \texttt{0x06}, por lo que se considera obsoleto.
 
-    \item \textbf{Modo 0x06 - Resultados de los monitores a bordo.} Devuelve los resultados de los test de los sistemas monitorizados de forma no continua por la ECU (catalizador, sistema EGR, sondas de oxígeno, etc.)~\cite{SAEJ1979:2014}. Cada test se identifica mediante un MID (\textit{Monitor ID}) y un TID (\textit{Test ID}), y la respuesta incluye el valor medido junto con sus límites mínimo y máximo admisibles, lo que permite verificar si un monitor ha superado o no su umbral antes de que se genere un DTC.
+    \item \textbf{Modo 0x06 - Resultados de los monitores a bordo.} Devuelve los resultados de los test de los sistemas monitorizados de forma no continua por la ECU (catalizador, sistema EGR [\textit{Exhaust Gas Recirculation}], sondas de oxígeno, etc.)~\cite{SAEJ1979:2014}. Cada test se identifica mediante un MID (\textit{Monitor ID}) y un TID (\textit{Test ID}), y la respuesta incluye el valor medido junto con sus límites mínimo y máximo admisibles, lo que permite verificar si un monitor ha superado o no su umbral antes de que se genere un DTC.
 
-    \item \textbf{Modo 0x07 - Lectura de DTCs pendientes.} Devuelve los DTCs detectados durante el ciclo de conducción actual o el último, que aún no se han confirmado~\cite{SAEJ1979:2014}. Un código se vuelve pendiente cuando un fallo se detecta una sola vez; si el fallo se repite en un segundo ciclo de conducción, el código pasa a confirmado (modo \texttt{0x03}) y se enciende el testigo \textit{Check Engine}. El formato de codificación de los DTCs es idéntico al del modo \texttt{0x03}.
+    \item \textbf{Modo 0x07 - Lectura de DTCs pendientes.} Devuelve los DTCs detectados durante el ciclo de conducción actual o el último, que aún no se han confirmado~\cite{SAEJ1979:2014}. Un código se vuelve pendiente cuando un fallo se detecta una sola vez; si el fallo se repite en un segundo ciclo de conducción, el código pasa a confirmado (modo \texttt{0x03} de lectura de DTCs almacenados) y se enciende el testigo \textit{Check Engine}. El formato de codificación de los DTCs es idéntico al del modo \texttt{0x03} de lectura de DTCs almacenados.
 
-    \item \textbf{Modo 0x08 - Control de componentes a bordo.} Permite al equipo de diagnóstico activar o desactivar la operación de un componente o sistema de la ECU (por ejemplo, forzar el ciclo de una electroválvula del sistema EVAP)~\cite{SAEJ1979:2014}. Es un servicio de actuación bidireccional, poco habitual y dependiente del fabricante, que debe usarse con precaución dado que actúa físicamente sobre el vehículo.
+    \item \textbf{Modo 0x08 - Control de componentes a bordo.} Permite al equipo de diagnóstico activar o desactivar la operación de un componente o sistema de la ECU (por ejemplo, forzar el ciclo de una electroválvula del sistema EVAP\footnote{EVAP (\textit{Evaporative Emission Control System}): sistema de control de emisiones evaporativas encargado de capturar los vapores de combustible del depósito.})~\cite{SAEJ1979:2014}. Es un servicio de actuación bidireccional, poco habitual y dependiente del fabricante, que debe usarse con precaución dado que actúa físicamente sobre el vehículo.
 
     \item \textbf{Modo 0x09 - Información del vehículo.} Permite obtener el número de identificación del vehículo (VIN, PID \texttt{0x02}), que se devuelve como una cadena ASCII de 17 caracteres mediante una secuencia ISO-TP multi-frame~\cite{SAEJ1979:2014, ISO15765-2:2016}.
-
-    \item \textbf{Modo 0x0A - Lectura de DTCs permanentes.} Devuelve los DTCs permanentes, una categoría de códigos confirmados que \textbf{no} puede borrarse mediante el modo \texttt{0x04} ni desconectando la batería~\cite{SAEJ1979:2014}. Solo se eliminan cuando la propia ECU verifica, tras varios ciclos de conducción, que la avería se ha corregido. Su finalidad es impedir que se enmascaren fallos de emisiones borrando los códigos justo antes de una inspección técnica. El formato de codificación coincide con el del modo \texttt{0x03}.
+\vspace{1cm}
+    \item \textbf{Modo 0x0A - Lectura de DTCs permanentes.} Devuelve los DTCs permanentes, una categoría de códigos confirmados que \textbf{no} pueden borrarse mediante el modo \texttt{0x04} de borrado de DTCs ni desconectando la batería~\cite{SAEJ1979:2014}. Solo se eliminan cuando la propia ECU verifica, tras varios ciclos de conducción, que la avería se ha corregido. Su finalidad es impedir que se enmascaren fallos de emisiones borrando los códigos justo antes de una inspección técnica. El formato de codificación coincide con el del modo \texttt{0x03} de lectura de DTCs.
 \end{itemize}
 
-Cuando la ECU no puede atender una petición (modo no soportado, condiciones no adecuadas, PID no implementado), responde desde su identificador físico (\texttt{0x7E8}) con una trama cuyo primer byte de datos es \texttt{0x7F} (NRC Service Identifier), seguido del SID rechazado y el código NRC según ISO~14229-1~\cite{ISO14229-1:2020}. El byte NRC (\textit{Negative Response Code}) identifica la causa del rechazo: \texttt{0x11} (servicio no soportado), \texttt{0x12} (subfunción no soportada), \texttt{0x22} (condiciones no cumplidas) o \texttt{0x33} (seguridad no desbloqueada).
-
+Cuando la ECU no puede atender una petición (modo no soportado, condiciones no adecuadas, PID no implementado), responde desde su identificador físico (\texttt{0x7E8}) con una trama cuyo primer byte de datos es \texttt{0x7F} (NRC Service Identifier), seguido del SID\footnote{SID (\textit{Service Identifier}): identificador del servicio UDS solicitado, equivalente al modo OBD-II.} rechazado y el código NRC\footnote{NRC (\textit{Negative Response Code}): código de respuesta negativa definido en ISO~14229-1 que identifica la causa del rechazo.} según ISO~14229-1~\cite{ISO14229-1:2020}. El byte NRC identifica la causa del rechazo: \texttt{0x11} (servicio no soportado), \texttt{0x12} (subfunción no soportada), \texttt{0x22} (condiciones no cumplidas) o \texttt{0x33} (seguridad no desbloqueada).
 % \input{figuras/fig_obd2_pids_mandatory.tex}
 
 
 \subsection{UDS - Unified Diagnostic Services (ISO 14229-1)}
 \label{sec:proto_uds}
 
-UDS (\textit{Unified Diagnostic Services}), definido en la ISO~14229-1~\cite{ISO14229-1:2020}, es el protocolo de diagnóstico de capa de aplicación adoptado por la industria automotriz moderna.
+UDS (\textit{Unified Diagnostic Services}), definido en la ISO~14229-1~\cite{ISO14229-1:2020}, es el protocolo de diagnóstico de capa de aplicación adoptado por la industria automotriz actual.
 
-Cada petición UDS se estructura con un byte de identificador de servicio (\textbf{SID} \textit{Service Identifier}) seguido de parámetros opcionales. La ECU responde con el SID de respuesta positiva (SID~$+$~\texttt{0x40}) y los datos correspondientes~\cite{ISO14229-1:2020}. Cuando la ECU no puede atender la petición, emite una \textbf{Negative Response} de tres bytes: \texttt{0x7F} (identificador de respuesta negativa), el SID rechazado y el \textbf{Negative Response Code} (\texttt{NRC}). Este payload viaja encapsulado en un \textit{Single Frame} ISO-TP dentro de una trama CAN, tal y como se muestra en la tabla~\ref{tab:nrc_frame}: la ECU responde con el identificador \texttt{0x7E8}, el primer byte es el PCI ISO-TP (\texttt{0x03}, que indica \textit{Single Frame} de 3 bytes), seguido de los tres bytes de la respuesta negativa y el relleno (\textit{padding}) hasta completar los 8 bytes del campo de datos.
+Cada petición UDS se estructura con un byte de identificador de servicio (\textbf{SID} \textit{Service Identifier}) seguido de parámetros opcionales. La ECU responde con el SID de respuesta positiva (SID~$+$~\texttt{0x40}) y los datos correspondientes~\cite{ISO14229-1:2020}. Cuando la ECU no puede atender la petición, emite una \textbf{Negative Response} de tres bytes: \texttt{0x7F} (identificador de respuesta negativa), el SID rechazado y el \textbf{Negative Response Code} (\texttt{NRC}). Este payload viaja encapsulado en un \textit{Single Frame} ISO-TP dentro de una trama CAN, tal y como se muestra en la tabla~\ref{tab:nrc_frame}: la ECU responde con el identificador \texttt{0x7E8}, el primer byte es el PCI (\textit{Protocolo Control Information}) ISO-TP (\texttt{0x03}, que indica \textit{Single Frame} de 3 bytes), seguido de los tres bytes de la respuesta negativa y el relleno (\textit{padding}) hasta completar los 8 bytes del campo de datos.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \caption{Trama CAN completa recibida en una respuesta negativa UDS/OBD-II: encapsulado ISO-TP (\textit{Single Frame}) del payload \textit{Negative Response} según ISO~14229-1~\cite{ISO14229-1:2020} e ISO~15765-2~\cite{ISO15765-2:2016}.}
 \label{tab:nrc_frame}
 \input{figuras/fig_nrc_frame.tex}
@@ -184,7 +178,9 @@ Cada petición UDS se estructura con un byte de identificador de servicio (\text
 
 Tanto UDS como OBD-II usan el mismo esquema de codificación para las respuestas positivas (\texttt{ID+0x40}) y comparten el mismo mecanismo para respuestas negativas (\textit{Negative Response}) definido por la norma ISO~\cite{ISO14229-1:2020}. Los servicios UDS que se han implementado en el sistema son \textit{DiagnosticSessionControl} (\texttt{0x10}), que controla el modo de sesión activo en la ECU, y \textit{ReadDataByIdentifier} (\texttt{0x22}), que permite leer datos solicitados a través de un identificador DID (\textit{Data Identifier}) de 2 bytes.
 
-El Algoritmo~\ref{alg:uds_did} ilustra la lectura de un dato por identificador (servicio \texttt{0x22}) cuando el DID es de acceso restringido: antes de la lectura, el cliente debe conmutar a sesión extendida mediante \textit{DiagnosticSessionControl} (\texttt{0x10}); de lo contrario, la ECU rechaza la petición con un código NRC.
+UDS define varios modos de sesión de diagnóstico~\cite{ISO14229-1:2020}. La \textbf{sesión por defecto} (\textit{defaultSession}, subfunción \texttt{0x01}) es el modo de operación normal: da acceso a lectura de datos básicos y códigos de avería, pero restringe el acceso a parámetros de calibración del motor y funciones de configuración avanzadas. La \textbf{sesión extendida} (\textit{extendedDiagnosticSession}, subfunción \texttt{0x03}) amplía las capacidades, habilitando lectura de DIDs propietarios, funciones de actuación y acceso a datos internos de la ECU que en sesión por defecto son inaccesibles. Esta partición es lo que se denomina \textbf{acceso restringido}: ciertos DIDs sólo pueden leerse cuando la sesión activa es la extendida; fuera de ella, la ECU rechaza la petición con NRC \texttt{0x22} (\textit{conditionsNotCorrect}).
+
+El Algoritmo~\ref{alg:uds_did} ilustra la lectura de un dato por identificador (servicio \texttt{0x22}) cuando el DID es de acceso restringido: antes de la lectura, el cliente debe conmutar a sesión extendida mediante \textit{DiagnosticSessionControl} (\texttt{0x10}). De lo contrario, la ECU rechaza la petición con un código NRC.
 
 \begin{algorithm}[H]
 \caption{Lectura de un dato por identificador en UDS (servicio \texttt{0x22}).}
@@ -207,11 +203,12 @@ El Algoritmo~\ref{alg:uds_did} ilustra la lectura de un dato por identificador (
 
 Los códigos NRC más relevantes se recogen en la tabla~\ref{tab:uds_nrc}.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \caption{Principales códigos NRC (\textit{Negative Response Code}) de ISO~14229-1~\cite{ISO14229-1:2020} empleados en respuestas negativas OBD-II y UDS.}
 \label{tab:uds_nrc}
 \centering
 \renewcommand{\arraystretch}{0.95}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{|c|l|p{9cm}|}
 \hline
 \textbf{NRC} & \textbf{Nombre} & \textbf{Causa} \\
@@ -226,7 +223,7 @@ Los códigos NRC más relevantes se recogen en la tabla~\ref{tab:uds_nrc}.
 \hline
 \texttt{0x14} & \textit{responseTooLong}         & La respuesta excede el tamaño máximo transmisible. \\
 \hline
-\texttt{0x21} & \textit{busyRepeatRequest}       & La ECU está ocupada; debe repetirse la petición. \\
+\texttt{0x21} & \textit{busyRepeatRequest}       & La ECU está ocupada, por lo que debe repetirse la petición. \\
 \hline
 \texttt{0x22} & \textit{conditionsNotCorrect}    & Las condiciones del vehículo (motor, velocidad, etc.) no permiten ejecutar el servicio. \\
 \hline
@@ -242,19 +239,20 @@ Los códigos NRC más relevantes se recogen en la tabla~\ref{tab:uds_nrc}.
 \hline
 \texttt{0x37} & \textit{requiredTimeDelayNotExpired} & No ha transcurrido el tiempo de espera obligatorio tras un fallo de autenticación. \\
 \hline
-\texttt{0x78} & \textit{requestCorrectlyReceived-ResponsePending} & Petición recibida; respuesta pendiente por tiempo de procesamiento de la ECU. \\
+\texttt{0x78} & \textit{requestCorrectlyReceived-ResponsePending} & Petición recibida, con respuesta pendiente por tiempo de procesamiento de la ECU. \\
 \hline
 \texttt{0x7E} & \textit{subFunctionNotSupportedInActiveSession} & La subfunción no está disponible en la sesión de diagnóstico activa. \\
 \hline
 \texttt{0x7F} & \textit{serviceNotSupportedInActiveSession} & El servicio no está disponible en la sesión de diagnóstico activa. \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 % TODO - añadir tabla de bits de una trama NRC
 La diferencia entre el protocolo UDS y el protocolo OBD-II radica principalmente en el objetivo de cada uno y el "lenguaje" que usa cada uno, es decir:
 \begin{itemize}
-    \item \textbf{OBD-II}: tiene como objetivo principal definir un marco y lenguaje único universal para todos los fabricantes, que se encargue de del análisis de emisiones, afectando casi exclusivamente a la ECU motriz y de transmisión. Además este protocolo se limita a lectura de PIDs.
-    \item \textbf{UDS}: tiene un objetivo más especifico pues pese a trabajar en un marco similar al OBD-II, este tiene como propósito la ingeniería del vehículo permitiendo la lectura y escritura de parámetros en todas las ECUs. No obstante este protocolo trabaja con distintos códigos por fabricante haciendo que no haya códigos universales que permitan la escritura/lectura en cualquier ECU.
+    \item \textbf{OBD-II}~\cite{SAEJ1979:2014}: tiene como objetivo principal definir un marco y lenguaje único universal para todos los fabricantes, que se encargue de del análisis de emisiones, afectando casi exclusivamente a la ECU motriz y de transmisión. Además este protocolo se limita a lectura de PIDs.
+    \item \textbf{UDS}~\cite{ISO14229-1:2020}: tiene un objetivo más especifico pues pese a trabajar en un marco similar al OBD-II, este tiene como propósito la ingeniería del vehículo permitiendo la lectura y escritura de parámetros en todas las ECUs. No obstante este protocolo trabaja con distintos códigos por fabricante haciendo que no haya códigos universales que permitan la escritura/lectura en cualquier ECU.
 \end{itemize} 
 
 \subsection{BLE GATT y Nordic UART Service}
@@ -262,30 +260,44 @@ La diferencia entre el protocolo UDS y el protocolo OBD-II radica principalmente
 
 La comunicación inalámbrica entre la Raspberry Pi y la aplicación móvil se implementa mediante Bluetooth Low Energy (BLE), usando el perfil GATT (\textit{Generic Attribute Profile}). GATT define cómo dos dispositivos intercambian datos sobre BLE estructurando la información en una jerarquía de \textit{servicios}, \textit{características} y \textit{descriptores}~\cite{Bluetooth_CoreSpec}. Cada \textbf{servicio} agrupa un conjunto de \textbf{características}, que son los contenedores de datos elementales (un valor, una medida, un comando), y cada característica puede llevar asociados \textbf{descriptores} que aportan metadatos o configuran su comportamiento. El modelo es asimétrico: el dispositivo que aloja los datos actúa como \textbf{servidor GATT} (en este trabajo, la Raspberry Pi) y el que accede a ellos como \textbf{cliente GATT} (la aplicación móvil). Por norma general es el cliente quien inicia las operaciones, leyendo (\textit{Read}) o escribiendo (\textit{Write}) el valor de las características que expone el servidor.
 
-En un entorno donde el servidor está continuamente cambiando los datos de forma asíncrona resulta ineficiente este esquema, pues obliga al cliente a estar continuamente sondeando (\textit{polling}) al servidor. GATT define las \textbf{notificaciones} para evitar este problema, estas son un mecanismo \textit{push} por el cual el servidor envía el nuevo valor de una característica al cliente en el momento en que cambia, sin que este lo solicite~\cite{Bluetooth_CoreSpec}. La notificación no requiere confirmación a nivel ATT (\textit{fire-and-forget}), lo que minimiza la latencia y el consumo frente al sondeo; existe además la variante \textit{indicación}, que sí exige reconocimiento del cliente a costa de mayor latencia. Para que el servidor pueda notificar, el cliente debe habilitar previamente el flujo escribiendo en el descriptor \textbf{CCCD} (\textit{Client Characteristic Configuration Descriptor} y el UUID \texttt{0x2902}) de la característica correspondiente. Este patrón es el que permite a la Raspberry Pi empujar la telemetría y las respuestas a la aplicación móvil en tiempo real.
+En un entorno donde el servidor está continuamente cambiando los datos de forma asíncrona resulta ineficiente este esquema, pues obliga al cliente a estar continuamente sondeando (\textit{polling}) al servidor. GATT define las \textbf{notificaciones} para evitar este problema, estas son un mecanismo \textit{push} por el cual el servidor envía el nuevo valor de una característica al cliente en el momento en que cambia, sin que este lo solicite~\cite{Bluetooth_CoreSpec}. La notificación no requiere confirmación a nivel ATT, lo que minimiza la latencia y el consumo frente al sondeo. Existe además la variante \textit{indicación}, que sí exige reconocimiento del cliente a costa de mayor latencia. Para que el servidor pueda notificar, el cliente debe habilitar previamente el flujo escribiendo en el descriptor \textbf{CCCD} (\textit{Client Characteristic Configuration Descriptor} y el UUID \texttt{0x2902}) de la característica correspondiente. Este patrón es el que permite a la Raspberry Pi enviar la telemetría y las respuestas a la aplicación móvil en tiempo real.
 
-El servicio empleado en este trabajo es el \textbf{Nordic UART Service (NUS)}~\cite{Nordic_NUS}, un servicio GATT propietario de Nordic Semiconductor ampliamente soportado que emula un puerto serie bidireccional sobre BLE mediante un UUID de 128 bits de base aleatoria (\texttt{6E400001-B5A3-F393-E0A9-E50E24DCCA9E}). NUS define dos características principales~\cite{Nordic_NUS}:
+El servicio empleado en este trabajo es el \textbf{Nordic UART Service (NUS)}~\cite{Nordic_NUS}, un servicio GATT propietario de Nordic Semiconductor ampliamente soportado que emula un puerto serie bidireccional sobre BLE mediante un UUID\footnote{UUID: \textit{Universally Unique Identifier}} de 128 bits de base aleatoria (\texttt{6E400001-B5A3-F393-E0A9-E50E24DCCA9E}). NUS define dos características principales~\cite{Nordic_NUS}:
 
 \begin{itemize}
     \item \textbf{TX Characteristic} (\texttt{6E400003-B5A3-F393-E0A9-E50E24DCCA9E}): el servidor envía datos al cliente mediante notificaciones GATT. El cliente activa las notificaciones escribiendo en el descriptor CCCD (\textit{Client Characteristic Configuration Descriptor})~\cite{Nordic_NUS}.
     \item \textbf{RX Characteristic} (\texttt{6E400002-B5A3-F393-E0A9-E50E24DCCA9E}): el cliente escribe datos al servidor mediante operaciones GATT Write~\cite{Nordic_NUS}.
 \end{itemize}
 
-\begin{figure}[!htbp]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.5\textwidth]{Ilustraciones/BLE_layers.png}
 \caption{Pila de protocolos del Nordic UART Service (NUS) sobre BLE. Los comandos y respuestas JSON se transmiten como payload ATT sobre las características RX (escritura) y TX (notificación) del servicio NUS, con un MTU negociado de 240 bytes.}
 \label{fig:ble_nus_packet}
 \end{figure}
 
-El MTU negociado durante el establecimiento de la conexión determina el tamaño máximo de cada paquete de datos. En este trabajo se configura un MTU de 240 bytes, que es tamaño más que suficiente para transportar los objetos JSON más grandes de la aplicación (respuestas con múltiples muestras de telemetría) en un único paquete, evitando la fragmentación a nivel de aplicación.
+El MTU\footnote{MTU: \textit{Maximum Transmission Unit}} negociado durante el establecimiento de la conexión determina el tamaño máximo de cada paquete de datos. En este trabajo se configura un MTU de 240 bytes, que es tamaño más que suficiente para transportar los objetos JSON más grandes de la aplicación (respuestas con múltiples muestras de telemetría) en un único paquete, evitando la fragmentación a nivel de aplicación.
 
-El flujo de establecimiento de conexión se puede observar en la siguiente figura~\ref{fig:ble_gatt_flow} que también incluye las fases de advertising, conexión, negociación de MTU, descubrimiento de servicios, activación de notificaciones y autenticación por token.
+El flujo de establecimiento de conexión se puede observar en la figura~\ref{fig:ble_gatt_flow}, compuesto por las siguientes fases:
 
-\begin{figure}[!htbp]
+\begin{enumerate}
+    \item \textbf{\textit{Advertising} (difusión)}: el servidor BLE (Raspberry Pi) emite periódicamente paquetes de difusión en los canales dedicados de BLE (canales 37, 38 y 39). Estos paquetes contienen el nombre del dispositivo (\texttt{diag\_tool}) y los UUIDs de los servicios ofrecidos, permitiendo que el cliente lo detecte durante el escaneo sin conocer la dirección MAC de antemano.
+
+    \item \textbf{Conexión}: la aplicación móvil envía una solicitud de conexión al servidor. El servidor deja de emitir paquetes de advertising y establece un canal de comunicación dedicado y bidireccional con el cliente.
+
+    \item \textbf{Negociación de MTU}: el cliente solicita un tamaño de MTU mayor al por defecto (23 bytes), en este caso 240 bytes, para aumentar el rendimiento y evitar fragmentación de los mensajes JSON a nivel de aplicación.
+\vspace{1cm}
+    \item \textbf{Descubrimiento de servicios y características}: el cliente usa el protocolo ATT (\textit{Attribute Protocol}) para enumerar los \textbf{servicios} disponibles en el servidor GATT —agrupaciones lógicas de funcionalidad identificadas por un UUID, como el propio servicio NUS— y, dentro de cada uno, sus \textbf{características} —los contenedores de datos elementales con los que el cliente puede operar—. El resultado es la localización de las características RX y TX del servicio NUS por sus UUIDs de 128 bits.
+
+    \item \textbf{Activación de notificaciones}: el cliente escribe en el descriptor CCCD (\texttt{0x2902}) de la característica TX para habilitar el flujo de notificaciones, permitiendo que el servidor empuje datos al cliente sin que este los solicite explícitamente.
+
+    \item \textbf{Autenticación por token}: una vez completada la conexión GATT, el sistema aplica una capa de autenticación propia basada en un token compartido, verificando que el cliente es legítimo antes de atender comandos de diagnóstico.
+\end{enumerate}
+
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.8\textwidth]{Ilustraciones/ble_gatt_flow.png}
-\caption{Flujo completo de una conexión BLE GATT con el servicio NUS. Tras el descubrimiento y negociación de MTU, la app habilita las notificaciones en la característica TX y comienza el intercambio de comandos JSON. Un mecanismo de keepalive mantiene la conexión activa; la inactividad superior a 20 segundos provoca el cierre de sesión.}
+\includegraphics[height=12.4cm]{Ilustraciones/ble_gatt_flow.png}
+\caption{Flujo completo de una conexión BLE GATT con el servicio NUS. Tras el descubrimiento y negociación de MTU, la app habilita las notificaciones en la característica TX y comienza el intercambio de comandos JSON. Un mecanismo de keepalive mantiene la conexión activa. La inactividad superior a 20 segundos provoca el cierre de sesión.}
 \label{fig:ble_gatt_flow}
 \end{figure}
 
@@ -295,18 +307,18 @@ La delimitación de mensajes se resuelve mediante \textbf{NDJSON} (\textit{Newli
 
 La estructura de los mensajes del protocolo se recoge en la tabla~\ref{tab:ndjson_struct}.
 
-\begin{table}[!htbp]
+\begin{table}[H]
 \caption{Estructura genérica de los mensajes NDJSON del protocolo sobre NUS. Cada objeto se serializa en una línea ASCII terminada en \texttt{\textbackslash n}.}
 \label{tab:ndjson_struct}
 \input{figuras/fig_ndjson_struct.tex}
 \end{table}
 
-Adicionalmente, el servidor puede enviar mensajes \textit{push} sin petición previa: \texttt{\{type: "samples"\}} con un ciclo de muestras del monitor de datos en vivo, \texttt{\{type: "error"\}} ante un fallo de lectura de PID, y \texttt{\{type:"heartbeat"\}} como sonda de keepalive cuando el cliente permanece inactivo más de 8 segundos. El cliente debe responder al heartbeat con \texttt{\{type:"heartbeat\_ack"\}} para mantener la sesión activa; la inactividad superior a 15 segundos provoca la desconexión automática y el reinicio del servidor BLE.
+Adicionalmente, el servidor puede enviar mensajes \textit{push} sin petición previa: \texttt{\{type: "samples"\}} con un ciclo de muestras del monitor de datos en vivo, \texttt{\{type: "error"\}} ante un fallo de lectura de PID, y \texttt{\{type:"heartbeat"\}} como sonda de keepalive cuando el cliente permanece inactivo más de 8 segundos. El cliente debe responder al heartbeat con \texttt{\{type:"heartbeat\_ack"\}} para mantener la sesión activa. La inactividad superior a 15 segundos provoca la desconexión automática y el reinicio del servidor BLE.
 
 \subsection{Trabajos relacionados}
 \label{sec:trabajos_relacionados}
 
-El acceso al diagnóstico OBD-II está ampliamente cubierto por soluciones comerciales. La más extendida es el adaptador \textbf{ELM327}, un circuito integrado que actúa de puente entre el bus del vehículo y una interfaz Bluetooth o Wi-Fi, utilizado junto a aplicaciones móviles como \textit{Torque Pro}, \textit{OBD Fusion} o \textit{Car Scanner ELM OBD2}~\cite{CarScanner_app}, así como lectores genéricos independientes~\cite{KONWEII_scanner}. Existen además bibliotecas y proyectos de código abierto que implementan partes de la pila de comunicación, como \texttt{python-can}~\cite{Twiss23-pythoncan} y \texttt{can-isotp}~\cite{Menager23-isotp} para el transporte sobre SocketCAN.
+El acceso al diagnóstico OBD-II está ampliamente cubierto por soluciones comerciales. La más extendida es el adaptador \textbf{ELM327}, un circuito integrado que actúa de puente entre el bus del vehículo y una interfaz Bluetooth o Wi-Fi, utilizado junto a aplicaciones móviles como \textit{Torque Pro}~\cite{Torque_Pro} o \textit{Car Scanner ELM OBD2}~\cite{CarScanner_app}, así como lectores genéricos independientes~\cite{KONWEII_scanner}. Existen además bibliotecas y proyectos de código abierto que implementan partes de la pila de comunicación, como \texttt{python-can}~\cite{Twiss23-pythoncan} y \texttt{can-isotp}~\cite{Menager23-isotp} para el transporte sobre SocketCAN.
 
 El presente trabajo se diferencia de estas soluciones en que no se apoya en un adaptador ELM327, sino que construye la pila de diagnóstico desde la capa de aplicación: implementa los servicios OBD-II y UDS sobre el transporte ISO-TP, expone la sesión mediante un servidor BLE GATT propio con perfil Nordic UART Service montado en la Raspberry Pi, registra la telemetría de forma estructurada en una base de datos SQLite y se acompaña de un simulador de ECU sobre Arduino que permite validar el sistema de forma controlada. El objetivo no es competir con las herramientas comerciales, sino comprender e implementar de primera mano los protocolos que orquestan la comunicación del vehículo.
 
@@ -319,7 +331,7 @@ A partir del contexto descrito, se definen los siguientes objetivos para este pr
 
 Diseñar y desarrollar un sistema empotrado de diagnóstico del vehículo basado en el protocolo OBD-II sobre bus CAN, con acceso inalámbrico vía Bluetooth Low Energy y validado mediante un banco de pruebas basado en Arduino.
 
-La propuesta de este trabajo (TFT01) define tres funciones de usuario de alto nivel que el sistema debe satisfacer.
+La propuesta de este trabajo define tres funciones de usuario de alto nivel que el sistema debe satisfacer.
 
 \subsection{Objetivos específicos}
 
@@ -327,13 +339,13 @@ La propuesta de este trabajo (TFT01) define tres funciones de usuario de alto ni
 La tabla~\ref{tab:tft01_objetivos} recoge la trazabilidad entre las funciones de usuario definidas en la propuesta y los objetivos específicos que las implementan.
 
 \begin{table}[!htbp]
-\caption{Trazabilidad entre funciones definidas en la propuesta TFT01 y objetivos específicos del trabajo.}
+\caption{Trazabilidad entre funciones definidas en la propuesta y objetivos específicos del trabajo.}
 \label{tab:tft01_objetivos}
 \centering
 \renewcommand{\arraystretch}{1.3}
 \begin{tabular}{|p{4.2cm}|p{8.5cm}|c|}
 \hline
-\textbf{Función TFT01} & \textbf{Descripción} & \textbf{Obj.} \\
+\textbf{Función} & \textbf{Descripción} & \textbf{Obj.} \\
 \hline
 Monitorización en tiempo real &
   Visualización numérica de parámetros de sensores disponibles en el vehículo (RPM, temperaturas, presiones, voltajes, etc.) &
@@ -369,6 +381,6 @@ Identificación &
 \label{sec:alcance}
 
 % CAMBIO: reescrita sección de alcance - eliminado TODO, texto reformulado para reflejar el trabajo real
-El sistema desarrollado implementa los modos OBD-II estándar definidos por SAE~J1979~\cite{SAEJ1979:2014} (modos 0x01, 0x03, 0x04 y 0x09) y los servicios UDS 0x10 y 0x22 de ISO~14229-1~\cite{ISO14229-1:2020}. Quedan fuera del alcance los servicios de diagnóstico propietarios de fabricante, que requieren acuerdos de licencia y herramientas específicas por marca, así como los modos OBD-II 0x02, 0x05, 0x06, 0x07 y 0x08, cuya implementación no se alineaba con los objetivos del trabajo.
+El sistema desarrollado implementa los modos OBD-II estándar definidos por SAE~J1979~\cite{SAEJ1979:2014} (modos 0x01 lectura de datos en tiempo real, 0x03 lectura de DTC almacenadas, 0x04 borrado de DTCs almacenadas y 0x09 lectura de información del vehiculo) y los servicios UDS 0x10 (control de sesión de diagnóstico) y 0x22 (lectura de datos a través de identificadores) de ISO~14229-1~\cite{ISO14229-1:2020}. Quedan fuera del alcance los servicios de diagnóstico propietarios de fabricante, que requieren acuerdos de licencia y herramientas específicas por marca, así como los modos OBD-II 0x02 \textit{freeze frame}, 0x05, 0x06 (ambos modos de medición de sensores de emisiones), 0x07 (lectura de DTCs pendientes) y 0x08 (control de componentes), cuya implementación no se alineaba con los objetivos del trabajo.
 
 La estrategia de validación del sistema se apoya principalmente en un banco de pruebas basado en Arduino MKR WAN~1310, que implementa un simulador de ECU con modelo de dinámica de motor y capacidad de inyección de DTCs. Este enfoque permite reproducir condiciones de diagnóstico independientemente de la disponibilidad de un vehículo real. Adicionalmente, el sistema se validó sobre un vehículo real del grupo VAG (Škoda Yeti de 2015), confirmando la interoperabilidad con una ECU de producción a través del conector OBD-II, como se detalla en el Capítulo~6.

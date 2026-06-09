@@ -1,0 +1,301 @@
+╔══════════════════════════════════════════════╗
+║  diag_tool — BLE OBD-II Server               ║
+║  Transport:  IsoTpTransport (can0)           ║
+║  Logging:    diagnostics.db + ble_comms.log  ║
+╚══════════════════════════════════════════════╝
+[BLE] Auth token loaded from: default
+[LOG] Session #100 → /home/gorka/TFT-CAN-BLE-system/diagnostics.db
+[BLE] Advertising 'diag_tool' — waiting for connection...
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=30
+[BLE] Client connected — first write size=30b (server TX MTU=240b)
+RX - [BLE]
+  RAW    : {"cmd":"auth","token":"1234"}
+  DECODED: command='auth'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"authenticated"}
+  DECODED: status='ok' data='authenticated'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=14
+RX - [BLE]
+  RAW    : {"cmd":"vin"}
+  DECODED: command='vin'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"ARDUINO0000000000"}
+  DECODED: status='ok' data='ARDUINO0000000000'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=21
+RX - [BLE]
+  RAW    : {"cmd":"probe_pids"}
+  DECODED: command='probe_pids'
+TX - [BLE]
+  RAW    : {"status":"ok","data":[4,5,6,7,10,11,12,13,14,15,16,17,31,35,47,49,51,66,70,71,73,74,92,94]}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=19
+RX - [BLE]
+  RAW    : {"cmd":"snapshot"}
+  DECODED: command='snapshot'
+TX - [BLE]
+  RAW    : {"status":"ok","data":{"Carga del motor":{"value":0.0,"unit":"%"},"Temp. refrigerante":{"value":20.0,"unit":"\u00b0C"},"Trim combustible corto B1":{"value":0.0,"unit":"%"},"Trim combustible largo B1":...
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=21
+RX - [BLE]
+  RAW    : {"cmd":"probe_pids"}
+  DECODED: command='probe_pids'
+TX - [BLE]
+  RAW    : {"status":"ok","data":[4,5,6,7,10,11,12,13,14,15,16,17,31,35,47,49,51,66,70,71,73,74,92,94]}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"ping"}
+  DECODED: command='ping'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"pong"}
+  DECODED: status='ok' data='pong'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=70
+RX - [BLE]
+  RAW    : {"cmd":"monitor_start","pids":[4,5,12,10,13,15,17],"interval_ms":500}
+  DECODED: command='monitor_start' pids=['0x4', '0x5', '0xc', '0xa', '0xd', '0xf', '0x11']
+TX - [BLE]
+  RAW    : {"status":"ok","data":"monitor started"}
+  DECODED: status='ok' data='monitor started'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6730.477474339},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6730.489886921},{"pid...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=25
+RX - [BLE]
+  RAW    : {"type":"heartbeat_ack"}
+  DECODED: command='?'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6731.064740917},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6731.077222702},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6731.651398711},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6731.663914995},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6732.238264503},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6732.250761232},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6732.824630676},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6732.837107165},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6733.411139348},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6733.42378263},{"pid"...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":0.0,"unit":"%","ts":6733.997771759},{"pid":5,"name":"Temp. refrigerante","value":20.0,"unit":"\u00b0C","ts":6734.010171861},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6734.584190585},{"pid":5,"name":"Temp. refrigerante","value":25.0,"unit":"\u00b0C","ts":6734.6...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6735.191864994},{"pid":5,"name":"Temp. refrigerante","value":33.0,"unit":"\u00b0C","ts":6735.2...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6735.781376098},{"pid":5,"name":"Temp. refrigerante","value":39.0,"unit":"\u00b0C","ts":6735.7...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=25
+RX - [BLE]
+  RAW    : {"type":"heartbeat_ack"}
+  DECODED: command='?'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6736.368444618},{"pid":5,"name":"Temp. refrigerante","value":46.0,"unit":"\u00b0C","ts":6736.3...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"ping"}
+  DECODED: command='ping'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"pong"}
+  DECODED: status='ok' data='pong'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6736.956103463},{"pid":5,"name":"Temp. refrigerante","value":53.0,"unit":"\u00b0C","ts":6736.9...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":17.647058823529413,"unit":"%","ts":6737.543801067},{"pid":5,"name":"Temp. refrigerante","value":58.0,"unit":"\u00b0C","ts":6737.5...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":28.627450980392158,"unit":"%","ts":6738.132398822},{"pid":5,"name":"Temp. refrigerante","value":63.0,"unit":"\u00b0C","ts":6738.1...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":38.8235294117647,"unit":"%","ts":6738.718625865},{"pid":5,"name":"Temp. refrigerante","value":70.0,"unit":"\u00b0C","ts":6738.729...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":49.80392156862745,"unit":"%","ts":6739.3143931},{"pid":5,"name":"Temp. refrigerante","value":75.0,"unit":"\u00b0C","ts":6739.3267...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6739.901387613},{"pid":5,"name":"Temp. refrigerante","value":80.0,"unit":"\u00b0C","ts":6739.913875158},{"pi...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6740.489133297},{"pid":5,"name":"Temp. refrigerante","value":85.0,"unit":"\u00b0C","ts":6740.500541973},{"pi...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6741.075957945},{"pid":5,"name":"Temp. refrigerante","value":92.0,"unit":"\u00b0C","ts":6741.088113311},{"pi...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=25
+RX - [BLE]
+  RAW    : {"type":"heartbeat_ack"}
+  DECODED: command='?'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6741.662500378},{"pid":5,"name":"Temp. refrigerante","value":93.0,"unit":"\u00b0C","ts":6741.673980108},{"pi...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6742.249260808},{"pid":5,"name":"Temp. refrigerante","value":92.0,"unit":"\u00b0C","ts":6742.260652929},{"pi...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":60.0,"unit":"%","ts":6742.83535503},{"pid":5,"name":"Temp. refrigerante","value":93.0,"unit":"\u00b0C","ts":6742.847964165},{"pid...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":49.80392156862745,"unit":"%","ts":6743.431450567},{"pid":5,"name":"Temp. refrigerante","value":95.0,"unit":"\u00b0C","ts":6743.44...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"ping"}
+  DECODED: command='ping'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"pong"}
+  DECODED: status='ok' data='pong'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":42.745098039215684,"unit":"%","ts":6744.018388942},{"pid":5,"name":"Temp. refrigerante","value":96.0,"unit":"\u00b0C","ts":6744.0...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":31.764705882352942,"unit":"%","ts":6744.605485446},{"pid":5,"name":"Temp. refrigerante","value":95.0,"unit":"\u00b0C","ts":6744.6...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":21.96078431372549,"unit":"%","ts":6745.193375029},{"pid":5,"name":"Temp. refrigerante","value":93.0,"unit":"\u00b0C","ts":6745.20...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6745.782988877},{"pid":5,"name":"Temp. refrigerante","value":92.0,"unit":"\u00b0C","ts":6745.7...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6746.369706151},{"pid":5,"name":"Temp. refrigerante","value":91.0,"unit":"\u00b0C","ts":6746.3...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=25
+RX - [BLE]
+  RAW    : {"type":"heartbeat_ack"}
+  DECODED: command='?'
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6746.956652349},{"pid":5,"name":"Temp. refrigerante","value":92.0,"unit":"\u00b0C","ts":6746.9...
+  DECODED: type='samples' samples=7
+TX - [BLE]
+  RAW    : {"type":"samples","samples":[{"pid":4,"name":"Carga del motor","value":14.901960784313726,"unit":"%","ts":6747.554284553},{"pid":5,"name":"Temp. refrigerante","value":91.0,"unit":"\u00b0C","ts":6747.5...
+  DECODED: type='samples' samples=7
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=23
+RX - [BLE]
+  RAW    : {"cmd":"monitor_stop"}
+  DECODED: command='monitor_stop'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"monitor stopped"}
+  DECODED: status='ok' data='monitor stopped'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"dtcs"}
+  DECODED: command='dtcs'
+TX - [BLE]
+  RAW    : {"status":"ok","data":[{"code":"P0300","description":"Se detectan fallos de encendido aleatorios/m\u00faltiples cilindros"}]}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"ping"}
+  DECODED: command='ping'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"pong"}
+  DECODED: status='ok' data='pong'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"dtcs"}
+  DECODED: command='dtcs'
+TX - [BLE]
+  RAW    : {"status":"ok","data":[{"code":"P0300","description":"Se detectan fallos de encendido aleatorios/m\u00faltiples cilindros"}]}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"dtcs"}
+  DECODED: command='dtcs'
+TX - [BLE]
+  RAW    : {"status":"ok","data":[{"code":"P0300","description":"Se detectan fallos de encendido aleatorios/m\u00faltiples cilindros"}]}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=21
+RX - [BLE]
+  RAW    : {"cmd":"clear_dtcs"}
+  DECODED: command='clear_dtcs'
+TX - [BLE]
+  RAW    : {"status":"ok","data":null}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=15
+RX - [BLE]
+  RAW    : {"cmd":"ping"}
+  DECODED: command='ping'
+TX - [BLE]
+  RAW    : {"status":"ok","data":"pong"}
+  DECODED: status='ok' data='pong'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0xF190"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"ok","data":{"did":"0xF190","name":"VIN","value":"ARDUINO0000000000","unit":""}}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0xF18C"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"ok","data":{"did":"0xF18C","name":"Numero serie ECU","value":"ECU00001","unit":""}}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0xF189"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"ok","data":{"did":"0xF189","name":"Version software","value":"V1.0.0","unit":""}}
+  DECODED: status='ok'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2001"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2001"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2002"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2002"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2003"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2003"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2004"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2004"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2005"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2005"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2006"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2006"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2007"}
+  DECODED: command='uds_read_did'
+TX - [BLE]
+  RAW    : {"status":"error","message":"UDS NRC 0x22 for RDBI DID 0x2007"}
+  DECODED: status='error'
+[BLE] write callback: uuid='6e400002-b5a3-f393-e0a9-e50e24dcca9e' len=38
+RX - [BLE]
+  RAW    : {"cmd":"uds_read_did","did":"0x2008"}
+  DECODED: command='uds_read_did'

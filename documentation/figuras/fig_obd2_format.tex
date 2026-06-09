@@ -2,9 +2,11 @@
 \renewcommand{\arraystretch}{1.4}
 \textbf{Petición} (Escáner \textrightarrow\ ECU, CAN ID: \texttt{0x7E0})
 \vspace{0.3em}
+
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{|c|c|c|c|c|c|c|c|c|}
 \hline
-& \textbf{PCI} & \textbf{Modo} & \textbf{PID} &
+& \makecell{\textbf{PCI} \\ \scriptsize{\textit{Protocol Control Information}}} & \textbf{Modo} & \textbf{PID} &
 \textbf{Byte 3} & \textbf{Byte 4} & \textbf{Byte 5} & \textbf{Byte 6} & \textbf{Byte 7} \\
 \hline
 \textit{Valor} &
@@ -12,16 +14,20 @@
 \textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
 \hline
 \textit{Significado} &
-SF, 2 bytes & Modo 01 & RPM &
+\makecell{SF \\ \scriptsize{2 bytes}} & Modo 01 & RPM &
 \multicolumn{5}{c|}{\textit{padding}} \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \vspace{1em}
+
 \textbf{Respuesta} (ECU \textrightarrow\ Escáner, CAN ID: \texttt{0x7E8})
 \vspace{0.3em}
+
+\resizebox{\linewidth}{!}{%
 \begin{tabular}{|c|c|c|c|c|c|c|c|c|}
 \hline
-& \textbf{PCI} & \textbf{Modo} & \textbf{PID} &
+& \makecell{\textbf{PCI} \\ \scriptsize{\textit{Protocol Control Information}}} & \textbf{Modo} & \textbf{PID} &
 \textbf{Byte A} & \textbf{Byte B} & \textbf{Byte 5} & \textbf{Byte 6} & \textbf{Byte 7} \\
 \hline
 \textit{Valor} &
@@ -30,12 +36,14 @@ SF, 2 bytes & Modo 01 & RPM &
 \textit{0xAA} & \textit{0xAA} & \textit{0xAA} \\
 \hline
 \textit{Significado} &
-SF, 4 bytes & Modo+\texttt{0x40} & RPM &
+\makecell{SF \\ \scriptsize{4 bytes}} & Modo+\texttt{0x40} & RPM &
 \multicolumn{2}{c|}{datos RPM} &
 \multicolumn{3}{c|}{\textit{padding}} \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 \vspace{0.5em}
+
 \begin{tabular}{ll}
 \textbf{Decodificación:} & $\text{RPM} = \dfrac{(\texttt{A} \ll 8) \mid \texttt{B}}{4} = \dfrac{\texttt{0x1AF0}}{4} = 1724{,}0 \text{ rpm}$ \\
 \end{tabular}
