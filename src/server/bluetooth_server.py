@@ -291,6 +291,3 @@ class BLEDiagServer:
         except Exception as e:
             logger.error(f"[BLE] Error sending notification: {e}")
             raise
-
-
-BluetoothDiagServer = BLEDiagServer

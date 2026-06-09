@@ -5,10 +5,6 @@ class NrcException(Exception):
         super().__init__(f"NRC for mode 0x{mode:02X}: code 0x{nrc_code:02X}")
 
 
-class TransportError(Exception):
-    """Low-level CAN / ISO-TP communication failure."""
-
-
 class DiagnosticTimeoutError(Exception):
     """Diagnostic operation exceeded its timeout threshold."""
 
