@@ -1,58 +1,17 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
 
+import config.uds_dids as _dids
 from config.obd_pids import PIDS
 from core.exceptions import DiagnosticTimeoutError
 from core.interfaces.i_data_logger import IDataLogger
 from core.interfaces.i_diagnostic_session import IDiagnosticSession
-from core.interfaces.i_transport import ITransport
 from core.models.monitor_sample import MonitorSample
 from infraestructure.decoder.obd2_decoder import Obd2DataDecoder
+from infraestructure.transport.logging_transport import LoggingTransport
 from monitor.live_data_monitor import LiveDataMonitor
-
-# UDS service IDs
-_UDS_DSC         = 0x10  # DiagnosticSessionControl
-_UDS_RDBI        = 0x22  # ReadDataByIdentifier
-_UDS_NRC         = 0x7F
-
-# DID registry: did_int -> (name, unit, decoder)
-# decoder(data: bytes) -> str | int | float
-def _dec_str(data: bytes) -> str:
-    return data.decode("ascii", errors="replace").rstrip("\x00")
-
-def _dec_pct(data: bytes) -> int:
-    return round(data[0] * 100 / 255)
-
-def _dec_temp(data: bytes) -> int:
-    return data[0] - 40
-
-def _dec_rpm(data: bytes) -> int:
-    return ((data[0] << 8) | data[1]) // 4
-
-def _dec_raw1(data: bytes) -> int:
-    return data[0]
-
-def _dec_raw2(data: bytes) -> int:
-    return (data[0] << 8) | data[1]
-
-def _dec_voltage_mv(data: bytes) -> float:
-    return round(((data[0] << 8) | data[1]) / 1000, 2)
-
-_DID_META: dict[int, tuple[str, str, Any]] = {
-    0xF190: ("VIN",                    "",     _dec_str),
-    0xF18C: ("Numero serie ECU",       "",     _dec_str),
-    0xF189: ("Version software",       "",     _dec_str),
-    0x2001: ("Carga del motor",        "%",    _dec_pct),
-    0x2002: ("Temp. refrigerante",     "°C",   _dec_temp),
-    0x2003: ("RPM motor",              "rpm",  _dec_rpm),
-    0x2004: ("Velocidad",              "km/h", _dec_raw1),
-    0x2005: ("Posicion acelerador",    "%",    _dec_pct),
-    0x2006: ("Nivel combustible",      "%",    _dec_pct),
-    0x2007: ("Temp. aceite motor",     "°C",   _dec_temp),
-    0x2008: ("Tension bateria",        "V",    _dec_voltage_mv),
-}
+from session.uds_session import UdsSession
 
 
 class BtCommandHandler:
@@ -62,7 +21,7 @@ class BtCommandHandler:
         session: IDiagnosticSession,
         logger: IDataLogger,
         session_id: int,
-        transport: ITransport,
+        transport: LoggingTransport,
         transport_lock: threading.Lock,
         push_callback=None,
         auth_token: str | None = None,
@@ -77,7 +36,7 @@ class BtCommandHandler:
         self._authenticated = auth_token is None
         self._monitor: LiveDataMonitor | None = None
         self._monitor_lock = threading.Lock()
-        self._uds_session_type: int = 1
+        self._uds = UdsSession(transport)
         self._supported_pids: set[int] | None = None
 
     def set_push_callback(self, cb) -> None:
@@ -131,6 +90,7 @@ class BtCommandHandler:
 
     def _snapshot(self, _cmd: dict) -> dict:
         pid_ids = self._supported_pids if self._supported_pids is not None else set(PIDS.keys())
+        _decoder = Obd2DataDecoder()
         data = {}
         for pid_id in pid_ids:
             pid_def = PIDS[pid_id]
@@ -138,6 +98,7 @@ class BtCommandHandler:
                 with self._lock:
                     self._transport.send(pid_def.request)
                     raw = self._transport.receive()
+                _decoder.validate_response(raw, expected_mode=0x01)
                 value = pid_def.decode(raw)
                 data[pid_def.name] = {"value": value, "unit": pid_def.unit}
             except DiagnosticTimeoutError:
@@ -317,48 +278,34 @@ class BtCommandHandler:
 
     def _uds_session(self, cmd: dict) -> dict:
         session_type = int(cmd.get("session_type", 1))
-        request = bytes([_UDS_DSC, session_type])
         with self._lock:
-            self._transport.send(request)
-            raw = self._transport.receive()
-        if len(raw) >= 1 and raw[0] == _UDS_NRC:
-            nrc = raw[2] if len(raw) >= 3 else 0x00
-            raise RuntimeError(f"UDS NRC 0x{nrc:02X} for DSC")
-        if len(raw) < 6 or raw[0] != 0x50:
-            raise RuntimeError(f"Unexpected DSC response: {raw.hex()}")
-        p2_ms     = (raw[2] << 8) | raw[3]
-        p2ext_ms  = (raw[4] << 8) | raw[5]
-        self._uds_session_type = raw[1]
+            info = self._uds.set_session(session_type)
+        self._logger.log_command(
+            self._session_id, f"uds_session_{session_type}",
+            self._transport.last_sent, self._transport.last_received,
+        )
         return {"status": "ok", "data": {
-            "session_type":    self._uds_session_type,
-            "p2_server_ms":    p2_ms,
-            "p2_extended_ms":  p2ext_ms,
+            "session_type":   self._uds.current_session,
+            "p2_server_ms":   info["p2_server_ms"],
+            "p2_extended_ms": info["p2_extended_ms"],
         }}
 
     def _uds_read_did(self, cmd: dict) -> dict:
         did_str = str(cmd.get("did", "0x0000"))
         did_int = int(did_str, 16)
-        did_hi  = (did_int >> 8) & 0xFF
-        did_lo  = did_int & 0xFF
-        request = bytes([_UDS_RDBI, did_hi, did_lo])
+        definition = _dids.DIDS.get(did_int)
         with self._lock:
-            self._transport.send(request)
-            raw = self._transport.receive()
-        if len(raw) >= 1 and raw[0] == _UDS_NRC:
-            nrc = raw[2] if len(raw) >= 3 else 0x00
-            raise RuntimeError(f"UDS NRC 0x{nrc:02X} for RDBI DID 0x{did_int:04X}")
-        if len(raw) < 3 or raw[0] != 0x62:
-            raise RuntimeError(f"Unexpected RDBI response: {raw.hex()}")
-        self._logger.log_command(self._session_id, f"uds_read_did_{did_str}", request, raw)
-        data = raw[3:]
-        meta = _DID_META.get(did_int)
-        if meta:
-            name, unit, decoder = meta
-            value = decoder(data)
-        else:
-            name  = f"DID_0x{did_int:04X}"
-            unit  = ""
-            value = data.hex().upper()
+            if definition is not None:
+                value = self._uds.read_did(did_int)
+            else:
+                response = self._uds.read_did_raw(did_int)
+                value = bytes(response.data[2:]).hex().upper()
+        self._logger.log_command(
+            self._session_id, f"uds_read_did_{did_str}",
+            self._transport.last_sent, self._transport.last_received,
+        )
+        name = definition.name if definition else f"DID_0x{did_int:04X}"
+        unit = definition.unit if definition else ""
         return {"status": "ok", "data": {
             "did":   did_str,
             "name":  name,
@@ -385,7 +332,11 @@ class BtCommandHandler:
     def on_disconnect(self) -> None:
         self.stop_monitor()
         self._authenticated = self._auth_token is None
-        self._uds_session_type = 1
+        try:
+            with self._lock:
+                self._uds.set_session(_dids.UDS_SESSION_DEFAULT)
+        except Exception:
+            pass
 
     def close_session(self) -> None:
         """Flush DB buffer and end the current session on client disconnect.

@@ -1,10 +1,10 @@
 """UDS (ISO 14229-1) Data Identifier definitions.
 
 Wire encoding mirrors the Arduino simulator:
-  - percent values: uint8  encoded as raw*255/100
-  - temperatures:   int16  BE, °C direct
-  - RPM:            uint16 BE, rpm direct
-  - voltage:        uint16 BE, mV
+  - percent values: uint8  encoded as raw*255/100  (encodePercent)
+  - temperatures:   uint8  encoded as temp+40       (encodeTemp, 1 byte)
+  - RPM:            uint16 BE, rpm*4                (encodeRPM — divide by 4 to decode)
+  - voltage:        uint16 BE, mV                   (raw, no scaling)
   - ASCII fields:   raw bytes decoded as ASCII
 """
 
@@ -36,13 +36,13 @@ DIDS: dict[int, DidDefinition] = {
     ),
     0xF18C: DidDefinition(
         did=0xF18C, name="ECU Serial Number", unit="",
-        response_bytes=7,
-        decode=lambda raw: raw[_D:_D + 4].decode("ascii", errors="replace"),
+        response_bytes=11,
+        decode=lambda raw: raw[_D:_D + 8].decode("ascii", errors="replace").rstrip("\x00"),
     ),
     0xF189: DidDefinition(
         did=0xF189, name="Software Version", unit="",
-        response_bytes=7,
-        decode=lambda raw: raw[_D:_D + 4].decode("ascii", errors="replace"),
+        response_bytes=9,
+        decode=lambda raw: raw[_D:_D + 6].decode("ascii", errors="replace").rstrip("\x00"),
     ),
 
     # --- Proprietary live-data DIDs (Extended session only) ---
@@ -54,14 +54,14 @@ DIDS: dict[int, DidDefinition] = {
     ),
     0x2002: DidDefinition(
         did=0x2002, name="Coolant Temp", unit="°C",
-        response_bytes=5,
-        decode=lambda raw: int.from_bytes(raw[_D:_D + 2], "big", signed=True),
+        response_bytes=4,
+        decode=lambda raw: raw[_D] - 40,
         extended_only=True,
     ),
     0x2003: DidDefinition(
         did=0x2003, name="Engine RPM", unit="rpm",
         response_bytes=5,
-        decode=lambda raw: int.from_bytes(raw[_D:_D + 2], "big", signed=False),
+        decode=lambda raw: ((raw[_D] << 8) | raw[_D + 1]) // 4,
         extended_only=True,
     ),
     0x2004: DidDefinition(
@@ -84,14 +84,14 @@ DIDS: dict[int, DidDefinition] = {
     ),
     0x2007: DidDefinition(
         did=0x2007, name="Engine Oil Temp", unit="°C",
-        response_bytes=5,
-        decode=lambda raw: int.from_bytes(raw[_D:_D + 2], "big", signed=True),
+        response_bytes=4,
+        decode=lambda raw: raw[_D] - 40,
         extended_only=True,
     ),
     0x2008: DidDefinition(
         did=0x2008, name="Battery Voltage", unit="V",
         response_bytes=5,
-        decode=lambda raw: int.from_bytes(raw[_D:_D + 2], "big", signed=False) / 1000,
+        decode=lambda raw: ((raw[_D] << 8) | raw[_D + 1]) / 1000,
         extended_only=True,
     ),
 }
