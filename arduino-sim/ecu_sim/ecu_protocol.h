@@ -16,7 +16,7 @@
 
 // ---------- LOGGING ----------
 // 0 = quiet (only errors + key events), 1 = all RX/TX frames, 2 = + broadcasts
-#define LOG_LEVEL 0
+#define LOG_LEVEL 1
 
 // ---------- CAN BUS ----------
 #define CAN_SPEED          500E3
@@ -128,12 +128,12 @@
 //
 // BROADCAST_ENABLE: 1 = emit 0x280/0x320/0x3D0 frames every BROADCAST_INTERVAL_MS
 //                   0 = no unsolicited frames (bus silent except OBD responses)
-#define BROADCAST_ENABLE       0
-#define BROADCAST_INTERVAL_MS  100
+#define BROADCAST_ENABLE       1
+#define BROADCAST_INTERVAL_MS  10000
 
 // ADD_NOISE: 1 = add random jitter to sensor values each update cycle
 //            0 = clean deterministic values
-#define ADD_NOISE              0
+#define ADD_NOISE              1
 
 // Per-sensor noise amplitude (only active when ADD_NOISE 1)
 #define NOISE_RPM_MAX        25
@@ -231,14 +231,14 @@ struct DTC {
 #define DID_SW_VERSION             0xF189  // Software Version (4 ASCII)
 
 // Proprietary live-data DIDs — Extended session only
-#define DID_ENGINE_LOAD_UDS        0x2001  // uint8, percent×255/100
-#define DID_COOLANT_TEMP_UDS       0x2002  // int16 BE, °C
-#define DID_RPM_UDS                0x2003  // uint16 BE, rpm
-#define DID_VEHICLE_SPEED_UDS      0x2004  // uint8, km/h
-#define DID_THROTTLE_POS_UDS       0x2005  // uint8, percent×255/100
-#define DID_FUEL_LEVEL_UDS         0x2006  // uint8, percent×255/100
-#define DID_OIL_TEMP_UDS           0x2007  // int16 BE, °C
-#define DID_BATTERY_VOLTAGE_UDS    0x2008  // uint16 BE, mV
+#define DID_ENGINE_LOAD_UDS        0x2001  // uint8,   percent×255/100 (encodePercent)
+#define DID_COOLANT_TEMP_UDS       0x2002  // uint8,   temp+40 (encodeTemp, 1 byte)
+#define DID_RPM_UDS                0x2003  // uint16 BE, rpm×4 (encodeRPM — divide by 4 to decode)
+#define DID_VEHICLE_SPEED_UDS      0x2004  // uint8,   km/h raw
+#define DID_THROTTLE_POS_UDS       0x2005  // uint8,   percent×255/100 (encodePercent)
+#define DID_FUEL_LEVEL_UDS         0x2006  // uint8,   percent×255/100 (encodePercent)
+#define DID_OIL_TEMP_UDS           0x2007  // uint8,   temp+40 (encodeTemp, 1 byte)
+#define DID_BATTERY_VOLTAGE_UDS    0x2008  // uint16 BE, mV raw
 
 // ---------- ENCODING UTILITIES ----------
 // OBD-II wire format: rpm*4, temp+40, percent*255/100, fuel trim 0-255 centered at 128

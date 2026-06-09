@@ -144,7 +144,7 @@ void loop() {
 // ---------- INITIALIZATION ----------
 
 void initVehicleData() {
-  strcpy(vehicle.vin, "ARDUINO00000000000");
+  strcpy(vehicle.vin, "ARDUINO0000000000");  // 17 chars exactos (cabe en vin[18] con null)
 
   vehicle.engineType         = ENGINE_TYPE_GENERIC;
   vehicle.odometer           = 0;
@@ -654,10 +654,10 @@ bool handleMode01(uint8_t pid) {
 // Sends up to 2 DTCs as ISO-TP Single Frame (max 7 payload bytes).
 bool handleMode03() {
   responseBuffer[0] = MODE_03_DTCS + RESPONSE_SUCCESS;
-  responseBuffer[1] = numStoredDTCs;
   responseLength = 2;
 
   uint8_t toSend = min(numStoredDTCs, (uint8_t)2);
+  responseBuffer[1] = toSend;
   for (uint8_t i = 0; i < toSend; i++) {
     if (dtcList[i].active && responseLength <= ISOTP_SF_MAX_PAYLOAD - 2) {
       responseBuffer[responseLength++] = (dtcList[i].code >> 8) & 0xFF;
