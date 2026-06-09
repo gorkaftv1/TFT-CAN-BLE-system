@@ -1,0 +1,52 @@
+\section{Contexto}
+
+El sector automovilístico ha consolidado una tendencia hacia una sensorización masiva que conlleva la comunicación de datos en tiempo real, impulsada por la necesidad de monitorizar el estado del vehículo y para anticipar o detectar posibles fallos en el estado general del vehículo. Esta tendencia ha consistido en la incorporación de sensores cada vez más sofisticados, tales como sensores de presión, temperatura, posición. Estos generan una enorme cantidad de datos que deben ser procesados y transmitidos entre las distintas Unidades de Control Electrónico (ECU, del inglés \textit{Electronic Control Unit}) que controlan el funcionamiento del vehículo, además estos datos han de ser tratados según su prioridad y criticidad, requiriendo de la adopción de protocolos de comunicación robustos y eficientes.
+
+Para lograr una comunicación fiable, en tiempo real y con gestión de prioridades los fabricantes comenzaron a implementar el bus CAN (\textit{Controller Area Network}), un protocolo de comunicaciones serie desarrollado en Robert Bosch GmbH a partir de 1983, publicado en 1986 y estandarizado bajo la norma ISO 11898. Esencialmente el bus CAN consiste en un protocolo que permite la comunicación de múltiples microcontroladores compartiendo un mismo medio y resolviendo los conflictos de transmisión mediante un mecanismo de prioridades que se basa en el ID del mensaje siendo el bit 0 el dominante. Un ejemplo de la gestión de prioridades podría ser: un coche que va a 120 km/h y el conductor pisa el freno a fondo, esto provoca que el sensor antibloqueo de los frenos (ABS) envíe un mensaje a la ECU del motor para indicar que las ruedas se están bloqueando, sin embargo al mismo tiempo la ECU envia al tablero de instrumentos las revoluciones por minuto(RPM) pero su ID tiene un número mayor con lo que se quedará en silencio y cuando el ABS termine su transmisión la ECU enviará las RPM nuevamente.
+
+Por otra parte, en 1996 se introdujo el estándar OBD-II (\textit{On-Board Diagnostics, segunda generación}), que define un conector físico de 16 pines situado en el habitáculo(J1962), un conjunto de protocolos de comunicación y una batería de códigos de error comunes (DTCs - \textit{Diagnostic Trouble Code}). Junto con esto, el protocolo también indica qué sensores deben monitorizar el coche continuamente y evaluar el estado de los microcontroladores integrados en el vehículo.
+
+\section{Descripción del sistema desarrollado}
+
+Este proyecto se ha centrado en el diseño y desarrollo de un sistema de diagnóstico de vehículos que usan el protocolo OBD-II sobre bus CAN y que ofrece acceso inalámbrico usando Bluetooth Low Energy (BLE). Durante el desarrollo se han implementado tres componentes principales:
+
+El componente principal es la \textbf{herramienta de diagnóstico}, creada sobre una Raspberry Pi 4 conectada al bus CAN usando el CAN HAT rs485 que cuenta con el controlador MCP2515. Esta herramienta implementa los siguientes protocolos en las distintas capas: 
+\begin{itemize}
+    \item \textbf{ISO-TP (ISO 15765-2)} como capa de transporte sobre CAN.
+    \item \textbf{OBD-II (SAE J1979)} como capa de aplicación.
+    \item \textbf{UDS  (ISO 14229-1)} como capa de aplicación
+\end{itemize}
+
+La herramienta se encarga tanto de codificar peticiones como de decodificar los parámetros recibidos, almacenándolos en una base de datos SQLite y a su vez transmitiéndolos inalámbricamente usando Bluetooth Low Energy (BLE) mediante un servidor GATT que se encuentra montado en la propia Raspberry Pi que implementa el servicio Nordic UART Service (NUS).
+
+El componente desarrollado para realizar pruebas del protocolo y depuración es un \textbf{simulador de ECU} implementado sobre una plataforma Arduino MKR WAN 1310 con un shield CAN.
+
+El tercer componente es una \textbf{aplicación móvil nativa} desarrollada con React Native y Expo, compatible con Android e iOS, que permite la conexión a la Raspberry Pi vía Bluetooth Low Energy. La aplicación ofrece al usuario una interfaz para la monitorización en tiempo real de los parámetros del vehículo, la consulta y gestión de códigos de avería (DTCs), asimismo presenta una pantalla de logs para depuración que permite al usuario consultar el funcionamiento de la comunicación.
+
+El conjunto del desarrollo de los tres componentes ha resultado en un sistema de diagnóstico OBD-II portable, inalambrico, validado en el simulador de ECU desarrollado en la placa de Arduino de manera previa a ser usado en un vehiculo real.
+
+\section{Motivación}
+
+En el plan de estudios del Grado de Ingeniería Informática, la asignatura de Internet de las cosas introduce el ecosistema de los sistemas empotrados y sus protocolos de comunicación, entre ellos el bus CAN y su uso en el sector del automóvil. Esa primera toma de contacto, unida al interés personal por la automoción, es la que ha dado lugar a este trabajo, centrado en el estudio y la implementación del bus CAN, el protocolo OBD-II y los demás protocolos que orquestan la comunicación en un vehículo.
+
+Actualmente los automóviles integran numerosos microcontroladores que generan datos de telemetría y además cuentan con el protocolo de diagnóstico OBD-II. Estos son accesibles a través del puerto OBD que se encuentra normalmente en la parte inferior del volante en el asiento del piloto. Este puerto permite que no solo los talleres y personas especializadas en el mundo de la mecánica y electromecánica, sino que cualquier persona con un "escáner" pueda ver el estado de su coche o pueda diagnosticar qué fallo tiene o anticipar posibles fallos.
+
+En el mercado existen numerosas soluciones para el acceso al diagnóstico OBD-II~\cite{CSSElec_OBD2}, en su mayoría basadas en el adaptador ELM327 junto con aplicaciones como Torque Pro u OBD Fusion. Más que recurrir a una de ellas, este trabajo aborda la construcción del sistema desde cero —implementando los protocolos de aplicación OBD-II y UDS sobre la capa de transporte ISO-TP, con un fin principalmente formativo y de comprensión profunda de los protocolos de comunicación del vehículo.
+
+\section{Estructura del documento}
+
+El presente documento se organiza en siete capítulos cuyo contenido se resume a continuación.
+
+El \textbf{Capítulo~2} describe el estado actual de las tecnologías usadas en el proyecto, recoge la motivación por la cual se ha decidido realizar el trabajo y la definición de los objetivos que se pretenden alcanzar.
+
+El \textbf{Capítulo~3} describe las principales aportaciones del trabajo, las competencias específicas del Grado de Ingeniería Informática desarrolladas durante su realización y la relación del proyecto con los Objetivos de Desarrollo Sostenible de la ONU.
+
+El \textbf{Capítulo~4} presenta la metodología de desarrollo seguida, basada en prototipos incrementales, detalla las fases y tareas en las que se estructuró el trabajo.
+
+El \textbf{Capítulo~5} desarrolla en detalle el diseño e implementación de los distintos prototipos del sistema.
+
+El \textbf{Capítulo~6} se presentan los resultados obtenidos verificados frente a una herramienta de diagnosis comercial.
+
+El \textbf{Capítulo~7} detalla las conclusiones del trabajo, las líneas de trabajo futuro identificadas y el uso de herramientas de inteligencia artificial durante el desarrollo.
+
+Finalmente, el documento incluye la bibliografía de referencia y dos anexos: la tabla completa de los PIDs del modo 0x01 definidos por el estándar OBD-II y el catálogo de comandos del protocolo BLE empleado entre la aplicación móvil y la Raspberry Pi. El código fuente completo del proyecto está disponible en su repositorio.

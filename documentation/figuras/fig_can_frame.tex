@@ -1,27 +1,36 @@
 \centering
 \renewcommand{\arraystretch}{1.4}
-\begin{tabular}{|c|c|c|c|c|c|c|c|c|c|c|c|}
+
+% Tabla 1: Arbitration + Control
+\begin{tabular}{|c|c|c|c|c|c|}
 \hline
-\textbf{SOF} &
-\textbf{ID} &
-\textbf{RTR} &
-\textbf{IDE} &
-\textbf{r0} &
-\textbf{DLC} &
-\textbf{DATA} &
-\textbf{CRC} &
-\textbf{CD} &
-\textbf{ACK} &
-\textbf{AD} &
-\textbf{EOF} \\
+\makecell{\textbf{SOF} \\ \scriptsize{Start Of Frame}} &
+\makecell{\textbf{ID} \\ \scriptsize{Identificador}} &
+\makecell{\textbf{RTR} \\ \scriptsize{Remote Transmission Request}} &
+\makecell{\textbf{IDE} \\ \scriptsize{ID Extension}} &
+\makecell{\textbf{r0} \\ \scriptsize{Reservado}} &
+\makecell{\textbf{DLC} \\ \scriptsize{Data Length Code}} \\
 \hline
-1 b & 11 b & 1 b & 1 b & 1 b & 4 b & 0--64 b & 15 b & 1 b & 1 b & 1 b & 7 b \\
+1 bit & 11 bits & 1 bit & 1 bit & 1 bit & 4 bits \\
 \hline
-\multicolumn{5}{|c|}{\textit{Arbitration + Control}} &
-\multicolumn{1}{c|}{} &
-\multicolumn{1}{c|}{\textit{Datos}} &
-\multicolumn{2}{c|}{\textit{CRC}} &
-\multicolumn{2}{c|}{\textit{ACK}} &
-\multicolumn{1}{c|}{\textit{EOF}} \\
+\multicolumn{5}{|c|}{\textit{Arbitration + Control}} & \\
+\hline
+\end{tabular}
+
+\vspace{0.5cm}
+
+% Tabla 2: Datos, CRC, ACK, EOF
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+\makecell{\textbf{DATA} \\ \scriptsize{Datos}} &
+\makecell{\textbf{CRC} \\ \scriptsize{Cyclic Redundancy Check}} &
+\makecell{\textbf{CD} \\ \scriptsize{CRC Delimiter}} &
+\makecell{\textbf{ACK} \\ \scriptsize{Acknowledgement}} &
+\makecell{\textbf{AD} \\ \scriptsize{ACK Delimiter}} &
+\makecell{\textbf{EOF} \\ \scriptsize{End Of Frame}} \\
+\hline
+0--64 bits & 15 bits & 1 bit & 1 bit & 1 bit & 7 bits \\
+\hline
+\textit{Datos} & \multicolumn{2}{c|}{\textit{CRC}} & \multicolumn{2}{c|}{\textit{ACK}} & \textit{EOF} \\
 \hline
 \end{tabular}

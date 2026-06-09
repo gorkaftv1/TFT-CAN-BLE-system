@@ -10,17 +10,17 @@ Para verificar que los resultados obtenidos por la herramienta desarrollada son 
 \centering
 \begin{minipage}[t]{0.42\textwidth}
 \centering
-\includegraphics[height=10.5cm]{Ilustraciones/cuadro_konwei.png}
+\includegraphics[height=9.5cm]{Ilustraciones/cuadro_konwei.png}
 \subcaption{Cuadro de instrumentos (lectura de PIDs).}
 \label{fig:ref_panel}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.42\textwidth}
 \centering
-\includegraphics[height=10.5cm]{Ilustraciones/dtc_konwei.PNG}
+\includegraphics[height=9.5cm]{Ilustraciones/dtc_konwei.PNG}
 \subcaption{Lista de DTCs.}
 \label{fig:ref_dtcs}
 \end{minipage}
-\caption{Herramienta comercial de referencia (Car Scanner ELM OBD2~\cite{CarScanner_app}) usada como patrón de comparación: cuadro de instrumentos (a) y lista de DTCs (b).}
+\caption{Herramienta comercial de referencia (Car Scanner ELM OBD2~\cite{CarScanner_app}): cuadro de instrumentos (a) y lista de DTCs (b).}
 \label{fig:ref_comercial}
 \end{figure}
 
@@ -31,13 +31,20 @@ Para verificar que los resultados obtenidos por la herramienta desarrollada son 
 \section{Validación sobre vehículo real}
 \label{sec:resultados_vehiculo_real}
 
-Tras completar la validación sobre el banco de ensayo, el sistema se probó sobre un vehículo real. El vehículo objetivo inicial era un SEAT Ibiza 6J, pero debido a que la plataforma de ese modelo no implementa el protocolo OBD-II sobre el bus CAN en los pines 6 y 14 del puerto OBD, la validación final se realizó sobre un \textbf{Škoda Yeti de 2015}, perteneciente igualmente al grupo VAG y, por tanto, representativo de la misma arquitectura de diagnóstico. La conexión se efectuó mediante un cable OBD-II estándar que nos revela todos los pines del puerto de diagnóstico del vehículo: la Raspberry Pi actuó como interfaz entre el bus CAN del vehículo conectado a través de los pines 6 y 14 (\texttt{CAN\_L} y \texttt{CAN\_H} respectivamente) del puerto OBD-II y la aplicación móvil, manteniendo exactamente el mismo stack de software validado en el banco (\texttt{IsoTpTransport} sobre SocketCAN, servidor BLE GATT con NUS y aplicación React Native).
+Tras completar la validación sobre el banco de ensayo, el sistema se probó sobre un vehículo real. El vehículo objetivo inicial era un SEAT Ibiza 6J, pero debido a que la plataforma de ese modelo no implementa el protocolo OBD-II sobre el bus CAN en los pines 6 y 14 del puerto OBD, la validación final se realizó sobre un \textbf{Škoda Yeti de 2015}, perteneciente igualmente al grupo VAG y, por tanto, representativo de la misma arquitectura de diagnóstico. La conexión se efectuó mediante un cable OBD-II estándar~\cite{YingtuYou_OBD2} (Figura~\ref{fig:cable_obd}) que nos revela todos los pines del puerto de diagnóstico del vehículo: la Raspberry Pi actuó como interfaz entre el bus CAN del vehículo conectado a través de los pines 6 y 14 (\texttt{CAN\_H} y \texttt{CAN\_L} respectivamente) del puerto OBD-II y la aplicación móvil, manteniendo exactamente el mismo stack de software validado en el banco (\texttt{IsoTpTransport} sobre SocketCAN, servidor BLE GATT con NUS y aplicación React Native).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.3\textwidth]{Ilustraciones/cable_OBD.png}
+\caption{Cable OBD-II utilizado para la conexión al puerto de diagnóstico del Škoda Yeti, con los pines expuestos que permiten identificar y conectar directamente \texttt{CAN\_H} (pin~6) y \texttt{CAN\_L} (pin~14).}
+\label{fig:cable_obd}
+\end{figure}
 
 La conexión al vehículo demostró que el protocolo OBD-II implementado es compatible con ECUs de producción: la herramienta fue capaz de consultar los PIDs del modo 0x01 soportados por el vehículo, leer el VIN real mediante la secuencia ISO-TP multi-frame y recibir datos de telemetría en tiempo real a través de la aplicación móvil. Las respuestas del vehículo presentaron tiempos de respuesta ligeramente superiores a los del simulador (10--30\,ms frente a 2--8\,ms).
 
 \begin{figure}[!htbp]
 \centering
-\includegraphics[width=0.45\textwidth]{Ilustraciones/foto_coche_pi.jpeg}
+\includegraphics[height=7.5cm]{Ilustraciones/foto_coche_pi.jpeg}
 \caption{Sistema montado en el vehículo real: cable OBD-II conectado al puerto de diagnóstico, Raspberry Pi.}
 \label{fig:vehiculo_real}
 \end{figure}
@@ -46,26 +53,27 @@ Los datos leídos del Škoda Yeti se almacenaron en la base de datos SQLite como
 
 \begin{figure}[H]
 \centering
-\begin{minipage}[t]{0.32\textwidth}
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[height=7cm]{Ilustraciones/app_session_muestras.jpg}
+\includegraphics[height=9.5cm]{Ilustraciones/app_session_muestras.jpg}
 \subcaption{Muestras de la sesión por sensor.}
 \label{fig:skoda_muestras}
 \end{minipage}\hfill
-\begin{minipage}[t]{0.32\textwidth}
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[height=7cm]{Ilustraciones/app_session_muestra_detalle.jpg}
+\includegraphics[height=9.5cm]{Ilustraciones/app_session_muestra_detalle.jpg}
 \subcaption{Detalle de una muestra.}
 \label{fig:skoda_muestra_detalle}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.32\textwidth}
-\centering
-\includegraphics[height=7cm]{Ilustraciones/app_session_dtc.jpg}
-\subcaption{DTCs leídos de la ECU.}
-\label{fig:skoda_dtc}
 \end{minipage}
-\caption{Validación sobre el Škoda Yeti: detalle de la sesión registrada en SQLite, con las muestras de telemetría agrupadas por sensor (a), el detalle de una muestra concreta (b) y la lista de DTCs leídos del vehículo (c).}
+\caption{Validación sobre el Škoda Yeti: muestras de telemetría agrupadas por sensor (a) y detalle de una muestra concreta con su valor decodificado (b).}
 \label{fig:skoda_sesion}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[height=9.5cm]{Ilustraciones/app_session_dtc.jpg}
+\caption{Validación sobre el Škoda Yeti: lista de DTCs leídos de la ECU del vehículo.}
+\label{fig:skoda_dtc}
 \end{figure}
 
 El VIN reconstruido por la herramienta mediante la secuencia ISO-TP multi-frame fue \texttt{TMBJF45LXF6022462} (código de fabricante \texttt{TMB}, correspondiente a Škoda), coincidiendo carácter a carácter con el grabado en el vehículo. La tabla~\ref{tab:skoda_telemetria} compara los rangos de telemetría medidos por la herramienta desarrollada sobre el Škoda Yeti (extraídos de la base de datos SQLite con \texttt{scripts/db\_metrics.py} sobre un total de 1\,627 muestras) con las lecturas obtenidas por la herramienta comercial de referencia (KONWEII junto a Car Scanner ELM OBD2~\cite{KONWEII_scanner, CarScanner_app}) sobre el mismo vehículo.
@@ -75,6 +83,7 @@ El VIN reconstruido por la herramienta mediante la secuencia ISO-TP multi-frame 
 \label{tab:skoda_telemetria}
 \centering
 \renewcommand{\arraystretch}{1.2}
+\resizebox{\textwidth}{!}{%
 \begin{tabular}{|c|l|c|c|c|}
 \hline
 \textbf{PID} & \textbf{Parámetro} & \textbf{Herramienta desarrollada} & \textbf{Herramienta comercial} & \textbf{Coincide} \\
@@ -89,10 +98,11 @@ El VIN reconstruido por la herramienta mediante la secuencia ISO-TP multi-frame 
 \texttt{0x33} & Presión barométrica    & 101\,kPa         & 106\,kPa         & $\approx$ \\
 \texttt{0x0D} & Velocidad              & 255\,km/h (cte.) & 255\,km/h (cte.) & Sí \\
 \hline
-\end{tabular}
+\end{tabular}%
+}
 
 \vspace{2pt}
-{\footnotesize $^{*}$ La prueba con la herramienta comercial fue más breve, por lo que el motor alcanzó una temperatura de refrigerante inferior (63\,°C frente a 72\,°C); el rango es coherente en ambos casos.}
+{\footnotesize $^{*}$ La prueba con la herramienta comercial fue más breve, por lo que el motor alcanzó una temperatura de refrigerante inferior (63\,°C frente a 72\,°C). El rango es coherente en ambos casos.}
 \end{table}
 
 Las lecturas de ambas herramientas resultaron equivalentes en la práctica totalidad de los parámetros. Las únicas diferencias fueron la temperatura de refrigerante (consecuencia de la distinta duración de cada prueba) y la presión barométrica (106\,kPa frente a 101\,kPa, una desviación de unos 5\,kPa atribuible a la tolerancia y calibración del sensor). Esta correspondencia confirma la validez de las lecturas de la herramienta desarrollada frente a un instrumento comercial de referencia.
@@ -118,25 +128,26 @@ Finalmente se realizó una prueba adicional sobre un \textbf{Opel Astra K}, pert
 
 \begin{figure}[H]
 \centering
-\begin{minipage}[t]{0.32\textwidth}
-\centering
-\includegraphics[height=7cm]{Ilustraciones/opel_konwei.PNG}
-\subcaption{Esc\'aner comercial de referencia.}
+\includegraphics[height=10cm]{Ilustraciones/opel_konwei.PNG}
+\caption{Herramienta comercial de referencia (Car Scanner ELM OBD2~\cite{CarScanner_app}) sobre el Opel Astra K: no detecta ningún DTC activo.}
 \label{fig:opel_konwei}
-\end{minipage}\hfill
-\begin{minipage}[t]{0.32\textwidth}
+\end{figure}
+
+\begin{figure}[H]
 \centering
-\includegraphics[height=7cm]{Ilustraciones/opel_panel.png}
-\subcaption{Panel de telemetr\'ia.}
+\begin{minipage}[t]{0.48\textwidth}
+\centering
+\includegraphics[height=10cm]{Ilustraciones/opel_panel.png}
+\subcaption{Panel de telemetría.}
 \label{fig:opel_panel}
 \end{minipage}\hfill
-\begin{minipage}[t]{0.32\textwidth}
+\begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[height=7cm]{Ilustraciones/opel_dtc.png}
+\includegraphics[height=10cm]{Ilustraciones/opel_dtc.png}
 \subcaption{Escaneo de DTCs.}
 \label{fig:opel_dtc}
 \end{minipage}
-\caption{Validación sobre el Opel Astra K: lectura de la herramienta comercial de referencia (a) frente al panel de telemetría (b) y el escaneo de DTCs (c) de la herramienta desarrollada.}
+\caption{Herramienta desarrollada sobre el Opel Astra K: panel de telemetría (a) y escaneo de DTCs (b).}
 \label{fig:opel_astra}
 \end{figure}
 
@@ -176,46 +187,37 @@ La respuesta VIN se validó con una cadena de 17 caracteres ASCII, verificando q
 El ciclo de gestión de DTCs se validó íntegramente: lectura de lista vacía, inyección de los tres DTCs del conjunto (\texttt{P0300}, \texttt{P0171}, \texttt{P0420}) mediante la interrupción hardware del pin D4, lectura de la lista con los códigos presentes, borrado y confirmación de lista vacía. La codificación J2012 de los DTCs fue correcta en todos los casos.
 
 
-% TODO - verificar que los números de latencia son reales (medidos), no estimados
-% REVISAR [MÉTRICAS]: extraer cifras reales de la BD SQLite para respaldar esta
-%   sección (timestamps monotonic_ts/wall_ts de la tabla samples permiten calcular
-%   periodos e intervalos reales; tabla commands tiene request/response para contar
-%   transacciones). Sustituir rangos estimados por medias/percentiles medidos.
 \section{Métricas de rendimiento de la comunicación}
 \label{sec:resultados_rendimiento}
 
-Se midió la latencia extremo a extremo de una consulta OBD-II completa, desde el envío del comando JSON desde la aplicación móvil hasta la recepción de la respuesta decodificada, en condiciones de bus sin ruido. Las mediciones se realizaron sobre 100 consultas consecutivas del PID \texttt{0x0C} (RPM).
+Se midió la latencia round-trip extremo a extremo de una consulta completa, desde el envío del comando JSON por la aplicación móvil hasta la recepción de la respuesta decodificada. Las marcas de tiempo de transmisión (\texttt{ble\_tx}) y de recepción (\texttt{ble\_rx}) registradas por la propia aplicación durante una sesión real sobre el banco de pruebas permiten emparejar cada petición con su respuesta; sobre las 38 transacciones de la sesión, el script \texttt{scripts/latency\_from\_csv.py} calcula los estadísticos recogidos en la tabla~\ref{tab:latencias}.
 
-Los resultados obtenidos se resumen en la tabla~\ref{tab:latencias}:
-
-\begin{table}[!htbp]
-\caption{Latencia extremo a extremo de una consulta OBD-II (100 muestras, bus en modo determinista).}
+\begin{table}[H]
+\caption{Latencia round-trip extremo a extremo medida sobre 38 transacciones reales.}
 \label{tab:latencias}
 \centering
 \renewcommand{\arraystretch}{1.2}
 \begin{tabular}{|l|c|}
 \hline
-\textbf{Componente} & \textbf{Latencia media (ms)} \\
+\textbf{Estadístico} & \textbf{Latencia (ms)} \\
 \hline
-BLE Write (app → Raspberry Pi) & 12 -- 25 \\
-Procesamiento JSON + construcción trama & $< 1$ \\
-Transacción ISO-TP CAN (SF) & 2 -- 8 \\
-Decodificación + logging SQLite & 3 -- 7 \\
-BLE Notify (Raspberry Pi → app) & 10 -- 20 \\
-\hline
-\textbf{Total extremo a extremo} & \textbf{28 -- 62} \\
+Mínimo        & 57 \\
+Mediana       & 100 \\
+Media         & 128 \\
+Percentil 95  & 387 \\
+Máximo        & 548 \\
 \hline
 \end{tabular}
 \end{table}
 
-La latencia dominante en el sistema es la introducida por la capa BLE, que suma las contribuciones del Write y la Notify. La latencia CAN+ISO-TP es despreciable frente a la BLE a las velocidades de bus utilizadas.
+La latencia dominante la introduce la capa BLE (las operaciones \textbf{Write} y \textbf{Notify}), siendo la contribución de CAN+ISO-TP despreciable a las velocidades de bus empleadas. La mediana se mantiene en torno a 100\,ms, coherente con el carácter interactivo de la herramienta. El percentil 95 más elevado (387\,ms) corresponde a las operaciones con respuesta multi-frame de mayor tamaño (\texttt{probe\_pids} y \texttt{snapshot}), mientras que las consultas individuales como \texttt{uds\_read\_did} se mantienen en una mediana de 98\,ms.
 
 % Cadencia real medida con scripts/db_metrics.py sobre las sesiones de monitorización
 % continua de diagnostics.db (intervalo entre muestras consecutivas de cada PID).
-En el modo de monitorización continua, el periodo de ciclo medido escala con el número de PIDs solicitados en cada vuelta: con un conjunto reducido de 5--6 PIDs el periodo se aproxima al objetivo de 500\,ms (mediana de 516\,ms con 24 PIDs en una sesión y de 560\,ms con 6 PIDs en otra), mientras que con conjuntos amplios de 18--20 PIDs el ciclo se sitúa en torno a los 600--700\,ms (mediana de 703\,ms con 18 PIDs), por el coste acumulado de las transacciones ISO-TP secuenciales. En todos los casos la dispersión fue baja (rango intercuartílico inferior a 25\,ms en las sesiones deterministas) y el sistema mantuvo una tasa de actualización estable sin pérdidas de muestras. El reenvío de las muestras del hilo de monitorización al cliente BLE no presentó pérdidas ni saturación en ninguno de los ensayos.
+En el modo de monitorización continua, el periodo de ciclo real medido escala de forma lineal con el número de PIDs solicitados concurrentemente, debido al coste acumulado de las transacciones ISO-TP secuenciales en el bus CAN. Cuando el cliente solicita un conjunto reducido de 7 PIDs (configurado con un intervalo objetivo de 500\,ms), el sistema estabiliza su periodo de refresco con una mediana de 586\,ms y una media de 591\,ms, reflejando un overhead de procesamiento e I/O de aproximadamente 80--100\,ms respecto al temporizador ideal. A medida que el volumen de PIDs asciende a 18 y 24 solicitudes por ciclo, la naturaleza síncrona y bloqueante del escaneo expande el periodo de ciclo a medianas de 703\,ms y 816\,ms, respectivamente. En todos los escenarios concurrentes analizados bajo bus determinista, la dispersión estadística se mantuvo notablemente acotada (con rangos intercuartílicos inferiores a 25\,ms), garantizando una tasa de actualización altamente predecible y libre de pérdidas de muestras o saturación en el hilo de transmisión BLE.
 
-\begin{table}[!htbp]
-\caption{Cadencia real de la monitorización continua medida sobre la base de datos SQLite (intervalo entre muestras consecutivas por PID).}
+\begin{table}[H]
+\caption{Cadencia real de la monitorización continua medida sobre la base de datos SQLite (intervalo medido entre ráfagas consecutivas de actualización).}
 \label{tab:cadencia}
 \centering
 \renewcommand{\arraystretch}{1.2}
@@ -223,10 +225,9 @@ En el modo de monitorización continua, el periodo de ciclo medido escala con el
 \hline
 \textbf{PIDs por ciclo} & \textbf{Periodo mediana (ms)} & \textbf{Media (ms)} & \textbf{P10 -- P90 (ms)} \\
 \hline
-6  & 560 & 529 & 311 -- 571 \\
+7  & 586 & 591 & 571 -- 631 \\
 18 & 703 & 706 & 692 -- 713 \\
-20 & 453 & 426 & 310 -- 475 \\
-24 & 516 & 514 & 506 -- 526 \\
+24 & 816 & 821 & 806 -- 838 \\
 \hline
 \end{tabular}
 \end{table}
@@ -254,17 +255,17 @@ La Figura~\ref{fig:res_consolas} muestra la traza de ejecución durante una de e
 \centering
 \begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[height=7.5cm]{Ilustraciones/iter_2_ard.png}
+\includegraphics[height=9.5cm]{Ilustraciones/iter_3_ard.png}
 \subcaption{Consola del simulador Arduino.}
 \label{fig:res_consola_ard}
 \end{minipage}\hfill
 \begin{minipage}[t]{0.48\textwidth}
 \centering
-\includegraphics[height=7.5cm]{Ilustraciones/iter_2_pi.png}
+\includegraphics[height=9.5cm]{Ilustraciones/iter_3_pi.png}
 \subcaption{Consola de la Raspberry Pi.}
 \label{fig:res_consola_pi}
 \end{minipage}
-\caption{Traza de ejecución bajo condiciones de bus realistas: consola del simulador Arduino emitiendo tramas de difusión y ruido (a) y consola de la Raspberry Pi filtrando y decodificando las respuestas válidas (b).}
+\caption{Traza de ejecución bajo condiciones de bus realistas: consola del simulador Arduino emitiendo tramas de difusión (\texttt{[BC TX]}) e inyectando DTCs por interrupción hardware (a) y consola de la Raspberry Pi decodificando respuestas OBD-II y UDS (b).}
 \label{fig:res_consolas}
 \end{figure}
 
@@ -275,37 +276,37 @@ A continuación se recogen las capturas de las distintas pantallas de la aplicac
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=9cm]{Ilustraciones/datos_real.png}%
+\includegraphics[height=9.5cm]{Ilustraciones/datos_real.png}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=9cm]{Ilustraciones/uds_real.png}
+\includegraphics[height=9.5cm]{Ilustraciones/uds_real.png}
 \caption{Pantalla \textit{Panel}: telemetría en tiempo real (izquierda) y pestaña UDS con control de sesión y lectura de DIDs (derecha).}
 \label{fig:res_app_panel}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=9cm]{Ilustraciones/dtcs_real.png}%
+\includegraphics[height=9.5cm]{Ilustraciones/dtcs_real.png}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=9cm]{Ilustraciones/sesiones_sim.png}
+\includegraphics[height=9.5cm]{Ilustraciones/sesiones_sim.png}
 \caption{Pantallas \textit{Averías} (izquierda), con la lista de DTCs leídos de la ECU, y \textit{Sesiones} (derecha), con el historial de sesiones almacenado en SQLite.}
 \label{fig:res_app_dtc_sesiones}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=9cm]{Ilustraciones/sesion_detalle.png}%
+\includegraphics[height=9.5cm]{Ilustraciones/sesion_detalle.png}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=9cm]{Ilustraciones/logs_real.png}
+\includegraphics[height=9.5cm]{Ilustraciones/logs_real.png}
 \caption{Detalle de una sesión con las muestras agrupadas por sensor (izquierda) y pantalla \textit{Consola} con el envío de comandos JSON y el registro de comunicación BLE (derecha).}
 \label{fig:res_app_detalle_consola}
 \end{figure}
 
 \begin{figure}[H]
 \centering
-\includegraphics[height=9cm]{Ilustraciones/conexion.png}%
+\includegraphics[height=9.5cm]{Ilustraciones/conexion.png}%
 \hspace{0.04\textwidth}%
-\includegraphics[height=9cm]{Ilustraciones/ajustes.png}
-\caption{Pantalla \textit{Ajustes} (izquierda), con la gestión de conexión y el modo de simulación, y la pantalla de ajustes (derecha).}
+\includegraphics[height=9.5cm]{Ilustraciones/ajustes.png}
+\caption{Pantalla \textit{Conexión} (izquierda), con la gestión del enlace BLE, y pantalla \textit{Ajustes} (derecha), con el modo de simulación y preferencias.}
 \label{fig:res_app_ajustes_conexion}
 \end{figure}
 

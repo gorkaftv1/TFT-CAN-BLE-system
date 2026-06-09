@@ -3,9 +3,9 @@
 
 Este Trabajo de Fin de Título ha demostrado la viabilidad técnica de implementar un sistema completo de diagnóstico del vehículo OBD-II. Los resultados obtenidos en el banco de ensayo Arduino, junto con la validación sobre un vehículo real del grupo VAG (Škoda Yeti de 2015), confirman que la plataforma desarrollada es funcional, interoperable con ECUs de producción y extensible en sus tres componentes de forma independiente.
 
-Las conclusiones más relevantes del trabajo se pueden agrupan en torno a los tres componentes del sistema:
+Las conclusiones más relevantes del trabajo se pueden agrupar en torno a los tres componentes del sistema:
 
-\textbf{Sobre la pila de protocolos.} La implementación directa del UDS y OBD-II sobre \texttt{SocketCAN} en Python ha resultado viable. La librería \texttt{can-isotp} proporciona una abstracción suficiente para gestionar la segmentación y el Flow Control de forma transparente, si bien la correcta sincronización de la secuencia multi-frame para el VIN requirió un ajuste cuidadoso de los parámetros de timing en el simulador. La latencia extremo a extremo del sistema (28--62\,ms por consulta) es desprecible pues se trata de una herramienta de diagnóstico para uso personal que no trata factores críticos.
+\textbf{Sobre la pila de protocolos.} La implementación directa del UDS y OBD-II sobre \texttt{SocketCAN} en Python ha resultado viable. La librería \texttt{can-isotp} proporciona una abstracción suficiente para gestionar la segmentación y el Flow Control de forma transparente, si bien la correcta sincronización de la secuencia multi-frame para el VIN requirió un ajuste cuidadoso de los parámetros de timing en el simulador. La latencia round-trip extremo a extremo del sistema (mediana de 100\,ms, media de 128\,ms) es asumible pues se trata de una herramienta de diagnóstico para uso personal que no trata factores críticos.
 
 \textbf{Sobre el simulador Arduino.} El simulador de ECU desarrollado se ha revelado como una herramienta de validación de alto valor, que va más allá de la simple emulación de respuestas fijas. El modelo físico del motor, los mecanismos opcionales de variabilidad del bus (ruido en sensores y tramas de difusión) y la inyección de DTCs por interrupción hardware permiten al banco de ensayo la capacidad de simulación de escenarios reales que resulta difícil de reproducir sin acceso continuo a un vehículo.
 
@@ -13,7 +13,7 @@ Las conclusiones más relevantes del trabajo se pueden agrupan en torno a los tr
 
 Desde el punto de vista del proceso de desarrollo, la metodología basada en prototipos incrementales resultó especialmente adecuada para un proyecto de esta naturaleza, en el que la validez de las hipótesis técnicas no podía garantizarse a priori. Los ciclos cortos de implementación y prueba sobre el banco de ensayo permitieron detectar y corregir problemas de sincronización ISO-TP en etapas tempranas, antes de que estos afectaran al desarrollo de las capas superiores.
 
-La validación sobre vehículo real se llevó a cabo finalmente sobre un Škoda Yeti de 2015 (no sobre el SEAT Ibiza 6J planteado inicialmente, por problemas de acceso ya comentados previamente). Como limitación cabe señalar, por tanto, que la validación se realizó sobre un único vehículo y a través del conector OBD-II, lo que da acceso al bus de diagnóstico.
+La validación sobre vehículo real se llevó a cabo finalmente sobre un Škoda Yeti de 2015 (no sobre el SEAT Ibiza 6J planteado inicialmente, por problemas de acceso ya comentados).
 
 
 \section{Líneas de trabajo futuro}

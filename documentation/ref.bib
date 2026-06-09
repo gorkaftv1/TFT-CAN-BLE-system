@@ -1,9 +1,11 @@
 % ============================================================
 % Referencias bibliográficas — TFT Gorka Eimar
-% Última actualización: 2026-05-23
+% Última actualización: 2026-06-09
 % ============================================================
 
-% --- Estándares ISO ---
+% ============================================================
+% 1. ESTÁNDARES ISO — BUS CAN
+% ============================================================
 
 @techreport{ISO11898:1993,
   title        = {{Road vehicles --- Interchange of digital information ---
@@ -40,6 +42,10 @@
   address      = {Geneva, Switzerland},
   url          = {https://www.iso.org/standard/85120.html}
 }
+
+% ============================================================
+% 2. ESTÁNDARES ISO/SAE — DIAGNÓSTICO Y PROTOCOLOS OBD
+% ============================================================
 
 @techreport{ISO15765-2:2016,
   title        = {{Road vehicles --- Diagnostic communication over Controller Area
@@ -79,8 +85,6 @@
   url          = {https://www.iso.org/standard/72439.html}
 }
 
-% --- Estándares SAE ---
-
 @techreport{SAEJ1979:2014,
   title        = {{E/E Diagnostic Test Modes}},
   author       = {{SAE}},
@@ -103,7 +107,39 @@
   url          = {https://www.sae.org/standards/j2012_201612-diagnostic-trouble-code-definitions/}
 }
 
-% --- Organismos oficiales y reguladores ---
+% ============================================================
+% 3. ESTÁNDARES Y ESPECIFICACIONES — BLUETOOTH / BLE
+% ============================================================
+
+@techreport{Bluetooth_CoreSpec,
+  title       = {{Bluetooth Core Specification, Version 5.4}},
+  author      = {{Bluetooth SIG}},
+  institution = {Bluetooth Special Interest Group},
+  year        = {2023},
+  note        = {Generic Attribute Profile (GATT). Accedido: 2026-05-23}
+}
+
+@techreport{Bluetooth_BLE,
+  title       = {{Bluetooth Core Specification, Version 5.4 ---
+                  Bluetooth Low Energy (BLE)}},
+  author      = {{Bluetooth SIG}},
+  institution = {Bluetooth Special Interest Group},
+  year        = {2023},
+  url         = {https://www.bluetooth.com/specifications/specs/core-specification-5-4/},
+  note        = {Especificación oficial de Bluetooth Low Energy (BLE). Accedido: 2026-05-23}
+}
+
+@misc{Nordic_NUS,
+  title        = {{Nordic UART Service ({NUS}) --- nRF Connect SDK Documentation}},
+  author       = {{Nordic Semiconductor ASA}},
+  howpublished = {\url{https://docs.nordicsemi.com/bundle/ncs-3.0.2/page/nrf/libraries/bluetooth/services/nus.html}},
+  year         = {2024},
+  note         = {Nordic Semiconductor ASA. Accedido: 2026-05-23}
+}
+
+% ============================================================
+% 4. ORGANISMOS REGULADORES Y NORMATIVA
+% ============================================================
 
 @misc{CiA_CANhistory,
   title        = {{History of {CAN} Technology}},
@@ -130,7 +166,19 @@
   note         = {U.S. Environmental Protection Agency. Accedido: 2026-05-23}
 }
 
-% --- Datasheets y documentación de hardware ---
+% ============================================================
+% 5. HARDWARE — DATASHEETS Y DOCUMENTACIÓN
+% ============================================================
+
+@manual{RaspberryPi4_datasheet,
+  title        = {{Raspberry Pi 4 Model B --- Datasheet}},
+  author       = {{Raspberry Pi Ltd.}},
+  organization = {Raspberry Pi Ltd.},
+  edition      = {Release 1.1},
+  year         = {2024},
+  url          = {https://datasheets.raspberrypi.com/rpi4/raspberry-pi-4-datasheet.pdf},
+  note         = {Accedido: 2026-05-23}
+}
 
 @manual{Microchip_MCP2515,
   title        = {{MCP2515 Stand-Alone CAN Controller with {SPI} Interface ---
@@ -161,22 +209,44 @@
   note         = {Accedido: 2026-05-23}
 }
 
-% --- Documentación de protocolos y servicios ---
-
-@techreport{Bluetooth_CoreSpec,
-  title       = {{Bluetooth Core Specification, Version 5.4}},
-  author      = {{Bluetooth SIG}},
-  institution = {Bluetooth Special Interest Group},
-  year        = {2023},
-  note        = {Generic Attribute Profile (GATT). Accedido: 2026-05-23}
+@manual{Arduino_MKRCAN,
+  title        = {{Arduino MKR CAN Shield --- Official Documentation}},
+  author       = {{Arduino SA}},
+  organization = {Arduino SA},
+  year         = {2024},
+  url          = {https://docs.arduino.cc/hardware/mkr-can-shield},
+  note         = {SKU: ASX00005. Controlador MCP2515 vía SPI.
+                  Accedido: 2026-05-23}
 }
 
-@misc{Nordic_NUS,
-  title        = {{Nordic UART Service ({NUS}) --- nRF Connect SDK Documentation}},
-  author       = {{Nordic Semiconductor ASA}},
-  howpublished = {\url{https://docs.nordicsemi.com/bundle/ncs-3.0.2/page/nrf/libraries/bluetooth/services/nus.html}},
+@manual{ELM327_datasheet,
+  title        = {{ELM327 --- OBD to RS232 Interpreter}},
+  author       = {{Elm Electronics}},
+  organization = {Elm Electronics},
+  edition      = {Datasheet, versión 2.3},
+  year         = {2017},
+  howpublished = {\url{https://www.elmelectronics.com/wp-content/uploads/2016/07/ELM327DS.pdf}}
+}
+
+@misc{YingtuYou_OBD2,
+  title        = {{OD-UPW --- Escáner de diagnóstico OBD-II}},
+  author       = {{Yingtuyou Jiaju}},
+  howpublished = {\url{https://www.amazon.es/dp/B0CSSX6LYM}},
   year         = {2024},
-  note         = {Nordic Semiconductor ASA. Accedido: 2026-05-23}
+  note         = {Lector OBD-II comercial genérico usado como referencia de validación. ASIN: B0CSSX6LYM. Accedido: 2026-06-05}
+}
+
+% ============================================================
+% 6. SOFTWARE DE SISTEMA — SO Y PILA DE PROTOCOLOS
+% ============================================================
+
+@misc{LinuxKernel_SocketCAN,
+  title        = {{SocketCAN --- Controller Area Network --- The Linux Kernel Documentation}},
+  author       = {{The Linux Kernel Organization}},
+  howpublished = {\url{https://docs.kernel.org/networking/can.html}},
+  year         = {2024},
+  note         = {Documentación oficial del kernel Linux para SocketCAN.
+                  Accedido: 2026-05-23}
 }
 
 @misc{LinuxKernel_ISOTP,
@@ -188,25 +258,33 @@
                   Accedido: 2026-05-23}
 }
 
-@misc{WaleedDTC,
-  title        = {{DTC Database --- Diagnostic Trouble Code Reference}},
-  author       = {{Waleed Judah}},
-  howpublished = {\url{https://github.com/Wal33D/dtc-database}},
+@misc{BlueZ,
+  title        = {{BlueZ --- Official Linux Bluetooth Protocol Stack}},
+  author       = {{BlueZ Project}},
+  howpublished = {\url{http://www.bluez.org/}},
   year         = {2024},
-  note         = {Base de datos de referencia de códigos DTC para diagnóstico OBD-II.
-                  Accedido: 2026-05-27}
+  note         = {Pila oficial de Bluetooth para Linux. Accedido: 2026-05-23}
 }
 
-@misc{CSSElec_OBD2,
-  title        = {{OBD2 Explained --- A Simple Intro}},
-  author       = {{CSS Electronics}},
-  howpublished = {\url{https://www.csselectronics.com/pages/obd2-explained-simple-intro}},
-  year         = {2026},
-  note         = {CSS Electronics. Referencia técnica de ingeniería industrial.
-                  Accedido: 2026-05-23}
+@misc{Android,
+  title        = {{Android --- Mobile Operating System}},
+  author       = {{Google LLC}},
+  howpublished = {\url{https://www.android.com/}},
+  year         = {2024},
+  note         = {Sistema operativo móvil. Accedido: 2026-05-23}
 }
 
-% --- Software y librerías de terceros ---
+@misc{iOS,
+  title        = {{iOS --- Mobile Operating System}},
+  author       = {{Apple Inc.}},
+  howpublished = {\url{https://www.apple.com/ios/}},
+  year         = {2024},
+  note         = {Sistema operativo móvil. Accedido: 2026-05-23}
+}
+
+% ============================================================
+% 7. LIBRERÍAS PYTHON
+% ============================================================
 
 @misc{Twiss23-pythoncan,
   title        = {{python-can --- Controller Area Network interface module for Python}},
@@ -232,6 +310,26 @@
   note         = {Servidor GATT BLE multiplataforma sobre BlueZ/asyncio. Accedido: 2026-05-23}
 }
 
+@misc{Bleak_lib,
+  title        = {{bleak --- Bluetooth Low Energy platform Agnostic Klient for Python}},
+  author       = {{Henrik Blidh and contributors}},
+  howpublished = {\url{https://bleak.readthedocs.io/}},
+  year         = {2024},
+  note         = {Cliente GATT BLE multiplataforma para Python sobre asyncio. Accedido: 2026-05-23}
+}
+
+@misc{Python_asyncio,
+  title        = {{asyncio --- Asynchronous I/O --- Python 3 Documentation}},
+  author       = {{Python Software Foundation}},
+  howpublished = {\url{https://docs.python.org/3/library/asyncio.html}},
+  year         = {2024},
+  note         = {Biblioteca estándar de Python para programación asíncrona. Accedido: 2026-05-23}
+}
+
+% ============================================================
+% 8. LIBRERÍAS Y ENTORNO ARDUINO
+% ============================================================
+
 @misc{ArduinoCAN_lib,
   title        = {{Arduino CAN --- An Arduino library for sending and receiving data using CAN bus}},
   author       = {{Sandeep Mistry}},
@@ -240,12 +338,24 @@
   note         = {Abstracción del controlador MCP2515 vía SPI para Arduino. Accedido: 2026-05-23}
 }
 
-@misc{ReactNativeBLEPLX,
-  title        = {{react-native-ble-plx --- BLE library for React Native}},
-  author       = {{Dotintent}},
-  howpublished = {\url{https://github.com/dotintent/react-native-ble-plx}},
+@misc{Arduino_IDE,
+  title        = {{Arduino IDE 2 --- Official Documentation}},
+  author       = {{Arduino SA}},
+  howpublished = {\url{https://docs.arduino.cc/software/ide/}},
   year         = {2024},
-  note         = {Cliente BLE nativo para React Native (Android/iOS). Accedido: 2026-05-23}
+  note         = {Entorno de desarrollo integrado para programación de placas Arduino. Accedido: 2026-05-23}
+}
+
+% ============================================================
+% 9. FRAMEWORK MÓVIL — REACT NATIVE
+% ============================================================
+
+@misc{ReactNative,
+  title        = {{React Native --- A framework for building native applications using React}},
+  author       = {{Meta Platforms, Inc.}},
+  howpublished = {\url{https://reactnative.dev/}},
+  year         = {2024},
+  note         = {Framework multiplataforma para desarrollo de aplicaciones móviles (iOS/Android). Accedido: 2026-05-23}
 }
 
 @misc{Expo_docs,
@@ -256,6 +366,14 @@
   note         = {Plataforma de desarrollo para React Native. Accedido: 2026-05-23}
 }
 
+@misc{ReactNativeBLEPLX,
+  title        = {{react-native-ble-plx --- BLE library for React Native}},
+  author       = {{Dotintent}},
+  howpublished = {\url{https://github.com/dotintent/react-native-ble-plx}},
+  year         = {2024},
+  note         = {Cliente BLE nativo para React Native (Android/iOS). Accedido: 2026-05-23}
+}
+
 @misc{Zustand_lib,
   title        = {{Zustand --- A small, fast and scalable state management solution}},
   author       = {{Poimandres}},
@@ -263,6 +381,23 @@
   year         = {2024},
   note         = {Gestión de estado para React. Accedido: 2026-05-23}
 }
+
+% ============================================================
+% 10. BASE DE DATOS
+% ============================================================
+
+@misc{SQLite,
+  title        = {{SQLite --- A self-contained, serverless, zero-configuration,
+                   transactional SQL database engine}},
+  author       = {Hipp, D. Richard},
+  howpublished = {\url{https://www.sqlite.org}},
+  year         = {2024},
+  note         = {SQLite Development Team. Accedido: 2026-05-23}
+}
+
+% ============================================================
+% 11. HERRAMIENTAS COMERCIALES DE VALIDACIÓN
+% ============================================================
 
 @misc{KONWEII_scanner,
   title        = {{KONWEII --- Escáner de diagnóstico OBD-II}},
@@ -274,8 +409,47 @@
 
 @misc{CarScanner_app,
   title        = {{Car Scanner ELM OBD2 --- Aplicación de diagnóstico OBD-II}},
-  author       = {{Ovz}},
+  author       = {{CAR SCANNER LLC}},
   howpublished = {\url{https://apps.apple.com/es/app/car-scanner-elm-obd2/id1259933623}},
-  year         = {2024},
+  year         = {2026},
   note         = {Aplicación móvil OBD-II comercial usada como referencia de validación. Accedido: 2026-06-05}
+}
+
+@misc{Torque_Pro,
+  title        = {{Torque Pro (OBD 2 \& Car) --- Aplicación de diagnóstico OBD-II}},
+  author       = {{Ian Hawkins}},
+  howpublished = {\url{https://play.google.com/store/apps/details?id=org.prowl.torque}},
+  year         = {2025},
+  note         = {Aplicación móvil OBD-II comercial para Android. Accedido: 2026-06-05}
+}
+
+% ============================================================
+% 12. REFERENCIAS TÉCNICAS WEB Y REPOSITORIO
+% ============================================================
+
+@misc{CSSElec_OBD2,
+  title        = {{OBD2 Explained --- A Simple Intro}},
+  author       = {{CSS Electronics}},
+  howpublished = {\url{https://www.csselectronics.com/pages/obd2-explained-simple-intro}},
+  year         = {2026},
+  note         = {CSS Electronics. Referencia técnica de ingeniería industrial.
+                  Accedido: 2026-05-23}
+}
+
+@misc{WaleedDTC,
+  title        = {{DTC Database --- Diagnostic Trouble Code Reference}},
+  author       = {{Waleed Judah}},
+  howpublished = {\url{https://github.com/Wal33D/dtc-database}},
+  year         = {2024},
+  note         = {Base de datos de referencia de códigos DTC para diagnóstico OBD-II.
+                  Accedido: 2026-05-27}
+}
+
+@misc{SIANI_Git,
+  title        = {{Repositorio del proyecto TFT-CAN-BLE}},
+  author       = {{Gorka Eymard Santana Cabrera}},
+  howpublished = {\url{https://git.iusiani.ulpgc.es/git/gesantana/TFT-CAN-BLE}},
+  year         = {2026},
+  note         = {Repositorio Git del Instituto Universitario SIANI, ULPGC.
+                  Accedido: 2026-06-09}
 }

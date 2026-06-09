@@ -9,12 +9,13 @@
 \usepackage{float}
 \usepackage[spanish,es-noshorthands]{babel}
 \usepackage{csquotes}
-\usepackage[figurename=Ilustración]{caption}
+\usepackage[figurename=Figura]{caption}
 \usepackage{subcaption}
 \usepackage[numbers]{natbib}
 \usepackage{ragged2e}
 \usepackage{array}
 \usepackage{multirow}
+\usepackage{makecell}
 \usepackage{longtable}
 \usepackage{parskip}
 \usepackage{listings}
@@ -47,6 +48,11 @@
 
 \renewcommand{\lstlistingname}{Listado}
 
+% El texto referencia las tablas como "Tabla"; babel-spanish las rotula "Cuadro".
+% Se fuerza "Tabla" tanto en el rótulo del caption como en el índice de tablas.
+\captionsetup[table]{name=Tabla}
+\addto\captionsspanish{\renewcommand{\listtablename}{Índice de tablas}}
+
 \floatname{algorithm}{Algoritmo}
 \renewcommand{\listalgorithmname}{Índice de algoritmos}
 
@@ -56,6 +62,8 @@
     frame=single,
     breaklines=true,
     breakatwhitespace=false,
+    columns=flexible,
+    postbreak=\mbox{$\hookrightarrow$\space},
     numbers=left,
     numberstyle=\tiny\color{gray},
     numbersep=5pt,
@@ -89,12 +97,16 @@
 \titleformat{\chapter}[display]
 {\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{20pt}{\Huge}
 
+% Permite a TeX estirar líneas difíciles (código inline, URLs) evitando que
+% el texto invada el margen derecho (Overfull \hbox).
+\setlength{\emergencystretch}{3em}
+
 \urlstyle{same}
 \title{Diseño y desarrollo de un sistema empotrado basado en bus CAN con acceso inalámbrico para la monitorización de un vehículo automóvil}
 \author{Gorka Eymard Santana Cabrera}
 \date{Curso 2025 - 2026}
 \renewcommand{\contentsname}{Contenido}
-\renewcommand{\figurename}{Ilustración}
+\renewcommand{\figurename}{Figura}
 \usepackage{pifont}
 \renewcommand\labelitemi{\textbullet}
 
@@ -126,20 +138,20 @@
 \pagenumbering{arabic}
 
 \chapter{Introducción}
-En este capítulo se realizará una introducción general al contexto del sector autmotriz en el que se plantea el trabajo realizado y el motivo de porque se ha realizado este trabajo.
+En este capítulo se realizará una introducción general al contexto del sector automotriz en el que se plantea el trabajo realizado y el motivo de por qué se ha realizado este trabajo.
 \input{04_Introduccion.tex}
 
 \chapter{Estado actual y objetivos}
-Este capítulo expone los protocolos(CAN, OBD-II, ISO-TP, UDS) y herramientas tanto software como hardware (Raspberry Pi) que se usan en el marco en el que se encuentra el trabajo planteado a desarrollar, así como los objetivos definidos para la realización del mismo.
+Este capítulo expone los protocolos (CAN, OBD-II, ISO-TP, UDS) y herramientas tanto software como hardware (Raspberry Pi) que se usan en el marco en el que se encuentra el trabajo a desarrollar, así como los objetivos definidos para la realización del mismo.
 \input{05_EstadoDelArte.tex}
 
 \chapter{Aportaciones del trabajo}
-En esta capítulo se presentan las aportaciones de este trabajo así como las competencias y ODS que sigue.
+En este capítulo se presentan las aportaciones de este trabajo así como las competencias y ODS que sigue.
 \chaptermark{Aportaciones, competencias y ODS}
 \input{06_Competencias.tex}
 
 \chapter{Metodología de desarrollo}
-En este capítulo se detalla lo conseguido durante las distintas etapas del desarrollo detallando el análisis, diseño.
+En este capítulo se detalla lo conseguido durante las distintas etapas del desarrollo detallando el análisis y diseños llevados a cabo.
 \input{07_Metodologia.tex}
 
 \chapter{Desarrollo del sistema}
