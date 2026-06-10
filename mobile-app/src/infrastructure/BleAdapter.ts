@@ -3,13 +3,14 @@ import { DtcCode } from '../domain/models/DtcCode';
 import { MonitorSample } from '../domain/models/MonitorSample';
 import { IVehicleAdapter } from './IVehicleAdapter';
 import { LogService } from '../domain/services/LogService';
+import { useSettingsStore } from '../stores/settingsStore';
 
 const NUS_SERVICE = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E';
 const RX_CHAR     = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E';
 const TX_CHAR     = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E';
 
-const MTU                = 128;
-const WRITE_CHUNK_BYTES  = 240;
+const MTU                = 244;
+const WRITE_CHUNK_BYTES  = MTU - 3;  // ATT Write Request payload = MTU - 3
 const SCAN_TIMEOUT_MS    = 20_000;
 const REQUEST_TIMEOUT_MS = 15_000;
 const CLIENT_TIMEOUT_MS  = 20_000;
@@ -94,19 +95,19 @@ export class BleAdapter implements IVehicleAdapter {
   async connect(deviceId?: string, deviceLabel?: string): Promise<void> {
     if (!deviceId) throw new Error('No hay dispositivo seleccionado — elige uno de la lista');
     const label = deviceLabel ?? deviceId;
-    LogService.add('info', `[1/5] Conectando GATT a ${label}...`);
+    LogService.add('info', `[1/6] Conectando GATT a ${label}...`);
     // Cancel any stale OS-level GATT connection left by a previous unexpected disconnect
     await this.manager.cancelDeviceConnection(deviceId).catch(() => {});
     try {
       const raw = await this.manager.connectToDevice(deviceId, { autoConnect: false, timeout: 10000 });
-      LogService.add('info', `[2/5] GATT conectado — solicitando MTU ${MTU}...`);
+      LogService.add('info', `[2/6] GATT conectado — solicitando MTU ${MTU}...`);
       const mtuResult = await raw.requestMTU(MTU);
-      LogService.add('info', `[3/5] MTU=${mtuResult.mtu} — descubriendo servicios...`);
+      LogService.add('info', `[3/6] MTU=${mtuResult.mtu} — descubriendo servicios...`);
       await raw.discoverAllServicesAndCharacteristics();
-      LogService.add('info', '[4/5] Servicios descubiertos — suscribiendo RX...');
+      LogService.add('info', '[4/6] Servicios descubiertos — suscribiendo RX...');
       raw.onDisconnected(() => this.handleUnexpectedDisconnect());
       this.device = raw;
-      LogService.add('info', '[5/5] Suscribiendo canal de recepción...');
+      LogService.add('info', '[5/6] Suscribiendo canal de recepción...');
       await this.subscribeToTx();
       LogService.add('info', '[6/6] Autenticando con la Pi...');
       await this.authenticate();
@@ -122,7 +123,8 @@ export class BleAdapter implements IVehicleAdapter {
     this.startActivityMonitor();
   }
 
-  private async authenticate(token = '1234'): Promise<void> {
+  private async authenticate(): Promise<void> {
+    const token = useSettingsStore.getState().authToken;
     await this.request({ cmd: 'auth', token });
   }
 

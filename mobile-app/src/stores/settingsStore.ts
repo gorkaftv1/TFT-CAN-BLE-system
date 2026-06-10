@@ -8,10 +8,12 @@ interface SettingsState {
   deviceName: string;
   monitorIntervalMs: number;
   useMock: boolean;
+  authToken: string;
   loaded: boolean;
   setDeviceName: (name: string) => Promise<void>;
   setMonitorInterval: (ms: number) => Promise<void>;
   setUseMock: (value: boolean) => Promise<void>;
+  setAuthToken: (token: string) => Promise<void>;
   loadFromStorage: () => Promise<void>;
 }
 
@@ -19,6 +21,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   deviceName: 'diag_tool',
   monitorIntervalMs: 500,
   useMock: false,
+  authToken: '1234',
   loaded: false,
 
   setDeviceName: async (name) => {
@@ -37,17 +40,23 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     await persist(get());
   },
 
+  setAuthToken: async (token) => {
+    set({ authToken: token.trim() || '1234' });
+    await persist(get());
+  },
+
   loadFromStorage: async () => {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const { deviceName, monitorIntervalMs, useMock } = JSON.parse(raw) as Partial<SettingsState>;
+        const { deviceName, monitorIntervalMs, useMock, authToken } = JSON.parse(raw) as Partial<SettingsState>;
         const mock = typeof useMock === 'boolean' ? useMock : false;
         configureAdapter(mock);
         set({
           deviceName: typeof deviceName === 'string' && deviceName.trim() ? deviceName : 'diag_tool',
           monitorIntervalMs: typeof monitorIntervalMs === 'number' ? monitorIntervalMs : 500,
           useMock: mock,
+          authToken: typeof authToken === 'string' && authToken.trim() ? authToken : '1234',
         });
       }
     } catch { /* ignore */ }
@@ -62,6 +71,7 @@ async function persist(state: SettingsState): Promise<void> {
       deviceName: state.deviceName,
       monitorIntervalMs: state.monitorIntervalMs,
       useMock: state.useMock,
+      authToken: state.authToken,
     }));
   } catch { /* ignore */ }
 }
