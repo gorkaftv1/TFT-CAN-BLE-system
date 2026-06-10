@@ -69,9 +69,28 @@ class SqliteDataLogger(IDataLogger):
     def __init__(self, db_path: str = "diagnostics.db") -> None:
         self._lock = threading.Lock()
         self._sample_buffer: list[tuple] = []
+        self._db_path = db_path
         self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
+        self._snapshot_conn: sqlite3.Connection | None = None
+
+    def open_snapshot(self) -> None:
+        """Point-in-time in-memory copy of the DB for consistent historical reads."""
+        snap = sqlite3.connect(":memory:", check_same_thread=False)
+        with self._lock:
+            self._flush_buffer()
+            self._conn.backup(snap)
+        self._snapshot_conn = snap
+
+    def close_snapshot(self) -> None:
+        if self._snapshot_conn is not None:
+            self._snapshot_conn.close()
+            self._snapshot_conn = None
+
+    @property
+    def _read_conn(self) -> sqlite3.Connection:
+        return self._snapshot_conn if self._snapshot_conn is not None else self._conn
 
     def start_session(self, label: str = "") -> int:
         with self._lock:
@@ -123,7 +142,7 @@ class SqliteDataLogger(IDataLogger):
             self._conn.commit()
 
     def get_sessions(self, limit: int = 50) -> list[LogSession]:
-        cur = self._conn.execute(
+        cur = self._read_conn.execute(
             """
             SELECT s.id, s.label, s.started_at, s.ended_at,
                    COUNT(DISTINCT sa.id) AS sample_count,
@@ -157,14 +176,14 @@ class SqliteDataLogger(IDataLogger):
         offset: int = 0,
     ) -> list[MonitorSample]:
         if pid is None:
-            cur = self._conn.execute(
+            cur = self._read_conn.execute(
                 "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ?"
                 " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
                 (session_id, limit, offset),
             )
         else:
-            cur = self._conn.execute(
+            cur = self._read_conn.execute(
                 "SELECT pid, name, value, unit, monotonic_ts, wall_ts"
                 " FROM samples WHERE session_id = ? AND pid = ?"
                 " ORDER BY monotonic_ts DESC LIMIT ? OFFSET ?",
@@ -176,7 +195,7 @@ class SqliteDataLogger(IDataLogger):
         ]
 
     def get_commands(self, session_id: int) -> list[CommandLog]:
-        cur = self._conn.execute(
+        cur = self._read_conn.execute(
             "SELECT command, request_hex, response_hex, wall_ts"
             " FROM commands WHERE session_id = ? ORDER BY id",
             (session_id,),
@@ -201,7 +220,7 @@ class SqliteDataLogger(IDataLogger):
             self._conn.commit()
 
     def get_dtcs_for_session(self, session_id: int) -> list[Dtc]:
-        cur = self._conn.execute(
+        cur = self._read_conn.execute(
             "SELECT code, raw_hex, description FROM dtcs"
             " WHERE session_id = ? ORDER BY id",
             (session_id,),
