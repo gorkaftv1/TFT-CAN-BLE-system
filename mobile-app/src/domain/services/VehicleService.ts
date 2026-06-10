@@ -90,10 +90,15 @@ export class VehicleService {
         });
         LogService.addObdSample(pid, def.name, entry.value, entry.unit);
       } else {
+        const supported = usePidSupportStore.getState().supportedPids;
+        let reason: string;
+        if (supported === null)             reason = 'No disponible';
+        else if (!supported.includes(pid)) reason = 'No soportado';
+        else                               reason = 'Tiempo de espera agotado';
         useVehicleStore.getState().updateSample({
           pid, name: def.name, value: 0, unit: def.unit, timestamp: now, error: true,
         });
-        LogService.addObdError(pid, def.name, 'Tiempo de espera agotado');
+        LogService.addObdError(pid, def.name, reason);
       }
     }
   }

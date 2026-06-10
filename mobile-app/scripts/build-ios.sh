@@ -62,19 +62,19 @@ info "Running expo prebuild (generates ios/ native project)…"
 npx expo prebuild --platform ios --clean
 success "Prebuild complete."
 
-# ── Step 3: Detect workspace ──────────────────────────────────────────────────
-WORKSPACE=$(find "$IOS_DIR" -maxdepth 1 -name "*.xcworkspace" | head -1)
-[[ -z "$WORKSPACE" ]] && err "No .xcworkspace found in $IOS_DIR. Prebuild may have failed."
-WORKSPACE_NAME=$(basename "$WORKSPACE" .xcworkspace)
-SCHEME="$WORKSPACE_NAME"
-info "Workspace: $WORKSPACE_NAME  |  Scheme: $SCHEME"
-
-# ── Step 4: Pod install ───────────────────────────────────────────────────────
+# ── Step 3: Pod install ───────────────────────────────────────────────────────
 info "Running pod install…"
 cd "$IOS_DIR"
 pod install --repo-update
 cd "$ROOT"
 success "CocoaPods install done."
+
+# ── Step 4: Detect workspace ──────────────────────────────────────────────────
+WORKSPACE=$(find "$IOS_DIR" -maxdepth 1 -name "*.xcworkspace" | head -1)
+[[ -z "$WORKSPACE" ]] && err "No .xcworkspace found in $IOS_DIR. Pod install may have failed."
+WORKSPACE_NAME=$(basename "$WORKSPACE" .xcworkspace)
+SCHEME="$WORKSPACE_NAME"
+info "Workspace: $WORKSPACE_NAME  |  Scheme: $SCHEME"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MODE A: Direct USB install  (default)
@@ -124,7 +124,7 @@ else
     -derivedDataPath "$DERIVED_DATA" \
     -allowProvisioningUpdates \
     CODE_SIGN_STYLE=Automatic \
-    CODE_SIGN_IDENTITY="iPhone Developer" \
+    CODE_SIGN_IDENTITY="Apple Development" \
     PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
     clean build \
     2>&1 | grep -E "^(error:|warning:|Build succeeded|FAILED|===)" || true
