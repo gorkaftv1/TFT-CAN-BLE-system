@@ -30,12 +30,18 @@ _NUS_TX      = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 _BLE_NAME              = "diag_tool"
 _MTU                   = 240
-_CLIENT_TIMEOUT_S      = 30.0
-_SERVER_TIMEOUT_S      = 40.0
-_WATCHDOG_INTERVAL     = 5.0
-_HEARTBEAT_AFTER_S     = 15.0
+_CLIENT_TIMEOUT_S      = 15.0
+_SERVER_TIMEOUT_S      = 20.0
+_WATCHDOG_INTERVAL     = 3.0
+_HEARTBEAT_AFTER_S     = 8.0
 _RECV_BUFFER_MAX_SIZE  = 4096
 _MAX_RECONNECT_RETRIES = 5
+# Pause between BLE notification chunks. Large responses (e.g. session_samples
+# with hundreds of rows) fragment into dozens of 240b notifications. Pushing
+# them back-to-back overflows the BlueZ D-Bus socket (BlockingIOError, EAGAIN),
+# dropping chunks so the client never sees the terminating newline and the
+# request hangs. Pacing lets BlueZ drain each notification over the air.
+_SEND_CHUNK_DELAY_S    = 0.05
 
 
 class BLEDiagServer:
@@ -54,11 +60,13 @@ class BLEDiagServer:
         self._client_connected: bool = False
         self._server_running: bool = False
         self._watchdog_task: asyncio.Task | None = None
+        self._tx_lock: asyncio.Lock | None = None
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
         self._restart_event = asyncio.Event()
+        self._tx_lock = asyncio.Lock()
         reconnect_count = 0
         try:
             await self._start_server()
@@ -181,7 +189,7 @@ class BLEDiagServer:
             logger.warning("[BLE] RX buffer overflow — auto-disconnecting")
             print("[BLE] RX buffer overflow — auto-disconnecting")
             self._recv_buf = ""
-            self._notify_from_loop({"status": "error", "message": "Buffer overflow — disconnecting"})
+            self.notify({"status": "error", "message": "Buffer overflow — disconnecting"})
             # Schedule disconnect from within the event loop
             assert self._loop is not None
             asyncio.ensure_future(self._handle_disconnect())
@@ -198,7 +206,7 @@ class BLEDiagServer:
                 cmd = json.loads(line)
             except json.JSONDecodeError as exc:
                 logger.warning(f"[BLE] Invalid JSON: {exc}")
-                self._notify_from_loop({"status": "error", "message": f"Invalid JSON: {exc}"})
+                self.notify({"status": "error", "message": f"Invalid JSON: {exc}"})
                 continue
 
             logger.info(format_ble_rx(line, cmd))
@@ -233,8 +241,12 @@ class BLEDiagServer:
                         await self._handle_disconnect()
                         return
                     elif elapsed_rx > _HEARTBEAT_AFTER_S:
-                        # Client idle — probe so it sends heartbeat_ack, resetting _last_rx_time
-                        self._notify_from_loop({"type": "heartbeat"})
+                        # Client idle — probe it. The client replies with
+                        # heartbeat_ack, which arrives on RX and resets the timer.
+                        # RX is reset ONLY by real client feedback (ack/ping/cmd),
+                        # never by our own TX: a successful send proves nothing about
+                        # whether the client is still listening.
+                        self.notify({"type": "heartbeat"})
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -284,30 +296,36 @@ class BLEDiagServer:
         loop = asyncio.get_running_loop()
         response = await loop.run_in_executor(None, self._handler.handle, cmd)
         if response is not None:
-            self._notify_from_loop(response)
+            await self._notify_async(response)
         if cmd.get("cmd") == "disconnect":
             await self._handle_disconnect()
 
     def notify(self, data: dict) -> None:
-        """Send data to BLE client. Thread-safe."""
+        """Queue a message for sending. Safe from any thread (monitor worker,
+        BLE write callback) and from the event loop itself. Serialization is
+        handled by _notify_async's TX lock."""
         if self._server is None or self._loop is None:
             return
+        asyncio.run_coroutine_threadsafe(self._notify_async(data), self._loop)
+
+    async def _notify_async(self, data: dict) -> None:
+        """Send one logical message, serialized so its chunks never interleave
+        with another message's. Concurrent _dispatch_async/heartbeat/monitor
+        sends would otherwise inject their chunks mid-stream during the pacing
+        await, splicing e.g. a pong into the middle of a large session_samples
+        payload and corrupting the client's NDJSON line."""
         payload = (json.dumps(data) + "\n").encode()
         chunks = [payload[i:i + _MTU] for i in range(0, len(payload), _MTU)]
         logger.info(format_ble_tx(data))
         print(format_ble_tx(data))
-        self._loop.call_soon_threadsafe(self._send_chunks, chunks)
+        assert self._tx_lock is not None
+        async with self._tx_lock:
+            self._last_tx_time = time.time()  # mark before send — TX watchdog won't fire on partial BLE errors
+            await self._send_chunks_paced(chunks)
 
-    def _notify_from_loop(self, data: dict) -> None:
-        payload = (json.dumps(data) + "\n").encode()
-        chunks = [payload[i:i + _MTU] for i in range(0, len(payload), _MTU)]
-        logger.info(format_ble_tx(data))
-        print(format_ble_tx(data))
-        self._last_tx_time = time.time()  # mark before send — TX watchdog won't fire on partial BLE errors
-        self._send_chunks(chunks)
-
-    def _send_chunks(self, chunks: list[bytes]) -> None:
+    async def _send_chunks_paced(self, chunks: list[bytes]) -> None:
         assert self._server is not None
+        multi = len(chunks) > 1
         try:
             for chunk in chunks:
                 char = self._server.get_characteristic(_NUS_TX)
@@ -316,6 +334,10 @@ class BLEDiagServer:
                     break
                 char.value = bytearray(chunk)
                 self._server.update_value(_NUS_SERVICE, _NUS_TX)
+                if multi:
+                    await asyncio.sleep(_SEND_CHUNK_DELAY_S)
+                # Keep the TX watchdog calm during long multi-chunk transfers
+                self._last_tx_time = time.time()
         except Exception as e:
             logger.error(f"[BLE] Error sending notification: {e}")
             raise
