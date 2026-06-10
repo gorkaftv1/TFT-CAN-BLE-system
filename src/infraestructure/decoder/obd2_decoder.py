@@ -72,14 +72,17 @@ class Obd2DataDecoder(IDataDecoder):
         for i in range(dtc_count):
             offset = 2 + i * 2
             pair = raw[offset: offset + 2]
-            if pair == b"\x00\x00":
+            if len(pair) < 2 or pair == b"\x00\x00":
                 continue
             dtcs.append(Dtc.from_raw(pair))
         return dtcs
 
     def decode_vin(self, raw: bytes) -> str:
         """Decode 17-char VIN from raw[3:20]; raise InvalidResponseError if not 17 chars."""
-        vin = raw[3:20].decode("ascii")
+        try:
+            vin = raw[3:20].decode("ascii")
+        except UnicodeDecodeError as exc:
+            raise InvalidResponseError(f"VIN contains non-ASCII bytes: {exc}") from exc
         if len(vin) != 17:
             raise InvalidResponseError(f"VIN length invalid: expected 17, got {len(vin)}")
         return vin

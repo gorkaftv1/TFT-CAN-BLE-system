@@ -36,6 +36,7 @@ class IDataLogger(ABC):
         session_id: int,
         pid: int | None = None,
         limit: int = 1000,
+        offset: int = 0,
     ) -> list[MonitorSample]: ...
 
     @abstractmethod
