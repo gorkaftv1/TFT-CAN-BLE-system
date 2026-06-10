@@ -77,7 +77,7 @@ class SqliteDataLogger(IDataLogger):
 
     def open_snapshot(self) -> None:
         """Point-in-time in-memory copy of the DB for consistent historical reads."""
-        snap = sqlite3.connect(":memory:")
+        snap = sqlite3.connect(":memory:", check_same_thread=False)
         with self._lock:
             self._flush_buffer()
             self._conn.backup(snap)
