@@ -238,8 +238,9 @@ class BLEDiagServer:
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.error(f"[Watchdog] Error: {e}")
-            raise
+            logger.error(f"[Watchdog] Fatal error: {e} — triggering restart")
+            if self._restart_event is not None:
+                self._restart_event.set()
 
     async def _handle_disconnect(self) -> None:
         self._client_connected = False
@@ -267,7 +268,7 @@ class BLEDiagServer:
         # Reset HCI adapter to clear BlueZ advertising state
         print("[BLE] Resetting HCI adapter...")
         subprocess.run(["sudo", "hciconfig", "hci0", "reset"], timeout=5)
-        await asyncio.sleep(2)
+        await asyncio.sleep(3)
         # Signal start() to handle the restart — avoids restarting inside the watchdog
         # task where exceptions can't propagate to the main reconnect loop
         if self._restart_event is not None:
@@ -302,8 +303,8 @@ class BLEDiagServer:
         chunks = [payload[i:i + _MTU] for i in range(0, len(payload), _MTU)]
         logger.info(format_ble_tx(data))
         print(format_ble_tx(data))
+        self._last_tx_time = time.time()  # mark before send — TX watchdog won't fire on partial BLE errors
         self._send_chunks(chunks)
-        self._last_tx_time = time.time()
 
     def _send_chunks(self, chunks: list[bytes]) -> None:
         assert self._server is not None
