@@ -13,9 +13,11 @@ const SEVERITY_COLOR = { info: colors.primary, warning: colors.warning, error: c
 const SEVERITY_LABEL = { info: 'Informativo', warning: 'Aviso', error: 'Fallo grave' };
 
 const SAMPLES_DISCOVERY_LIMIT = 50;
-const SAMPLES_PER_PID_LIMIT   = 400;   // max samples per PID — keeps BLE payload small
+const SAMPLES_PAGE_SIZE       = 100;   // samples per request — keeps BLE payload small
+const SAMPLES_MAX_PAGES       = 200;   // safety cap (200 × 100 = 20k samples/PID)
 const SAMPLES_BATCH_SIZE      = 1;     // one PID at a time — avoids BLE congestion
 const SAMPLES_BATCH_DELAY_MS  = 300;   // pause between PIDs — gives Pi time to recover
+const SAMPLES_PAGE_DELAY_MS   = 150;   // pause between pages of the same PID
 
 type Tab = 'dtcs' | 'samples' | 'commands';
 
@@ -168,9 +170,18 @@ function SamplesTab({ sessionId }: { sessionId: number }) {
         const batch = pidOrder.slice(i, i + SAMPLES_BATCH_SIZE);
         for (const pid of batch) {
           try {
-            const pidSamples = await getAdapter().getSessionSamples(sessionId, pid, SAMPLES_PER_PID_LIMIT);
+            // Page through with offset until a short page signals the end.
+            // The server caps each response at SAMPLES_PAGE_SIZE to keep the
+            // BLE payload small; offset pagination recovers the full history.
+            const all: SessionSample[] = [];
+            for (let page = 0, offset = 0; page < SAMPLES_MAX_PAGES; page++, offset += SAMPLES_PAGE_SIZE) {
+              const pageSamples = await getAdapter().getSessionSamples(sessionId, pid, SAMPLES_PAGE_SIZE, offset);
+              all.push(...pageSamples);
+              if (pageSamples.length < SAMPLES_PAGE_SIZE) break;
+              await new Promise<void>((r) => setTimeout(r, SAMPLES_PAGE_DELAY_MS));
+            }
             setPidEntries((prev) =>
-              prev.map((e) => e.pid === pid ? { ...e, samples: pidSamples, loading: false } : e)
+              prev.map((e) => e.pid === pid ? { ...e, samples: all, loading: false } : e)
             );
           } catch {
             setPidEntries((prev) =>
