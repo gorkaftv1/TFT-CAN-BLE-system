@@ -194,6 +194,10 @@ class BLEDiagServer:
         try:
             while True:
                 await asyncio.sleep(_WATCHDOG_INTERVAL)
+                # Exit if a new watchdog replaced us (after reconnect)
+                if self._watchdog_task is not asyncio.current_task():
+                    return
+
                 now = time.time()
 
                 if self._server_running and self._client_connected:
@@ -208,6 +212,7 @@ class BLEDiagServer:
                         logger.warning(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         print(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         await self._handle_disconnect()
+                        return  # _start_server created a new watchdog; exit this one
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -228,8 +233,12 @@ class BLEDiagServer:
             logger.warning(f"[BLE] Error closing session: {e}")
         # 1. Stop current server (unregister GATT app from D-Bus)
         self._server_running = False
-        if self._watchdog_task:
+        current = asyncio.current_task()
+        if self._watchdog_task and self._watchdog_task is not current:
+            # Only cancel if we're not the watchdog itself — cancelling self
+            # raises CancelledError at the next await, aborting the restart
             self._watchdog_task.cancel()
+        self._watchdog_task = None  # _start_server will assign a new one
         if self._server:
             try:
                 await self._server.stop()
