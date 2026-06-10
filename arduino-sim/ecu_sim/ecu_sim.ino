@@ -279,7 +279,7 @@ void updateVehicleSimulation() {
     vehicle.coolantTemp    = constrain(vehicle.coolantTemp,    -40,   130);
     vehicle.oilTemp        = constrain(vehicle.oilTemp,        -40,   150);
     vehicle.intakeTemp     = constrain(vehicle.intakeTemp,     -40,    80);
-    vehicle.batteryVoltage = constrain(vehicle.batteryVoltage, 13800, 14400);
+    vehicle.batteryVoltage = constrain(vehicle.batteryVoltage, 0, 14400);
     vehicle.throttlePos    = constrain(vehicle.throttlePos,    0,     100);
     vehicle.shortFuelTrim1 = constrain(vehicle.shortFuelTrim1, -100,   99);
     if ((int16_t)vehicle.mafFlow < 0) vehicle.mafFlow = 0;
@@ -325,6 +325,7 @@ void broadcastVehicleState() {
   frame[4] = 0x00; frame[5] = 0x00; frame[6] = 0x00;
   frame[7] = (uint8_t)(engineRunning ? 0x01 : 0x00);
   CAN.beginPacket(0x280); CAN.write(frame, 8); CAN.endPacket();
+  logCANFrame("[BC TX]", 0x280, frame, 8);
 
   uint16_t speedRaw = (uint16_t)(vehicle.speed * 100);
   frame[0] = (speedRaw >> 8) & 0xFF; frame[1] = speedRaw & 0xFF;
@@ -332,6 +333,7 @@ void broadcastVehicleState() {
   frame[4] = (speedRaw >> 8) & 0xFF; frame[5] = speedRaw & 0xFF;
   frame[6] = (speedRaw >> 8) & 0xFF; frame[7] = speedRaw & 0xFF;
   CAN.beginPacket(0x320); CAN.write(frame, 8); CAN.endPacket();
+  logCANFrame("[BC TX]", 0x320, frame, 8);
 
   frame[0] = encodeTemp(vehicle.coolantTemp);
   frame[1] = encodePercent(vehicle.throttlePos);
@@ -920,12 +922,14 @@ void sendMultiFrame(const uint8_t* payload, uint8_t payloadLen) {
   for (uint8_t i = 0; i < 8; i++) CAN.write(ff[i]);
   CAN.endPacket();
 
+#if LOG_LEVEL >= 1
   Serial.print(F("[TX FF] 0x")); Serial.print(ECU_RESPONSE_ID, HEX); Serial.print(F(" | "));
   for (uint8_t i = 0; i < 8; i++) {
     if (ff[i] < 0x10) Serial.print(F("0"));
     Serial.print(ff[i], HEX); Serial.print(F(" "));
   }
   Serial.println();
+#endif
 
   if (!waitForFlowControl())
     Serial.println(F("[WARN] FC timeout — sending CFs anyway"));
@@ -943,12 +947,14 @@ void sendMultiFrame(const uint8_t* payload, uint8_t payloadLen) {
     for (uint8_t i = 0; i < 8; i++) CAN.write(cf[i]);
     CAN.endPacket();
 
+#if LOG_LEVEL >= 1
     Serial.print(F("[TX CF] SN=0x")); Serial.print(sn & 0x0F, HEX); Serial.print(F(" | "));
     for (uint8_t i = 0; i < 8; i++) {
       if (cf[i] < 0x10) Serial.print(F("0"));
       Serial.print(cf[i], HEX); Serial.print(F(" "));
     }
     Serial.println();
+#endif
 
     bytesSent += ISOTP_CF_DATA_BYTES;
     sn = (sn + 1) & 0x0F;
