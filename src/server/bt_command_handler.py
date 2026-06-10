@@ -338,6 +338,10 @@ class BtCommandHandler:
         except Exception:
             pass
 
+    def open_snapshot(self) -> None:
+        if hasattr(self._logger, "open_snapshot"):
+            self._logger.open_snapshot()  # type: ignore[union-attr]
+
     def close_session(self) -> None:
         """Flush DB buffer and end the current session on client disconnect.
 
@@ -347,6 +351,8 @@ class BtCommandHandler:
         """
         self.stop_monitor()
         self._logger.end_session(self._session_id)
+        if hasattr(self._logger, "close_snapshot"):
+            self._logger.close_snapshot()  # type: ignore[union-attr]
 
     def start_session(self, label: str = "BLE session") -> None:
         """Begin a fresh session row for a new client connection."""

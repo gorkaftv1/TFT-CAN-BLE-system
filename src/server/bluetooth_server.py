@@ -33,6 +33,7 @@ _MTU                   = 240
 _CLIENT_TIMEOUT_S      = 30.0
 _SERVER_TIMEOUT_S      = 40.0
 _WATCHDOG_INTERVAL     = 5.0
+_HEARTBEAT_AFTER_S     = 15.0
 _RECV_BUFFER_MAX_SIZE  = 4096
 _MAX_RECONNECT_RETRIES = 5
 
@@ -47,34 +48,51 @@ class BLEDiagServer:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._recv_buf: str = ""
         self._stop_event: asyncio.Event | None = None
+        self._restart_event: asyncio.Event | None = None
         self._last_rx_time: float = 0.0
         self._last_tx_time: float = 0.0
         self._client_connected: bool = False
         self._server_running: bool = False
         self._watchdog_task: asyncio.Task | None = None
-        self._reconnect_count: int = 0
 
     async def start(self) -> None:
         self._loop = asyncio.get_running_loop()
         self._stop_event = asyncio.Event()
+        self._restart_event = asyncio.Event()
+        reconnect_count = 0
         try:
-            while self._reconnect_count < _MAX_RECONNECT_RETRIES:
+            await self._start_server()
+            while True:
+                stop_fut    = asyncio.ensure_future(self._stop_event.wait())
+                restart_fut = asyncio.ensure_future(self._restart_event.wait())
+                done, pending = await asyncio.wait(
+                    [stop_fut, restart_fut], return_when=asyncio.FIRST_COMPLETED
+                )
+                for fut in pending:
+                    fut.cancel()
+
+                if self._stop_event.is_set():
+                    break
+
+                self._restart_event.clear()
+                reconnect_count += 1
+                if reconnect_count >= _MAX_RECONNECT_RETRIES:
+                    logger.error(f"[BLE] Max retries ({_MAX_RECONNECT_RETRIES}) reached. Stopping.")
+                    break
+                wait_s = min(2 ** reconnect_count, 30)
+                logger.info(
+                    f"[BLE] Restarting BLE server "
+                    f"(attempt {reconnect_count}/{_MAX_RECONNECT_RETRIES}, wait {wait_s}s)..."
+                )
+                await asyncio.sleep(wait_s)
                 try:
                     await self._start_server()
-                    self._reconnect_count = 0
-                    await self._stop_event.wait()
-                    break
+                    self._handler.start_session()
+                    print("[BLE] New DB session started for next client")
+                    reconnect_count = 0
                 except Exception as exc:
-                    self._reconnect_count += 1
-                    if self._reconnect_count >= _MAX_RECONNECT_RETRIES:
-                        logger.error(f"[BLE] Max retries reached ({_MAX_RECONNECT_RETRIES}). Stopping.")
-                        raise
-                    wait_time = min(2 ** self._reconnect_count, 30)
-                    logger.error(
-                        f"[BLE] Error (attempt {self._reconnect_count}/{_MAX_RECONNECT_RETRIES}): {exc}. "
-                        f"Retrying in {wait_time}s..."
-                    )
-                    await asyncio.sleep(wait_time)
+                    logger.error(f"[BLE] Restart failed: {exc}. Scheduling retry...")
+                    self._restart_event.set()
         finally:
             await self._shutdown()
 
@@ -155,6 +173,7 @@ class BLEDiagServer:
                     logger.info(f"[BLE] BlueZ reported MTU: {blz_mtu}")
             except Exception as e:
                 logger.debug(f"[BLE] Could not read BlueZ MTU: {e}")
+            self._handler.open_snapshot()
 
         chunk = bytes(value).decode("utf-8", errors="replace")
 
@@ -212,7 +231,10 @@ class BLEDiagServer:
                         logger.warning(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         print(f"[Watchdog] Client inactive for {elapsed_rx:.1f}s — disconnecting")
                         await self._handle_disconnect()
-                        return  # _start_server created a new watchdog; exit this one
+                        return
+                    elif elapsed_rx > _HEARTBEAT_AFTER_S:
+                        # Client idle — probe so it sends heartbeat_ack, resetting _last_rx_time
+                        self._notify_from_loop({"type": "heartbeat"})
         except asyncio.CancelledError:
             pass
         except Exception as e:
@@ -225,39 +247,35 @@ class BLEDiagServer:
         self._handler.on_disconnect()
         logger.info("[BLE] Client disconnected — restarting BLE server")
         print("[BLE] Client disconnected — restarting BLE server")
-        # Flush DB and end session cleanly
         try:
             self._handler.close_session()
             print("[BLE] Session closed and DB flushed")
         except Exception as e:
             logger.warning(f"[BLE] Error closing session: {e}")
-        # 1. Stop current server (unregister GATT app from D-Bus)
+        # Stop current server (unregister GATT app from D-Bus)
         self._server_running = False
         current = asyncio.current_task()
         if self._watchdog_task and self._watchdog_task is not current:
-            # Only cancel if we're not the watchdog itself — cancelling self
-            # raises CancelledError at the next await, aborting the restart
             self._watchdog_task.cancel()
-        self._watchdog_task = None  # _start_server will assign a new one
+        self._watchdog_task = None
         if self._server:
             try:
                 await self._server.stop()
             except Exception as e:
                 logger.warning(f"[BLE] Error stopping server: {e}")
             self._server = None
-        # 2. Reset HCI adapter to clear BlueZ advertising state
+        # Reset HCI adapter to clear BlueZ advertising state
         print("[BLE] Resetting HCI adapter...")
         subprocess.run(["sudo", "hciconfig", "hci0", "reset"], timeout=5)
         await asyncio.sleep(2)
-        # 3. Start fresh server
-        print("[BLE] Restarting BLE server...")
-        await self._start_server()
-        # 4. Roll a new DB session for the next client (DB stays open)
-        try:
+        # Signal start() to handle the restart — avoids restarting inside the watchdog
+        # task where exceptions can't propagate to the main reconnect loop
+        if self._restart_event is not None:
+            self._restart_event.set()
+        else:
+            # Fallback when called outside start() lifecycle (e.g. direct disconnect cmd)
+            await self._start_server()
             self._handler.start_session()
-            print("[BLE] New DB session started for next client")
-        except Exception as e:
-            logger.warning(f"[BLE] Error starting new session: {e}")
 
     # ── Dispatch and notify ────────────────────────────────────────────
 
